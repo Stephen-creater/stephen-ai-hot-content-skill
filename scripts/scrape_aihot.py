@@ -63,6 +63,10 @@ HEADERS = {
 # Feature Flags
 ENABLE_RSS = os.getenv('ENABLE_RSS', 'true').lower() == 'true'
 RSS_CONFIG_REL_PATH = "../resources/content_curator_sources.json"
+MAX_LOOKBACK_DAYS = 60
+GENERAL_LOOKBACK_DAYS = 45
+RECENT_PRIORITY_DAYS = 7
+SELECTION_COUNT = 5
 
 def truncate_text(text, max_len=800):
     if not text:
@@ -119,7 +123,7 @@ def parse_date_string(date_str):
 
     return None
 
-def is_old(date_str_or_obj, days_limit=10):
+def is_old(date_str_or_obj, days_limit=MAX_LOOKBACK_DAYS):
     """
     Check if the date is older than days_limit days from today.
     Accepts string (YYYY-MM-DD, YYYY年MM月DD日) or datetime object.
@@ -470,7 +474,7 @@ def generate_html_report(items, output_dir):
     except Exception as e:
         print(f"Error generating HTML report: {e}")
 
-def call_ai_selection(items, top_n=20):
+def call_ai_selection(items, top_n=SELECTION_COUNT):
     """
     Call AI to select top N items.
     """
@@ -482,11 +486,12 @@ def call_ai_selection(items, top_n=20):
         candidates_text += f"ID: {item['id']}\n"
         candidates_text += f"Title: {item['title']}\n"
         candidates_text += f"Platform: {item['platform']}\n"
+        candidates_text += f"Date: {item.get('article_date', '')}\n"
         candidates_text += f"Content: {item['content']}\n"
         candidates_text += "-" * 20 + "\n"
     
     prompt = f"""
-你是一个专业的AI热点内容主编。请从以下列表中挑选出前 {top_n} 个最值得推荐给中国读者的内容。
+你是一个专业的 AI 热点内容主编。请从以下列表中挑选出前 {top_n} 个最值得做成中文深度文章的选题。
 
 **今天是：{datetime.now().strftime('%Y-%m-%d')}**
 
@@ -495,30 +500,26 @@ def call_ai_selection(items, top_n=20):
 - **中间的六个省略号（......）代表了文章中间被省略的部分**。
 - 请务必阅读 `Content` 字段来判断文章是否有实质性内容（干货），不要仅凭标题判断。如果 Content 为空或看起来是毫无意义的占位符，请直接忽略该文章。
 
-挑选标准：
-1. **干货与知识性**：普通人能学到东西，或者有实用价值。
-2. **猎奇与趣味性**：普通人觉得很有意思，大开眼界。
-3. **时效性**：最新的重要进展。
-4. **相关性**：与中国读者生活或工作相关。
+目标读者：
+- 中国非技术型 AI 使用者、知识工作者、管理者、内容创作者，以及关注就业和教育的普通读者。
+- 他们不关心技术参数本身，关心 AI 对工作、生活、效率、职业和未来的实际影响。
 
-优先选择：
-第一类：既有很强的爆点或者时效性，同时又有一定可以发挥深度，对普通人的生活或未来有启发的内容。
-例如：某大公司裁员，可以引申出普通人 AI 时代怎么办。
-例如：某名人播客采访，既可以了解 AI 前沿，又能够学到认知提升。
-
-第二类：看起来非常猎奇又不可思议的内容。
-第三类：涉及到名人、硅谷等自带流量密码的内容。尤其是来自 "AI Podcasts & Interviews" 的内容，请给予极高优先级。
+优先选题：
+1. 真实 AI 产品、Agent、Codex、Skill 或工作流案例，有具体场景、使用方法和可量化结果。
+2. AI 对就业、教育、办公、知识、个人效率或决策的实际影响，能引出普通人的应对方法。
+3. 聚焦单一具体事件，同时具备强冲突、反常识、社会争议、鲜明数字或重大变化，并且有足够事实支撑深入解读。
+4. 知名公司、产品或人物之间的比较、排名变化或竞争，但必须说明对用户的实际价值。
+5. 同等质量下，优先发布于最近 {RECENT_PRIORITY_DAYS} 天的内容。普通时效新闻原则上不超过 {GENERAL_LOOKBACK_DAYS} 天；超过 {GENERAL_LOOKBACK_DAYS} 天的内容只有在实操、深度认知或长期影响明显更强时才可入选，最长不超过 {MAX_LOOKBACK_DAYS} 天。
 
 **排除标准**：
 - 排除太过于晦涩、技术细节过深、普通人完全看不懂的内容。
-- 排除纯粹的商业通稿或无实质内容的标题党（请结合 Content 判断）。
-- 排除大杂烩文章，比如“极客早知道”、“今日热点”、“Weekly Review”等综述类新闻。必须选择聚焦于单个具体事件的文章。
-- 排除所有与“AI Agent”、“智能体”、“Agent”相关的内容（用户明确要求）。
+- 排除纯模型参数、跑分、融资快讯、榜单搬运或对用户无明确价值的小版本更新。
+- 排除纯粹商业通稿、缺少事实证据的预测或无实质内容的标题党。有真实使用场景、数据和独立判断的产品内容不属于此类。
+- 排除“今日热点”、“Weekly Review”等多事件新闻合集。
 
 **额外要求**：
 - 避免选择重复的文章（不同平台描述同个事务的文章），如有，选择相对内容最全面的那一篇。
-- 避免过于相同类型的文章，我希望输出的结果有不同的角度，比如行业趋势、干货、认知升级、爆点话题、有趣的应用案例等多个领域。
-- 针对时效性无关的内容，例如 Podcast 或 Interviews 真知灼见和认知升级类内容，允许最近2个月内的内容，弱化对新鲜度的要求（但也要相对尽量新）。
+- {top_n} 个结果应尽量覆盖实操案例、普通人影响、认知升级、社会争议或产品竞争中的不同角度，但不得为多样性牺牲质量。
 
 请仔细阅读上述内容，挑选出 {top_n} 个 ID。
 **输出格式要求**：
@@ -748,13 +749,7 @@ def scrape_aihot():
                 # print(f"Skipping {item.get('title')} - No date found.")
                 continue
             
-            # Dynamic days limit
-            days_limit = 10
-            platform = item.get('platform', '')
-            if "Podcast" in platform or "Interview" in platform:
-                    days_limit = 60
-                
-            if is_old(a_date, days_limit=days_limit):
+            if is_old(a_date, days_limit=MAX_LOOKBACK_DAYS):
                 # print(f"Skipping {item.get('title')} - Date {a_date} is too old.")
                 continue
                 
@@ -799,13 +794,7 @@ def scrape_aihot():
                 # print(f"Removing {item.get('title')} - No date (safety check)")
                 continue
             
-            # Dynamic days limit
-            days_limit = 10
-            platform = item.get('platform', '')
-            if "Podcast" in platform or "Interview" in platform:
-                    days_limit = 60
-            
-            if is_old(a_date, days_limit=days_limit):
+            if is_old(a_date, days_limit=MAX_LOOKBACK_DAYS):
                 # print(f"Removing {item.get('title')} - Old date {a_date} (safety check)")
                 continue
             safe_items.append(item)
@@ -819,60 +808,7 @@ def scrape_aihot():
 
         # AI Selection
         if valid_items:
-            # Split items into recent (<= 4 days) and older (> 4 days)
-            recent_items = []
-            older_items = []
-            
-            today = datetime.now()
-            
-            for item in valid_items:
-                a_date = item.get('article_date')
-                is_recent = False
-                if a_date:
-                    try:
-                         # Parse date again just to be sure
-                         dt = parse_date_string(str(a_date))
-                         if dt:
-                             delta = today - dt
-                             if delta.days <= 4:
-                                 is_recent = True
-                    except Exception:
-                        pass
-                
-                if is_recent:
-                    recent_items.append(item)
-                else:
-                    older_items.append(item)
-            
-            print(f"Split items: {len(recent_items)} recent (<=4 days), {len(older_items)} older.")
-            
-            selected_results = []
-            
-            # Use ThreadPoolExecutor for parallel AI calls
-            with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-                futures = {}
-                
-                # Submit recent items task
-                if recent_items:
-                    print("Submitting recent items for AI selection...")
-                    future_recent = executor.submit(call_ai_selection, recent_items, top_n=20)
-                    futures[future_recent] = "recent"
-                    
-                # Submit older items task
-                if older_items:
-                    print("Submitting older items for AI selection...")
-                    future_older = executor.submit(call_ai_selection, older_items, top_n=10)
-                    futures[future_older] = "older"
-                
-                # Wait for results
-                for future in concurrent.futures.as_completed(futures):
-                    task_type = futures[future]
-                    try:
-                        result = future.result()
-                        print(f"Received results from {task_type} items selection.")
-                        selected_results.extend(result)
-                    except Exception as exc:
-                        print(f"{task_type} selection generated an exception: {exc}")
+            selected_results = call_ai_selection(valid_items, top_n=SELECTION_COUNT)
             
             if selected_results:
                 print(f"AI selected {len(selected_results)} items total.")
@@ -883,6 +819,8 @@ def scrape_aihot():
                 seen_ids = set()
                 
                 for selection in selected_results:
+                    if len(final_selection) >= SELECTION_COUNT:
+                        break
                     # Handle both integer ID (legacy/fallback) and object (new format)
                     if isinstance(selection, int):
                         sid = selection
