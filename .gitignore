@@ -1,2 +1,4 @@
 .venv/
 .config/openrouter_api_key.txt
+article_content_cache.json
+aihot_valid_all_debug.json
