@@ -245,6 +245,34 @@ def fetch_configured_sources(config):
                 
     return items
 
+MAX_ARTICLE_BYTES = 2 * 1024 * 1024
+ARTICLE_TOTAL_TIMEOUT = 25
+
+def download_article_html(url):
+    deadline = time.monotonic() + ARTICLE_TOTAL_TIMEOUT
+    chunks = []
+    total_bytes = 0
+
+    with requests.get(url, headers=HEADERS, timeout=(5, 10), stream=True) as response:
+        response.raise_for_status()
+        encoding = response.encoding or 'utf-8'
+
+        for chunk in response.iter_content(chunk_size=64 * 1024):
+            if time.monotonic() > deadline:
+                raise requests.Timeout(f"Total download time exceeded {ARTICLE_TOTAL_TIMEOUT}s")
+            if not chunk:
+                continue
+
+            remaining = MAX_ARTICLE_BYTES - total_bytes
+            if remaining <= 0:
+                break
+            chunks.append(chunk[:remaining])
+            total_bytes += min(len(chunk), remaining)
+            if total_bytes >= MAX_ARTICLE_BYTES:
+                break
+
+    return b''.join(chunks).decode(encoding, errors='replace')
+
 def fetch_article_content(item):
     """
     Fetch the main content and date from the item's link using trafilatura.
@@ -268,11 +296,8 @@ def fetch_article_content(item):
         return item
 
     try:
-        # Use requests with timeout
         try:
-            response = requests.get(url, headers=HEADERS, timeout=15)
-            response.raise_for_status()
-            downloaded = response.text
+            downloaded = download_article_html(url)
         except Exception as e:
             # print(f"Error downloading {url}: {e}")
             item['content_error'] = str(e)
