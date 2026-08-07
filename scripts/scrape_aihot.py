@@ -36,9 +36,23 @@ def save_content_cache():
         print(f"Error saving content cache: {e}")
 
 # AI Backend Configuration
-AI_API_KEY = "" # 在此设置你的 OpenRouter 的 API Key
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+AI_API_KEY_FILE = os.path.join(PROJECT_DIR, ".config", "openrouter_api_key.txt")
+
+def load_ai_api_key():
+    try:
+        with open(AI_API_KEY_FILE, 'r', encoding='utf-8') as f:
+            key = f.read().strip()
+    except FileNotFoundError:
+        return ""
+
+    if key == "PASTE_OPENROUTER_API_KEY_HERE":
+        return ""
+    return key
+
+AI_API_KEY = load_ai_api_key()
 AI_BASE_URL = "https://openrouter.ai/api/v1/chat/completions"
-AI_MODEL_NAME = "google/gemini-3-flash-preview" 
+AI_MODEL_NAME = "google/gemini-3-flash-preview"
 #AI_MODEL_NAME = "google/gemini-3-pro-preview" 
 
 # Global Headers
@@ -554,6 +568,10 @@ def call_ai_selection(items, top_n=20):
         return []
 
 def scrape_aihot():
+    if not AI_API_KEY:
+        print(f"OpenRouter API Key 未配置，请填写：{AI_API_KEY_FILE}")
+        return
+
     url = 'https://aihot.today/'
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
