@@ -185,7 +185,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score -= 35
         penalties.append("只有融资或估值")
     title_finance = ("融资", "估值", "收购", "卖了", "亿美元")
-    title_substance = ("开源", "发布", "上线", "产品", "模型", "技术", "案例", "工作流", "agent")
+    title_substance = ("开源", "模型发布", "模型上线", "产品发布", "产品上线", "技术", "案例", "工作流", "agent")
     if any(word.lower() in title.lower() for word in title_finance) and not any(word.lower() in title.lower() for word in title_substance):
         score -= 35
         penalties.append("标题只有资本事件")
@@ -201,6 +201,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     hype_terms = [word for word in editorial_fit.get("hype_or_gossip_terms", []) if word.lower() in title_summary]
     broad_terms = [word for word in editorial_fit.get("broad_or_pr_terms", []) if word.lower() in title_summary]
     niche_terms = [word for word in editorial_fit.get("niche_professional_terms", []) if word.lower() in title_summary]
+    major_entities = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in title_summary]
+    major_entities_in_content = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in haystack]
+    release_terms = [word for word in editorial_fit.get("release_terms", []) if word.lower() in title_summary]
+    interview_terms = [word for word in editorial_fit.get("authoritative_interview_terms", []) if word.lower() in haystack]
+    event_terms = [word for word in editorial_fit.get("event_or_ad_terms", []) if word.lower() in title_summary]
+    people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
+    concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
+    authoritative_interview = bool(interview_terms and major_entities_in_content)
     if evergreen_terms:
         score += 12
         reasons.append("具备可长期回看的机制切口")
@@ -213,6 +221,18 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if niche_terms:
         score -= 30
         penalties.append("科研或医疗垂直题，大众切口偏弱")
+    if authoritative_interview:
+        score += 24
+        reasons.insert(0, "核心 AI 团队权威人物访谈，材料完整")
+    if release_terms and not major_entities and not any(term in title_summary for term in concept_terms):
+        score -= 35
+        penalties.append("主体知名度或事件级别不足")
+    if event_terms:
+        score -= 55
+        penalties.append("活动、采购或合作宣传稿")
+    if people_terms and not authoritative_interview:
+        score -= 30
+        penalties.append("纯人物群像，缺少可复用的核心机制")
 
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:

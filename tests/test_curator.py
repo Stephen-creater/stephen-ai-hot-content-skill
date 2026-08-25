@@ -121,6 +121,66 @@ class CuratorTest(unittest.TestCase):
                 self.assertEqual(len(target.read_text().splitlines()), 1)
                 self.assertEqual(feedback_module.final_reviewed_ids(target), {"x"})
 
+    def test_second_feedback_batch_prefers_authoritative_interview(self) -> None:
+        common = {
+            "content": "已完成中文整理的长文材料。" * 120,
+            "published": "2026-08-25T08:00:00Z",
+            "source_name": "中文媒体",
+            "source_priority": 4,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "赛博义父 Tibo 最新访谈",
+                "summary": "下一代 Agent 将走向云端",
+                "content": "OpenAI Codex 负责人核心观点，以下是对话全文。" + common["content"],
+                "link": "https://example.com/interview",
+            },
+            {
+                **common,
+                "title": "开源国产 8B 模型，比肩闭源 Image 2",
+                "summary": "SenseNova U1.5 Lite",
+                "link": "https://example.com/unnamed-model",
+            },
+            {
+                **common,
+                "title": "WAIC CONNECT 带你拿下马来西亚 AI 采购需求",
+                "summary": "活动将在吉隆坡盛大开启",
+                "link": "https://example.com/event",
+            },
+            {
+                **common,
+                "title": "出版社与小猿达成合作，学习智能体首落 AI 学习机",
+                "summary": "双方签署合作协议",
+                "link": "https://example.com/partnership",
+            },
+            {
+                **common,
+                "title": "前 TikTok 产品经理创业，AI 视频平台获千万美元融资",
+                "summary": "融资与投资方信息",
+                "link": "https://example.com/product-manager-funding",
+            },
+            {
+                **common,
+                "title": "具身创业里的香港教授们",
+                "summary": "AI 创业者群像",
+                "link": "https://example.com/people",
+            },
+        ]
+        ranked = rank_candidates(items, self.profile, now=self.now)
+        lookup = {item["link"]: item for item in ranked}
+        self.assertTrue(lookup["https://example.com/interview"]["recommended"])
+        self.assertIn("权威人物访谈", lookup["https://example.com/interview"]["reason"])
+        self.assertIn("事件级别不足", lookup["https://example.com/unnamed-model"]["penalty"])
+        self.assertIn("活动、采购或合作宣传稿", lookup["https://example.com/event"]["penalty"])
+        self.assertIn("活动、采购或合作宣传稿", lookup["https://example.com/partnership"]["penalty"])
+        self.assertIn("只有资本事件", lookup["https://example.com/product-manager-funding"]["penalty"])
+        self.assertIn("纯人物群像", lookup["https://example.com/people"]["penalty"])
+
 
 if __name__ == "__main__":
     unittest.main()
