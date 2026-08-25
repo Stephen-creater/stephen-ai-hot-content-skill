@@ -6,12 +6,14 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from curator import rank_candidates
+import import_feedback as feedback_module
 from report import generate_report
 from scrape_aihot import inbox_item
 
@@ -48,7 +50,7 @@ class CuratorTest(unittest.TestCase):
             self.assertIn("应该入选", report)
             self.assertIn("不应入选", report)
             self.assertIn("补充遗漏选题", report)
-            self.assertIn("selection_feedback.json", report)
+            self.assertIn("selection_feedback-2026-08-25-120000.json", report)
             self.assertIn("二创成熟度", report)
             self.assertIn("已自动保存到浏览器，尚未导出", report)
             self.assertIn("导出全部审核结果", report)
@@ -74,6 +76,50 @@ class CuratorTest(unittest.TestCase):
             self.assertEqual(item["content_status"], "transcript")
             self.assertEqual(item["language"], "zh")
             self.assertGreater(len(item["content"]), 500)
+
+    def test_feedback_patterns_downrank_hype_broad_and_niche_topics(self) -> None:
+        common = {
+            "summary": "一篇已经完成中文整合的 AI 长文。",
+            "content": "文章包含完整的事件、判断和案例。" * 100,
+            "published": "2026-08-24T08:00:00Z",
+            "source_name": "中文媒体",
+            "source_priority": 4,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {**common, "title": "硅谷押注的下一个 Harness，是整个桌面操作系统", "link": "https://example.com/harness"},
+            {**common, "title": "阿里视频大模型 Wan3.0 正式上线", "link": "https://example.com/wan"},
+            {**common, "title": "匿名模型被扒出智谱血缘，也有人怀疑 Cursor", "link": "https://example.com/gossip"},
+            {**common, "title": "AI 重塑商业，信任决定未来商业能走多远", "link": "https://example.com/broad"},
+            {**common, "title": "一篇论文改写 AI 科研评价规则", "link": "https://example.com/science"},
+            {**common, "title": "阿里达摩院推出肝癌 AI 模型", "link": "https://example.com/medical"},
+        ]
+        ranked = rank_candidates(items, self.profile, now=self.now)
+        lookup = {item["link"]: item for item in ranked}
+        self.assertTrue(lookup["https://example.com/harness"]["recommended"])
+        self.assertTrue(lookup["https://example.com/wan"]["recommended"])
+        self.assertIn("炒作或猎奇", lookup["https://example.com/gossip"]["penalty"])
+        self.assertIn("缺少具体切口", lookup["https://example.com/broad"]["penalty"])
+        self.assertIn("大众切口偏弱", lookup["https://example.com/science"]["penalty"])
+        self.assertIn("大众切口偏弱", lookup["https://example.com/medical"]["penalty"])
+
+    def test_feedback_import_can_delete_verified_download(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            feedback = root / "selection_feedback.json"
+            feedback.write_text(json.dumps({"exported_at": "2026-08-25T06:20:39Z", "reviews": {"x": {"status": "rejected"}}}))
+            with patch.object(feedback_module, "ROOT", root):
+                target, duplicate = feedback_module.import_feedback(feedback)
+                self.assertFalse(duplicate)
+                self.assertTrue(feedback.exists())
+                _, duplicate = feedback_module.import_feedback(feedback, delete_source=True)
+                self.assertTrue(duplicate)
+                self.assertFalse(feedback.exists())
+                self.assertEqual(len(target.read_text().splitlines()), 1)
+                self.assertEqual(feedback_module.final_reviewed_ids(target), {"x"})
 
 
 if __name__ == "__main__":

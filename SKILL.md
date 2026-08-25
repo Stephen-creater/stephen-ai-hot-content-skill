@@ -17,6 +17,7 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - AI 对工作、组织、知识、教育和个人效率的真实影响。
 - KV Cache、训练、上下文、智能涌现等能够用大白话讲透的机制。
 - 作者已经提供明确判断、案例和因果链，二创时只需删减、重组和必要核验。
+- 能找到一个具体切入点，并且具有长期回看价值。
 
 默认排除：
 
@@ -25,6 +26,9 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - 多事件周报、新闻合集、商业通稿和缺少正文的标题党。
 - 政治、娱乐、监控、武器等偏离既有文章谱系的内容。
 - 需要大量专业背景，且无法转化成小白可理解价值的技术细节。
+- 模型身份八卦、猎奇演示、夸张标题等只有热度没有深度的内容。
+- 只讲重塑行业、未来趋势等宏大判断，却缺少具体机制、事件或用户价值。
+- 科研、医疗等垂直专业题，除非能转化成普通读者可理解、可复用的核心机制。
 
 详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。
 
@@ -68,7 +72,7 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 - `index.html`：人工审核页面。
 - `run.json`：抓取数量和失败来源。
 
-在 `index.html` 中标记应该入选、不应入选和遗漏选题。页面会将状态与备注实时保存到当前浏览器，但不会直接写入项目文件。完成审核后，点击「导出全部审核结果」生成 `selection_feedback.json`。
+在 `index.html` 中标记应该入选、不应入选和遗漏选题。页面会将状态与备注实时保存到当前浏览器，但不会直接写入项目文件。完成审核后，点击「导出全部审核结果」。浏览器会先把 JSON 暂存在下载目录，正式反馈库位于 `.local/editorial_feedback.jsonl`。
 
 导入反馈：
 
@@ -76,7 +80,15 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 python3 scripts/import_feedback.py /path/to/selection_feedback.json
 ```
 
+确认导入后同时删除下载的临时 JSON：
+
+```bash
+python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-source
+```
+
 反馈写入本地 `.local/editorial_feedback.jsonl`，不会进入公开仓库。后续根据反馈修改编辑画像、来源与评分逻辑。
+
+已明确标记为入选或不入选的同一条内容，后续运行会自动跳过；待定内容仍可再次进入候选。
 
 ## 交付要求
 

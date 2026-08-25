@@ -17,6 +17,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 from curator import clean_text, rank_candidates
+from import_feedback import final_reviewed_ids
 from report import generate_report
 
 
@@ -269,7 +270,9 @@ def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
             "只返回 JSON 对象，顶层字段为 items",
             "items 是数组",
             "每项包含 id、title_zh、reason",
-            "优先单一事件、机制清楚、普通读者有收获的选题",
+            "优先单一事件、有具体切入点、机制清楚、普通读者有收获的选题",
+            "优先能够解释机制、架构、工作流或重大产品变化，且具有长期回看价值的题",
+            "降低纯炒作、模型身份八卦、宏大行业叙事、商业通稿和缺少大众切口的科研医疗题",
             "不得为了多样性保留弱选题",
         ],
         "candidates": compact,
@@ -337,6 +340,10 @@ def main() -> None:
             items = list(executor.map(lambda item: hydrate(item, settings), items))
 
     ranked = rank_candidates(items, profile)
+    feedback_store = ROOT / ".local" / "editorial_feedback.jsonl"
+    reviewed_ids = set() if args.fixture else final_reviewed_ids(feedback_store)
+    skipped_reviewed_count = sum(1 for item in ranked if str(item["id"]) in reviewed_ids)
+    ranked = [item for item in ranked if str(item["id"]) not in reviewed_ids]
     report_count = profile["report_candidate_count"]
     candidates = ranked[:report_count]
     if not args.no_ai and api_key():
@@ -354,7 +361,7 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "candidates.json").write_text(json.dumps(candidates, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "run.json").write_text(
-        json.dumps({"generated_at": datetime.now(timezone.utc).isoformat(), "input_count": len(items), "errors": errors}, ensure_ascii=False, indent=2),
+        json.dumps({"generated_at": datetime.now(timezone.utc).isoformat(), "input_count": len(items), "skipped_reviewed_count": skipped_reviewed_count, "errors": errors}, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     generate_report(candidates, output_dir / "index.html", timestamp)

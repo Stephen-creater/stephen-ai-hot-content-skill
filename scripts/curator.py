@@ -196,6 +196,24 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score -= 25
         penalties.append("比赛新闻偏离既有文章谱系")
 
+    editorial_fit = profile.get("editorial_fit", {})
+    evergreen_terms = [word for word in editorial_fit.get("evergreen_angle_terms", []) if word.lower() in haystack]
+    hype_terms = [word for word in editorial_fit.get("hype_or_gossip_terms", []) if word.lower() in title_summary]
+    broad_terms = [word for word in editorial_fit.get("broad_or_pr_terms", []) if word.lower() in title_summary]
+    niche_terms = [word for word in editorial_fit.get("niche_professional_terms", []) if word.lower() in title_summary]
+    if evergreen_terms:
+        score += 12
+        reasons.append("具备可长期回看的机制切口")
+    if hype_terms:
+        score -= 45
+        penalties.append("炒作或猎奇成分过高")
+    if broad_terms:
+        score -= 30
+        penalties.append("宏大或通稿式表述，缺少具体切口")
+    if niche_terms:
+        score -= 30
+        penalties.append("科研或医疗垂直题，大众切口偏弱")
+
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:
         adaptation_readiness = "高"

@@ -33,7 +33,7 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
 <title>Stephen AI 热点候选</title>
 <style>
 body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f1eb;color:#222;margin:0}}main{{max-width:900px;margin:auto;padding:24px 18px 80px}}header{{margin-bottom:20px}}h1{{font-size:30px;margin:0 0 8px}}.hint{{color:#666}}.toolbar{{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 22px;padding:12px 14px;background:rgba(244,241,235,.96);border:1px solid #d8cdbc;border-radius:12px;box-shadow:0 6px 18px rgba(70,55,35,.08);backdrop-filter:blur(10px)}}.toolbar-summary{{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:#5c5144}}.export-state{{font-weight:600}}.export-state.dirty{{color:#a13f2c}}.export-state.clean{{color:#35633d}}.export-button{{flex:0 0 auto;background:#222;color:#fff;font-weight:600}}.card{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:20px;margin:16px 0}}.meta{{display:flex;justify-content:space-between;color:#806b51;font-size:13px}}h2{{font-size:21px;margin:10px 0}}a{{color:#222}}.reason{{color:#365b3b}}.penalty{{color:#9b3d2f}}.readiness{{font-size:13px;color:#6d5d49;background:#f8f4ed;padding:8px;border-radius:7px}}.review{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}button{{padding:9px;border:1px solid #cbbda9;background:#f8f4ed;border-radius:8px;cursor:pointer}}button.active{{background:#222;color:#fff}}textarea{{grid-column:1/-1;min-height:58px;padding:8px}}.card-save-status{{grid-column:1/-1;color:#777;font-size:12px}}.card-save-status.saved{{color:#35633d}}.missed{{background:#fff8df;border:1px solid #e2ca77;padding:18px;border-radius:12px;margin-top:30px}}input{{width:100%;box-sizing:border-box;margin:5px 0;padding:9px}}#export-bottom{{margin-top:20px;background:#222;color:#fff}}@media(max-width:620px){{.toolbar{{align-items:stretch;flex-direction:column}}.export-button{{width:100%}}}}
-</style></head><body><main><header><h1>Stephen AI 热点候选</h1><div class="hint">{html.escape(generated_at)} · 标记和备注会实时保存到当前浏览器，导出后才会生成可导入的 JSON 文件</div></header>
+</style></head><body><main><header><h1>Stephen AI 热点候选</h1><div class="hint">{html.escape(generated_at)} · 标记和备注会实时保存到当前浏览器。导出文件会暂存在浏览器下载目录，导入 Skill 后再清理</div></header>
 <section class="toolbar" aria-label="审核进度">
   <div class="toolbar-summary"><span id="review-counts"></span><span id="export-state" class="export-state"></span></div>
   <button class="export-button" data-export>导出全部审核结果</button>
@@ -126,7 +126,7 @@ function exportFeedback(){{
   const blob=new Blob([JSON.stringify(output,null,2)],{{type:'application/json'}});
   const url=URL.createObjectURL(blob);
   const link=document.createElement('a');
-  link.href=url;link.download='selection_feedback.json';link.click();
+  link.href=url;link.download='selection_feedback-{html.escape(generated_at)}.json';link.click();
   setTimeout(()=>URL.revokeObjectURL(url),0);
   state.dirty=false;state.last_exported_at=exportedAt;save(false);
 }}

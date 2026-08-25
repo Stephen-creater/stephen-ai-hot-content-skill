@@ -11,6 +11,7 @@ Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研�
 - API Key 可选，无 Key 也能运行。
 - 生成可审核的静态 HTML。
 - 支持标记入选、淘汰和遗漏，并导入本地反馈。
+- 已入选或已淘汰的同一条内容不会在后续报告中重复出现。
 
 ## 快速开始
 
@@ -22,7 +23,7 @@ python3 scripts/scrape_aihot.py
 
 输出位于 `topics/<时间戳>/index.html`。
 
-审核页中的入选状态和备注会实时保存到当前浏览器，顶部工具栏会显示审核统计和是否存在未导出改动。浏览器不会直接修改本地项目文件，完成审核后需点击「导出全部审核结果」，再导入下载的 `selection_feedback.json`。
+审核页中的入选状态和备注会实时保存到当前浏览器，顶部工具栏会显示审核统计和是否存在未导出改动。由于浏览器不允许本地页面直接修改项目文件，JSON 会先进入下载目录。导入后的正式反馈保存在 `.local/editorial_feedback.jsonl`，使用 `--delete-source` 可在验证导入后自动清理下载文件。
 
 离线演示：
 
@@ -33,7 +34,7 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 导入人工审核：
 
 ```bash
-python3 scripts/import_feedback.py /path/to/selection_feedback.json
+python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-source
 ```
 
 ## 配置
