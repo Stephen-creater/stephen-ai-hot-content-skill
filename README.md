@@ -22,6 +22,8 @@ python3 scripts/scrape_aihot.py
 
 输出位于 `topics/<时间戳>/index.html`。
 
+审核页中的入选状态和备注会实时保存到当前浏览器，顶部工具栏会显示审核统计和是否存在未导出改动。浏览器不会直接修改本地项目文件，完成审核后需点击「导出全部审核结果」，再导入下载的 `selection_feedback.json`。
+
 离线演示：
 
 ```bash

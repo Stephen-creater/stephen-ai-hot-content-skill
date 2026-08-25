@@ -68,7 +68,7 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 - `index.html`：人工审核页面。
 - `run.json`：抓取数量和失败来源。
 
-在 `index.html` 中标记应该入选、不应入选和遗漏选题，然后导出 `selection_feedback.json`。
+在 `index.html` 中标记应该入选、不应入选和遗漏选题。页面会将状态与备注实时保存到当前浏览器，但不会直接写入项目文件。完成审核后，点击「导出全部审核结果」生成 `selection_feedback.json`。
 
 导入反馈：
 

@@ -50,6 +50,11 @@ class CuratorTest(unittest.TestCase):
             self.assertIn("补充遗漏选题", report)
             self.assertIn("selection_feedback.json", report)
             self.assertIn("二创成熟度", report)
+            self.assertIn("已自动保存到浏览器，尚未导出", report)
+            self.assertIn("导出全部审核结果", report)
+            self.assertIn("beforeunload", report)
+            self.assertIn("review-counts", report)
+            self.assertIn("state.dirty===undefined", report)
 
     def test_local_transcript_becomes_ready_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
