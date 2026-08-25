@@ -110,7 +110,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if matched_pillars:
         reasons.append("符合" + "、".join(matched_pillars[:2]))
 
-    excluded = [word for word in profile["exclude_keywords"] if word.lower() in haystack]
+    excluded = [word for word in profile["exclude_keywords"] if word.lower() in title_summary]
     if excluded:
         penalties.append("命中排除词" + "、".join(excluded[:2]))
 

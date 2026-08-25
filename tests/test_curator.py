@@ -198,6 +198,63 @@ class CuratorTest(unittest.TestCase):
         self.assertIn("只有资本事件", lookup["https://example.com/product-manager-funding"]["penalty"])
         self.assertIn("纯人物群像", lookup["https://example.com/people"]["penalty"])
 
+    def test_incidental_body_words_do_not_trigger_hard_exclusions(self) -> None:
+        common = {
+            "published": "2026-08-06T08:00:00Z",
+            "source_name": "中文深度媒体",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "Agent 成本失控背后：上下文、人工审核与维护成本正在被低估",
+                "summary": "拆解 Agent 任务的真实成本结构",
+                "content": "文中会讨论不同模型和产品，但这不是一篇模型发布稿。" * 120,
+                "link": "https://example.com/agent-cost",
+            },
+            {
+                **common,
+                "title": "耗时 41 分钟，千问办公押注了怎样的 Agent 未来",
+                "summary": "千问办公、WorkBuddy、TRAE Work 使用同一任务实测",
+                "content": "测试任务是制作行业周报，文中也提到榜单，但文章核心是三条 Agent 路线对比。" * 120,
+                "link": "https://example.com/agent-comparison",
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=self.now)}
+        self.assertTrue(lookup["https://example.com/agent-cost"]["recommended"])
+        self.assertTrue(lookup["https://example.com/agent-comparison"]["recommended"])
+        self.assertNotIn("命中排除词", lookup["https://example.com/agent-comparison"]["penalty"])
+        self.assertNotIn("事件级别不足", lookup["https://example.com/agent-cost"]["penalty"])
+
+    def test_headline_noise_is_rejected_without_body_keyword_accidents(self) -> None:
+        common = {
+            "summary": "AI 行业长文",
+            "content": "一篇完整的中文文章。" * 120,
+            "published": "2026-08-24T08:00:00Z",
+            "source_name": "中文媒体",
+            "source_priority": 4,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        titles = [
+            "WRC 2026｜原生全模态世界模型：从模拟世界到交互世界",
+            "有头有脸的大模型公司，集体搞起匿名公测",
+            "MiniMax 做视频领域 Claude Code 的野心已经藏不住了",
+            "从单点突破到全数 SOTA，阿里打响模型团战第一枪",
+            "AI 音乐走到该怎么做，中国大模型为啥选最难的路",
+            "字节 AI 产品向豆包集结，Agent 时代第一场巨头战役打响",
+            "Gen1.5 模型带来重要进展：物理 AI 正在接近 GPT3 时刻",
+        ]
+        items = [{**common, "title": title, "link": f"https://example.com/noise-{index}"} for index, title in enumerate(titles)]
+        ranked = rank_candidates(items, self.profile, now=self.now)
+        self.assertTrue(all(not item["recommended"] for item in ranked))
+
 
 if __name__ == "__main__":
     unittest.main()
