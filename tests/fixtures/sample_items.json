@@ -1,0 +1,102 @@
+[
+  {
+    "title": "Codex Harness open sourced with App Server and SDK",
+    "link": "https://example.com/codex-harness",
+    "summary": "OpenAI releases the Codex harness for building coding agents with tools, approvals, context and workflows.",
+    "content": "The release explains the Agent runtime, App Server, SDK, tool calls, permissions and long-running workflow integration. It includes concrete API examples and migration guidance for product teams.",
+    "published": "2026-08-24T08:00:00Z",
+    "source_name": "OpenAI News",
+    "source_priority": 5,
+    "source_type": "rss"
+  },
+  {
+    "title": "Prompt caching and KV cache explained for Agent workflows",
+    "link": "https://example.com/prompt-cache",
+    "summary": "A practical guide to cache repeated prefixes and reduce Agent latency and cost.",
+    "content": "The article compares KV cache inside one inference with prompt caching across requests. It shows a workflow example, cache misses, context ordering and user-facing cost impact.",
+    "published": "2026-08-23T08:00:00Z",
+    "source_name": "Simon Willison",
+    "source_priority": 4,
+    "source_type": "rss"
+  },
+  {
+    "title": "AI adoption is a myth when enterprise workflow stays manual",
+    "link": "https://example.com/adoption",
+    "summary": "A case study argues that usage metrics hide a barbell of power users and inactive employees.",
+    "content": "The enterprise case compares adoption dashboards with actual workflow automation and proposes moving agents into existing systems. It includes concrete employee distribution and token usage data.",
+    "published": "2026-08-22T08:00:00Z",
+    "source_name": "One Useful Thing",
+    "source_priority": 4,
+    "source_type": "rss"
+  },
+  {
+    "title": "Startup raises $900M at a $12B valuation",
+    "link": "https://example.com/funding",
+    "summary": "Funding round and investor list with no product details.",
+    "content": "The company announced a funding round. The report only lists valuation and investors.",
+    "published": "2026-08-24T08:00:00Z",
+    "source_name": "Tech News",
+    "source_priority": 2,
+    "source_type": "rss"
+  },
+  {
+    "title": "Weekly roundup of 25 AI benchmark leaderboard updates",
+    "link": "https://example.com/roundup",
+    "summary": "A week in review with many unrelated benchmark results.",
+    "content": "Weekly roundup covering leaderboard changes and minor model scores without user impact.",
+    "published": "2026-08-24T08:00:00Z",
+    "source_name": "AI Roundup",
+    "source_priority": 3,
+    "source_type": "rss"
+  },
+  {
+    "title": "Election surveillance platform adds AI weapon detection",
+    "link": "https://example.com/politics",
+    "summary": "Politics, election and surveillance news.",
+    "content": "The story focuses on election politics, surveillance and weapon detection.",
+    "published": "2026-08-24T08:00:00Z",
+    "source_name": "General News",
+    "source_priority": 3,
+    "source_type": "rss"
+  },
+  {
+    "title": "Codex Harness open sourced with App Server & SDK",
+    "link": "https://duplicate.example.com/codex-harness",
+    "summary": "Duplicate coverage of the same Codex Harness release.",
+    "content": "Duplicate release summary.",
+    "published": "2026-08-24T09:00:00Z",
+    "source_name": "Duplicate",
+    "source_priority": 2,
+    "source_type": "rss"
+  },
+  {
+    "title": "v2.1.241",
+    "link": "https://example.com/claude-version",
+    "summary": "Claude Code package release notes.",
+    "content": "Minor package release with internal fixes.",
+    "published": "2026-08-24T10:00:00Z",
+    "source_name": "Claude Code Releases",
+    "source_priority": 5,
+    "source_type": "rss"
+  },
+  {
+    "title": "Windows 11 arm64 image generally available",
+    "link": "https://example.com/windows-image",
+    "summary": "A generic GitHub Actions runner image update.",
+    "content": "The update changes the available Windows runner image.",
+    "published": "2026-08-24T10:00:00Z",
+    "source_name": "GitHub Changelog",
+    "source_priority": 4,
+    "source_type": "rss"
+  },
+  {
+    "title": "llm-anthropic 0.27",
+    "link": "https://example.com/package-version",
+    "summary": "AI model plugin package release.",
+    "content": "Package maintenance release notes.",
+    "published": "2026-08-24T10:00:00Z",
+    "source_name": "Simon Willison",
+    "source_priority": 4,
+    "source_type": "rss"
+  }
+]

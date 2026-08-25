@@ -1,37 +1,75 @@
 ---
-name: ai-hot-content-curator
-description: 一个用于发现、筛选和研究AI/科技及个人成长领域自媒体热门选题的技能。本 SKILL 只用于选题，写自媒体文案、写 C 哥日课等任何内容实际创作都不能使用这个 SKILL。
+name: stephen-ai-hot-content-skill
+description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序适合日课创作的 AI 热点选题。用于寻找选题、生成候选报告、审核入选与淘汰项；不负责撰写文章正文。
 ---
 
-# ai-hot-content-curator
+# Stephen AI 热点选题
 
-此技能旨在帮助发现、筛选和深度分析热门的自媒体内容的潜在选题。它专注于从网上获取热门最新新闻，然后聚焦于AI、科技、个人成长和“一人公司”等主题。
+只负责发现与筛选选题。确认题目后的文章研究与写作交给 `stephen-writing-skill`。
 
-## 工作流
+## 选题标准
 
-### 1. 自动获取与筛选 (Automated Curation)
-- **执行脚本**: 运行 `scripts/scrape_aihot.py`。
-- **功能**: 
-    - 该脚本会自动从预设的来源（AIHot 网站、RSS 源等）抓取最新内容。
-    - 自动进行去重、清洗和初步筛选（去除旧内容、无干货内容）。
-    - 调用 AI 接口，从候选列表中挑选出最值得推荐的选题。
-    - **中文输出**: 脚本会强制要求 AI 用中文生成推荐理由和优化后的中文标题。
+优先选择：
 
-### 2. 结果输出 (Output)
-- **位置**: 脚本运行完成后，会在项目根目录下的 `topics/` 文件夹中创建一个带有时间戳的子目录（例如 `topics/2026-02-09-120000/`）。
-- **文件**:
-    - `aihot_selected.json`: 包含所有被选中选题的详细信息（JSON格式），包括 ID、中文标题、原始链接、推荐理由等。
-    - `index.html`: 一个可视化的 HTML 报告，可以直接在浏览器中打开查看选题。
+- Agent、Codex、Claude Code、Harness、Skill、MCP 等系统与工作流变化。
+- 重要模型、API、开源项目或产品发布，且能说清普通人的使用价值。
+- AI 对工作、组织、知识、教育和个人效率的真实影响。
+- KV Cache、训练、上下文、智能涌现等能够用大白话讲透的机制。
+- 有明确事件、事实、数字、案例、冲突或反常识判断，能形成单一因果链。
 
-### 3. 后续操作 (Next Steps)
-- 用户可以根据生成的 `index.html` 或 `aihot_selected.json` 确认最终选题。
-- 确认选题后，如果需要进一步创作，请使用其他相关技能或手动进行深度研究。
+默认排除：
 
-## 使用方法
-当用户需要自媒体选题，且通过热门新闻、最新爆点、热门事件等获取选题时，直接调用此技能运行 `scrape_aihot.py` 脚本即可。
+- 只有融资、估值、跑分、榜单或小版本更新。
+- 多事件周报、新闻合集、商业通稿和缺少正文的标题党。
+- 政治、娱乐、监控、武器等偏离既有文章谱系的内容。
+- 需要大量专业背景，且无法转化成小白可理解价值的技术细节。
 
-## 注意事项
-1. **依赖**: 脚本依赖 `requests`, `bs4`, `trafilatura`, `feedparser` 等库，请确保环境中已安装。
-2. **输出**: 所有输出内容（标题、理由）均为中文。
-3. **定位**: 脚本会自动在项目根目录生成 `topics` 文件夹，请在执行完脚本后检查该目录获取结果。
-4. 本 SKILL 只用于选题，写自媒体文案、写 C 哥日课等任何内容实际创作都不能使用这个 SKILL。
+详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)。
+
+## 运行
+
+首次安装依赖：
+
+```bash
+python3 -m pip install -r scripts/requirements.txt
+```
+
+抓取并生成报告：
+
+```bash
+python3 scripts/scrape_aihot.py
+```
+
+没有 API Key 时使用确定性评分。需要模型复排时，配置环境变量 `OPENROUTER_API_KEY`，或把 Key 写入本地 `.config/openrouter_api_key.txt`。Key 禁止提交。
+
+离线验证：
+
+```bash
+python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-ai
+```
+
+## 输出与人工审核
+
+每次运行在 `topics/<时间戳>/` 生成：
+
+- `candidates.json`：候选选题、分数、推荐理由与排除原因。
+- `index.html`：人工审核页面。
+- `run.json`：抓取数量和失败来源。
+
+在 `index.html` 中标记应该入选、不应入选和遗漏选题，然后导出 `selection_feedback.json`。
+
+导入反馈：
+
+```bash
+python3 scripts/import_feedback.py /path/to/selection_feedback.json
+```
+
+反馈写入本地 `.local/editorial_feedback.jsonl`，不会进入公开仓库。后续根据反馈修改编辑画像、来源与评分逻辑。
+
+## 交付要求
+
+- 默认展示候选报告，不擅自替用户确定最终选题。
+- 抓取失败的来源写入 `run.json`，其余来源继续运行。
+- 同一事件只保留信息最完整的一篇。
+- 没有足够强的候选时，允许少选，不用弱题凑数量。
+- 运行测试后才能提交代码。

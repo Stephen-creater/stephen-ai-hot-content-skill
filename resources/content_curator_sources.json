@@ -1,85 +1,109 @@
 {
-    "sources": [
-        {
-            "category": "AI Podcasts & Interviews",
-            "type": "RSS",
-            "urls": [
-                "https://lexfridman.com/feed/podcast/",
-                "https://karpathy.github.io/feed.xml",
-                "http://blog.samaltman.com/posts.atom",
-                "https://blog.ycombinator.com/feed/",
-                "https://rss.art19.com/tim-ferriss-show",
-                "https://nav.al/feed"
-            ]
-        },
-        {
-            "category": "Tech & AI News",
-            "type": "Web",
-            "urls": [
-                "https://techcrunch.com/category/artificial-intelligence/",
-                "https://www.theverge.com/tech",
-                "https://news.ycombinator.com/",
-                "https://openai.com/blog",
-                "https://www.anthropic.com/news",
-                "https://blog.google/technology/ai/",
-                "https://www.ainews.com/",
-                "https://aivalley.ai/",
-                "https://github.com/liyupi/ai-guide"
-            ]
-        },
-        {
-            "category": "Thought Leadership & Newsletters",
-            "type": "Web",
-            "urls": [
-                "https://stratechery.com/",
-                "https://www.oneusefulthing.org/",
-                "https://www.lennysnewsletter.com/",
-                "https://bensbites.beehiiv.com/",
-                "https://peteryang.substack.com/",
-                "https://danwang.co/"
-            ]
-        },
-        {
-            "category": "Personal Growth & Philosophy",
-            "type": "Web",
-            "urls": [
-                "https://fs.blog/blog/",
-                "https://jamesclear.com/articles",
-                "https://paulgraham.com/articles.html"
-            ]
-        },
-        {
-            "category": "RSS Feeds",
-            "type": "RSS",
-            "urls": [
-                "http://feeds.feedburner.com/TechCrunch/",
-                "https://rss.nytimes.com/services/xml/rss/nyt/Technology.xml",
-                "https://stratechery.com/feed/",
-                "https://www.oneusefulthing.org/feed",
-                "https://www.lennysnewsletter.com/feed",
-                "https://news.smol.ai/rss.xml",
-                "https://www.404media.co/rss",
-                "https://magazine.sebastianraschka.com/feed",
-                "https://aibusiness.com/rss.xml",
-                "https://aimodels.substack.com/feed",
-                "https://www.artificialintelligence-news.com/feed/rss/",
-                "https://venturebeat.com/category/ai/feed/",
-                "https://aisnakeoil.substack.com/feed",
-                "https://deepmind.com/blog/feed/basic/",
-                "https://www.technologyreview.com/feed/",
-                "https://openai.com/blog/rss/",
-                "http://googleaiblog.blogspot.com/atom.xml",
-                "https://huggingface.co/blog/feed.xml",
-                "https://rss.beehiiv.com/feeds/2R3C6Bt5wj.xml",
-                "https://www.theverge.com/rss/index.xml",
-                "https://simonwillison.net/atom/everything/",
-                "https://www.latent.space/feed",
-                "https://www.interconnects.ai/feed"
-            ]
-        }
-    ],
-    "search_params": {
-        "time_range": "last_week",
-        "include_timeless": true
+  "sources": [
+    {
+      "name": "OpenAI News",
+      "category": "官方发布",
+      "type": "rss",
+      "url": "https://openai.com/news/rss.xml",
+      "priority": 5
+    },
+    {
+      "name": "Google DeepMind",
+      "category": "官方发布",
+      "type": "rss",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "priority": 5
+    },
+    {
+      "name": "Hugging Face Blog",
+      "category": "开源模型",
+      "type": "rss",
+      "url": "https://huggingface.co/blog/feed.xml",
+      "priority": 4
+    },
+    {
+      "name": "GitHub Changelog",
+      "category": "开发工具",
+      "type": "rss",
+      "url": "https://github.blog/changelog/feed/",
+      "priority": 4
+    },
+    {
+      "name": "OpenAI Codex Releases",
+      "category": "Agent与编程",
+      "type": "rss",
+      "url": "https://github.com/openai/codex/releases.atom",
+      "priority": 5
+    },
+    {
+      "name": "Claude Code Releases",
+      "category": "Agent与编程",
+      "type": "rss",
+      "url": "https://github.com/anthropics/claude-code/releases.atom",
+      "priority": 5
+    },
+    {
+      "name": "Simon Willison",
+      "category": "开发者实践",
+      "type": "rss",
+      "url": "https://simonwillison.net/atom/everything/",
+      "priority": 4
+    },
+    {
+      "name": "Latent Space",
+      "category": "深度访谈",
+      "type": "rss",
+      "url": "https://www.latent.space/feed",
+      "priority": 4
+    },
+    {
+      "name": "Interconnects",
+      "category": "模型与训练",
+      "type": "rss",
+      "url": "https://www.interconnects.ai/feed",
+      "priority": 4
+    },
+    {
+      "name": "One Useful Thing",
+      "category": "工作与组织",
+      "type": "rss",
+      "url": "https://www.oneusefulthing.org/feed",
+      "priority": 4
+    },
+    {
+      "name": "AI News by Smol AI",
+      "category": "行业精选",
+      "type": "rss",
+      "url": "https://news.smol.ai/rss.xml",
+      "priority": 3
+    },
+    {
+      "name": "Anthropic News",
+      "category": "官方发布",
+      "type": "web",
+      "url": "https://www.anthropic.com/news",
+      "priority": 5
+    },
+    {
+      "name": "Google AI",
+      "category": "官方发布",
+      "type": "web",
+      "url": "https://blog.google/technology/ai/",
+      "priority": 4
+    },
+    {
+      "name": "AIHot",
+      "category": "中文热点聚合",
+      "type": "web",
+      "url": "https://aihot.today/",
+      "priority": 3
     }
+  ],
+  "fetch": {
+    "rss_items_per_source": 12,
+    "web_links_per_source": 12,
+    "hydrate_workers": 12,
+    "request_timeout_seconds": 15,
+    "max_article_bytes": 1500000
+  }
 }

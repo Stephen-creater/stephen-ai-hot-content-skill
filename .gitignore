@@ -1,4 +1,12 @@
+.DS_Store
 .venv/
-.config/openrouter_api_key.txt
+__pycache__/
+*.py[cod]
+.config/
+.local/
+topics/
 article_content_cache.json
+fetched_content.json
 aihot_valid_all_debug.json
+.env
+.env.*
