@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from curator import rank_candidates
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import inbox_item
+from scrape_aihot import inbox_item, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -57,6 +57,23 @@ class CuratorTest(unittest.TestCase):
             self.assertIn("beforeunload", report)
             self.assertIn("review-counts", report)
             self.assertIn("state.dirty===undefined", report)
+
+    def test_report_gate_does_not_fill_with_rejected_items(self) -> None:
+        ranked = [
+            {"id": "good", "recommended": True, "score": 100},
+            {"id": "bad-1", "recommended": False, "score": 99},
+            {"id": "bad-2", "recommended": False, "score": 98},
+        ]
+        self.assertEqual([item["id"] for item in select_report_candidates(ranked, 15)], ["good"])
+        self.assertEqual(len(select_report_candidates(ranked, 15, include_rejected=True)), 3)
+
+    def test_empty_report_explains_that_nothing_passed(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "index.html"
+            generate_report([], path, "2026-08-25-120000")
+            report = path.read_text()
+            self.assertIn("本轮没有合格候选", report)
+            self.assertIn("不用为了凑数", report)
 
     def test_local_transcript_becomes_ready_candidate(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -51,6 +51,10 @@ python3 -m pip install -r scripts/requirements.txt
 python3 scripts/scrape_aihot.py
 ```
 
+正常报告只展示通过硬门槛的内容。`report_candidate_count` 是最大数量，不是必须凑满的配额。0 条合格时应直接输出 0 条，不得用低质量内容补位。
+
+只有调试筛选规则时才可显式运行 `--include-rejected`，该模式不用于日常选题。
+
 公众号、B站、播客或本地逐字稿先加入 inbox：
 
 ```bash
@@ -100,5 +104,5 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-sou
 - 默认展示候选报告，不擅自替用户确定最终选题。
 - 抓取失败的来源写入 `run.json`，其余来源继续运行。
 - 同一事件只保留信息最完整的一篇。
-- 没有足够强的候选时，允许少选，不用弱题凑数量。
+- 硬门槛未通过的内容禁止进入正常审核页。没有足够强的候选时允许少选或 0 条，不得用弱题凑数量。
 - 运行测试后才能提交代码。

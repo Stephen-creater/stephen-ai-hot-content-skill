@@ -28,17 +28,23 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
 </article>"""
         )
 
+    candidate_content = "".join(cards) if cards else """
+<section class="empty-state">
+  <h2>本轮没有合格候选</h2>
+  <p>所有内容都已被历史反馈或硬门槛过滤。不用为了凑数审核低质量选题。</p>
+</section>"""
+
     document = f"""<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Stephen AI 热点候选</title>
 <style>
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f1eb;color:#222;margin:0}}main{{max-width:900px;margin:auto;padding:24px 18px 80px}}header{{margin-bottom:20px}}h1{{font-size:30px;margin:0 0 8px}}.hint{{color:#666}}.toolbar{{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 22px;padding:12px 14px;background:rgba(244,241,235,.96);border:1px solid #d8cdbc;border-radius:12px;box-shadow:0 6px 18px rgba(70,55,35,.08);backdrop-filter:blur(10px)}}.toolbar-summary{{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:#5c5144}}.export-state{{font-weight:600}}.export-state.dirty{{color:#a13f2c}}.export-state.clean{{color:#35633d}}.export-button{{flex:0 0 auto;background:#222;color:#fff;font-weight:600}}.card{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:20px;margin:16px 0}}.meta{{display:flex;justify-content:space-between;color:#806b51;font-size:13px}}h2{{font-size:21px;margin:10px 0}}a{{color:#222}}.reason{{color:#365b3b}}.penalty{{color:#9b3d2f}}.readiness{{font-size:13px;color:#6d5d49;background:#f8f4ed;padding:8px;border-radius:7px}}.review{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}button{{padding:9px;border:1px solid #cbbda9;background:#f8f4ed;border-radius:8px;cursor:pointer}}button.active{{background:#222;color:#fff}}textarea{{grid-column:1/-1;min-height:58px;padding:8px}}.card-save-status{{grid-column:1/-1;color:#777;font-size:12px}}.card-save-status.saved{{color:#35633d}}.missed{{background:#fff8df;border:1px solid #e2ca77;padding:18px;border-radius:12px;margin-top:30px}}input{{width:100%;box-sizing:border-box;margin:5px 0;padding:9px}}#export-bottom{{margin-top:20px;background:#222;color:#fff}}@media(max-width:620px){{.toolbar{{align-items:stretch;flex-direction:column}}.export-button{{width:100%}}}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f1eb;color:#222;margin:0}}main{{max-width:900px;margin:auto;padding:24px 18px 80px}}header{{margin-bottom:20px}}h1{{font-size:30px;margin:0 0 8px}}.hint{{color:#666}}.toolbar{{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 22px;padding:12px 14px;background:rgba(244,241,235,.96);border:1px solid #d8cdbc;border-radius:12px;box-shadow:0 6px 18px rgba(70,55,35,.08);backdrop-filter:blur(10px)}}.toolbar-summary{{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:#5c5144}}.export-state{{font-weight:600}}.export-state.dirty{{color:#a13f2c}}.export-state.clean{{color:#35633d}}.export-button{{flex:0 0 auto;background:#222;color:#fff;font-weight:600}}.card{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:20px;margin:16px 0}}.empty-state{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:32px 24px;margin:18px 0;color:#5c5144}}.empty-state h2{{color:#222}}.meta{{display:flex;justify-content:space-between;color:#806b51;font-size:13px}}h2{{font-size:21px;margin:10px 0}}a{{color:#222}}.reason{{color:#365b3b}}.penalty{{color:#9b3d2f}}.readiness{{font-size:13px;color:#6d5d49;background:#f8f4ed;padding:8px;border-radius:7px}}.review{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}button{{padding:9px;border:1px solid #cbbda9;background:#f8f4ed;border-radius:8px;cursor:pointer}}button.active{{background:#222;color:#fff}}textarea{{grid-column:1/-1;min-height:58px;padding:8px}}.card-save-status{{grid-column:1/-1;color:#777;font-size:12px}}.card-save-status.saved{{color:#35633d}}.missed{{background:#fff8df;border:1px solid #e2ca77;padding:18px;border-radius:12px;margin-top:30px}}input{{width:100%;box-sizing:border-box;margin:5px 0;padding:9px}}#export-bottom{{margin-top:20px;background:#222;color:#fff}}@media(max-width:620px){{.toolbar{{align-items:stretch;flex-direction:column}}.export-button{{width:100%}}}}
 </style></head><body><main><header><h1>Stephen AI 热点候选</h1><div class="hint">{html.escape(generated_at)} · 标记和备注会实时保存到当前浏览器。导出文件会暂存在浏览器下载目录，导入 Skill 后再清理</div></header>
 <section class="toolbar" aria-label="审核进度">
   <div class="toolbar-summary"><span id="review-counts"></span><span id="export-state" class="export-state"></span></div>
   <button class="export-button" data-export>导出全部审核结果</button>
 </section>
-{''.join(cards)}
+{candidate_content}
 <section class="missed"><h2>补充遗漏选题</h2><input id="missed-title" placeholder="标题"><input id="missed-url" placeholder="链接"><input id="missed-reason" placeholder="为什么重要"><button id="add-missed">加入遗漏列表</button><ul id="missed-list"></ul></section>
 <button id="export-bottom" data-export>导出全部审核结果</button>
 </main><script>

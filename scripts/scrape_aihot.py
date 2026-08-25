@@ -311,11 +311,17 @@ def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
     return ordered
 
 
+def select_report_candidates(ranked: list[dict], limit: int, include_rejected: bool = False) -> list[dict]:
+    eligible = ranked if include_rejected else [item for item in ranked if item.get("recommended")]
+    return eligible[:limit]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="为 Stephen 筛选 AI 热点选题")
     parser.add_argument("--fixture", type=Path, help="使用本地 JSON 数据，不联网")
     parser.add_argument("--inbox", type=Path, default=ROOT / ".local" / "source_inbox.json", help="公众号、B站、播客和本地逐字稿入口")
     parser.add_argument("--include-verification", action="store_true", help="同时抓取英文官方核验来源")
+    parser.add_argument("--include-rejected", action="store_true", help="调试时在报告中包含未通过硬门槛的内容")
     parser.add_argument("--no-ai", action="store_true", help="不调用模型复排")
     parser.add_argument("--model", default="google/gemini-3-flash-preview")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
@@ -347,7 +353,8 @@ def main() -> None:
     skipped_reviewed_count = sum(1 for item in ranked if str(item["id"]) in reviewed_ids)
     ranked = [item for item in ranked if str(item["id"]) not in reviewed_ids]
     report_count = profile["report_candidate_count"]
-    candidates = ranked[:report_count]
+    rejected_by_gate_count = sum(1 for item in ranked if not item.get("recommended"))
+    candidates = select_report_candidates(ranked, report_count, include_rejected=args.include_rejected)
     if not args.no_ai and api_key():
         try:
             candidates = ai_rerank(candidates, profile, args.model)
@@ -363,11 +370,23 @@ def main() -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "candidates.json").write_text(json.dumps(candidates, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "run.json").write_text(
-        json.dumps({"generated_at": datetime.now(timezone.utc).isoformat(), "input_count": len(items), "skipped_reviewed_count": skipped_reviewed_count, "errors": errors}, ensure_ascii=False, indent=2),
+        json.dumps(
+            {
+                "generated_at": datetime.now(timezone.utc).isoformat(),
+                "input_count": len(items),
+                "skipped_reviewed_count": skipped_reviewed_count,
+                "rejected_by_gate_count": rejected_by_gate_count,
+                "candidate_count": len(candidates),
+                "include_rejected": args.include_rejected,
+                "errors": errors,
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
         encoding="utf-8",
     )
     generate_report(candidates, output_dir / "index.html", timestamp)
-    print(f"候选 {len(candidates)} 条，输入 {len(items)} 条")
+    print(f"合格候选 {len(candidates)} 条，输入 {len(items)} 条，硬门槛拒绝 {rejected_by_gate_count} 条")
     if errors:
         print("抓取告警：")
         for error in errors:
