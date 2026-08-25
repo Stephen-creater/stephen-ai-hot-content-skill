@@ -1,108 +1,79 @@
 {
   "sources": [
     {
+      "name": "少数派",
+      "category": "中文科技深度内容",
+      "type": "rss",
+      "url": "https://sspai.com/feed",
+      "priority": 4,
+      "role": "candidate",
+      "language": "zh",
+      "maturity": "secondary"
+    },
+    {
+      "name": "AIHot中文媒体",
+      "category": "中文AI媒体聚合",
+      "type": "aihot",
+      "url": "https://aihot.today/",
+      "priority": 4,
+      "role": "candidate",
+      "language": "zh",
+      "maturity": "secondary",
+      "allowed_platforms": ["机器之心", "量子位", "新智元", "极客公园", "InfoQ", "少数派"]
+    },
+    {
       "name": "OpenAI News",
-      "category": "官方发布",
+      "category": "英文官方核验",
       "type": "rss",
       "url": "https://openai.com/news/rss.xml",
-      "priority": 5
+      "priority": 5,
+      "role": "verification",
+      "language": "en",
+      "maturity": "primary"
     },
     {
       "name": "Google DeepMind",
-      "category": "官方发布",
+      "category": "英文官方核验",
       "type": "rss",
       "url": "https://deepmind.google/blog/rss.xml",
-      "priority": 5
-    },
-    {
-      "name": "Hugging Face Blog",
-      "category": "开源模型",
-      "type": "rss",
-      "url": "https://huggingface.co/blog/feed.xml",
-      "priority": 4
-    },
-    {
-      "name": "GitHub Changelog",
-      "category": "开发工具",
-      "type": "rss",
-      "url": "https://github.blog/changelog/feed/",
-      "priority": 4
-    },
-    {
-      "name": "OpenAI Codex Releases",
-      "category": "Agent与编程",
-      "type": "rss",
-      "url": "https://github.com/openai/codex/releases.atom",
-      "priority": 5
-    },
-    {
-      "name": "Claude Code Releases",
-      "category": "Agent与编程",
-      "type": "rss",
-      "url": "https://github.com/anthropics/claude-code/releases.atom",
-      "priority": 5
-    },
-    {
-      "name": "Simon Willison",
-      "category": "开发者实践",
-      "type": "rss",
-      "url": "https://simonwillison.net/atom/everything/",
-      "priority": 4
-    },
-    {
-      "name": "Latent Space",
-      "category": "深度访谈",
-      "type": "rss",
-      "url": "https://www.latent.space/feed",
-      "priority": 4
-    },
-    {
-      "name": "Interconnects",
-      "category": "模型与训练",
-      "type": "rss",
-      "url": "https://www.interconnects.ai/feed",
-      "priority": 4
-    },
-    {
-      "name": "One Useful Thing",
-      "category": "工作与组织",
-      "type": "rss",
-      "url": "https://www.oneusefulthing.org/feed",
-      "priority": 4
-    },
-    {
-      "name": "AI News by Smol AI",
-      "category": "行业精选",
-      "type": "rss",
-      "url": "https://news.smol.ai/rss.xml",
-      "priority": 3
+      "priority": 5,
+      "role": "verification",
+      "language": "en",
+      "maturity": "primary"
     },
     {
       "name": "Anthropic News",
-      "category": "官方发布",
+      "category": "英文官方核验",
       "type": "web",
       "url": "https://www.anthropic.com/news",
-      "priority": 5
+      "priority": 5,
+      "role": "verification",
+      "language": "en",
+      "maturity": "primary"
     },
     {
-      "name": "Google AI",
-      "category": "官方发布",
-      "type": "web",
-      "url": "https://blog.google/technology/ai/",
-      "priority": 4
-    },
-    {
-      "name": "AIHot",
-      "category": "中文热点聚合",
-      "type": "web",
-      "url": "https://aihot.today/",
-      "priority": 3
+      "name": "GitHub Changelog",
+      "category": "英文官方核验",
+      "type": "rss",
+      "url": "https://github.blog/changelog/feed/",
+      "priority": 4,
+      "role": "verification",
+      "language": "en",
+      "maturity": "primary"
     }
+  ],
+  "manual_registry": [
+    {"name": "小林coding", "platform": "wechat", "priority": 5, "notes": "技术概念大白话解释"},
+    {"name": "MindCode", "platform": "wechat", "priority": 5, "notes": "AI、脑科学、心理学与创业的长逻辑文章"},
+    {"name": "得到APP精选", "platform": "web", "priority": 4, "notes": "可复用的概念、方法和商业判断"},
+    {"name": "中文AI公众号", "platform": "wechat", "priority": 4, "notes": "通过 inbox 持续补充已验证作者"},
+    {"name": "B站小众高质量视频", "platform": "bilibili", "priority": 4, "notes": "优先附字幕或本地逐字稿"},
+    {"name": "中文AI播客", "platform": "xiaoyuzhou", "priority": 4, "notes": "优先附 Show Notes、RSS 或本地逐字稿"}
   ],
   "fetch": {
     "rss_items_per_source": 12,
-    "web_links_per_source": 12,
-    "hydrate_workers": 12,
+    "web_links_per_source": 15,
+    "hydrate_workers": 10,
     "request_timeout_seconds": 15,
     "max_article_bytes": 1500000
   }

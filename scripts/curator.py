@@ -86,6 +86,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     title_summary = f"{title} {summary}".lower()
     reasons: list[str] = []
     penalties: list[str] = []
+    language = item.get("language", "unknown")
+    maturity = item.get("maturity", "unknown")
+    content_status = item.get("content_status", "fulltext" if len(content) >= 500 else "summary")
+    source_role = item.get("source_role", "candidate")
 
     published = parse_datetime(item.get("published") or item.get("article_date"))
     age_days = None
@@ -118,6 +122,34 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     elif item.get("source_type") == "web":
         score -= 6
 
+    if language == profile.get("preferred_language"):
+        score += 18
+        reasons.append("中文内容")
+    elif language == "en":
+        score -= 22
+        penalties.append("英文一手信息，优先用于核验")
+    if maturity == profile.get("preferred_maturity"):
+        score += 16
+        reasons.append("作者已完成二手整合")
+    elif maturity == "primary":
+        score -= 15
+    if source_role == "verification":
+        score -= 80
+        penalties.append("核验来源，不进入默认选题")
+
+    if content_status == "transcript":
+        score += 20
+        reasons.append("已有逐字稿")
+    elif content_status == "fulltext":
+        score += 15
+        reasons.append("已有完整正文")
+    elif content_status == "shownotes":
+        score += 8
+        reasons.append("已有详细 Show Notes")
+    else:
+        score -= 14
+        penalties.append("缺少完整文字材料")
+
     if NUMBER_RE.search(haystack):
         score += 6
         reasons.append("包含明确数字")
@@ -144,13 +176,36 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if any(word.lower() in haystack for word in ("weekly roundup", "week in review", "本周汇总", "一周回顾")):
         score -= 30
         penalties.append("多事件合集")
+    if title.count("；") >= 2:
+        score -= 40
+        penalties.append("标题包含多个事件")
     finance_terms = ("funding", "raises $", "valuation", "融资", "估值")
     substance_terms = ("open source", "开源", "api", "workflow", "agent", "product", "产品", "机制", "case study")
     if any(word in haystack for word in finance_terms) and not any(word in haystack for word in substance_terms):
         score -= 35
         penalties.append("只有融资或估值")
+    title_finance = ("融资", "估值", "收购", "卖了", "亿美元")
+    title_substance = ("开源", "发布", "上线", "产品", "模型", "技术", "案例", "工作流", "agent")
+    if any(word.lower() in title.lower() for word in title_finance) and not any(word.lower() in title.lower() for word in title_substance):
+        score -= 35
+        penalties.append("标题只有资本事件")
+    if any(word in title for word in ("重磅发布", "深度参与", "主论坛", "峰会")):
+        score -= 30
+        penalties.append("疑似会议或商业通稿")
+    if any(word in title for word in ("比赛", "决赛", "奖金")):
+        score -= 25
+        penalties.append("比赛新闻偏离既有文章谱系")
 
     score = round(score, 1)
+    if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:
+        adaptation_readiness = "高"
+        research_cost = "低"
+    elif content_status in {"shownotes", "fulltext", "transcript"} and len(content) >= 400:
+        adaptation_readiness = "中"
+        research_cost = "中"
+    else:
+        adaptation_readiness = "低"
+        research_cost = "高"
     return {
         **item,
         "id": item.get("id") or hashlib.sha1(f"{title}|{item.get('link', '')}".encode()).hexdigest()[:10],
@@ -160,9 +215,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "age_days": age_days,
         "pillars": matched_pillars,
         "score": score,
-        "recommended": score >= profile["minimum_score"] and not excluded and not penalties,
-        "reason": "；".join(reasons[:4]) or "信息不足，等待人工判断",
+        "recommended": score >= profile["minimum_score"] and not excluded and not penalties and source_role == "candidate",
+        "reason": "；".join(reasons[:6]) or "信息不足，等待人工判断",
         "penalty": "；".join(penalties),
+        "language": language,
+        "maturity": maturity,
+        "content_status": content_status,
+        "adaptation_readiness": adaptation_readiness,
+        "research_cost": research_cost,
+        "source_role": source_role,
     }
 
 

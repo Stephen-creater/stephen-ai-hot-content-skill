@@ -1,11 +1,13 @@
 # Stephen AI Hot Content Skill
 
-Stephen 的个人 AI 热点选题 Skill。它根据既有文章和人工审核反馈，从 RSS 与网页来源中筛出适合日课创作的候选题。
+Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研究、解释和整理过的中文内容，包括公众号文章、中文播客、B站视频逐字稿和中文长文，再筛出适合日课二创的候选题。
 
 ## 核心能力
 
-- RSS 优先、网页兜底。
+- 中文二手内容优先，英文官方来源只负责事实核验。
+- 支持公众号、B站、播客链接和本地逐字稿 inbox。
 - 按个人文章谱系做确定性评分和去重。
+- 标记文字材料状态、二创成熟度和预计研究成本。
 - API Key 可选，无 Key 也能运行。
 - 生成可审核的静态 HTML。
 - 支持标记入选、淘汰和遗漏，并导入本地反馈。
@@ -14,6 +16,7 @@ Stephen 的个人 AI 热点选题 Skill。它根据既有文章和人工审核�
 
 ```bash
 python3 -m pip install -r scripts/requirements.txt
+python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
 python3 scripts/scrape_aihot.py
 ```
 
@@ -35,6 +38,7 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json
 
 - `resources/content_curator_sources.json` 管理信息源。
 - `resources/editorial_profile.json` 管理读者、选题方向、排除项和权重。
+- `.local/source_inbox.json` 保存人工投喂的公众号、视频、播客和逐字稿，仅本地使用。
 - `OPENROUTER_API_KEY` 或 `.config/openrouter_api_key.txt` 用于可选模型复排。
 
 API Key、本地反馈、缓存和运行结果均不会提交到公开仓库。

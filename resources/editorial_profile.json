@@ -1,70 +1,55 @@
 {
   "owner": "Stephen",
-  "target_readers": [
-    "中文偏小白 AI 使用者",
-    "产品、运营与管理者",
-    "知识工作者与内容创作者"
-  ],
+  "target_readers": ["中文偏小白 AI 使用者", "产品、运营与管理者", "知识工作者与内容创作者"],
   "selection_count": 8,
   "report_candidate_count": 15,
-  "priority_days": 7,
-  "max_age_days": 30,
-  "minimum_score": 38,
+  "priority_days": 14,
+  "max_age_days": 45,
+  "minimum_score": 48,
+  "preferred_language": "zh",
+  "preferred_maturity": "secondary",
   "topic_pillars": [
     {
       "name": "Agent与编程系统",
       "weight": 1.4,
-      "keywords": ["agent", "codex", "claude code", "harness", "skill", "mcp", "tool use", "coding agent", "app server", "sdk"]
+      "keywords": ["agent", "codex", "claude code", "harness", "skill", "mcp", "工作流", "智能体"]
     },
     {
       "name": "重大产品与开源发布",
-      "weight": 1.3,
-      "keywords": ["open source", "开源", "api", "release", "发布", "launch", "preview", "model", "模型"]
+      "weight": 1.25,
+      "keywords": ["开源", "api", "发布", "上线", "preview", "模型", "产品"]
     },
     {
       "name": "AI工作与组织变化",
-      "weight": 1.3,
-      "keywords": ["workflow", "productivity", "enterprise", "adoption", "工作流", "效率", "组织", "办公", "就业"]
+      "weight": 1.35,
+      "keywords": ["效率", "组织", "办公", "工作", "就业", "企业", "生产力", "自动化"]
     },
     {
       "name": "模型机制与认知解释",
-      "weight": 1.25,
-      "keywords": ["context", "cache", "training", "inference", "reasoning", "emergence", "world model", "上下文", "缓存", "训练", "推理", "涌现"]
+      "weight": 1.3,
+      "keywords": ["上下文", "缓存", "训练", "推理", "涌现", "世界模型", "知识", "泛化"]
     },
     {
       "name": "可复用实践与避坑",
       "weight": 1.25,
-      "keywords": ["best practice", "guide", "how to", "case study", "实践", "指南", "避坑", "案例", "教程"]
+      "keywords": ["实践", "指南", "避坑", "案例", "教程", "方法", "复盘"]
     }
   ],
   "positive_signals": [
-    "有一个明确事件或问题",
-    "能够讲清工作机制",
-    "普通读者能理解并获得行动建议",
-    "包含真实产品、案例、数据或对比",
-    "具备反常识冲突或明确判断",
-    "可以自然形成一条因果链"
+    "已有完整中文正文、字幕、逐字稿或详细Show Notes",
+    "国内作者已经完成资料整合和中文解释",
+    "有明确判断、案例和因果链",
+    "普通读者能直接看懂",
+    "适合删减、重组和保留高质量原文",
+    "二创所需额外研究较少"
   ],
-  "exclude_keywords": [
-    "weekly roundup",
-    "week in review",
-    "融资快讯",
-    "funding round",
-    "benchmark only",
-    "leaderboard",
-    "celebrity",
-    "gossip",
-    "politics",
-    "election",
-    "surveillance",
-    "weapon"
-  ],
+  "exclude_keywords": ["融资快讯", "估值快讯", "榜单", "周报", "本周汇总", "派早报", "本周看什么", "近期值得关注的 App", "娱乐", "明星", "政治", "选举", "监控", "武器", "升降桌", "Surface Pro", "HomePod"],
   "weak_signals": [
-    "只有融资和估值",
-    "只有参数和跑分",
+    "只有一手发布，没有中文解释",
+    "只有融资、参数或跑分",
+    "没有正文、字幕或逐字稿",
     "多事件合集",
-    "缺少正文或一手来源",
-    "与普通读者没有明确关系",
+    "二创前仍需大量补充研究",
     "需要大量专业背景才能理解"
   ],
   "reference_articles": [
@@ -73,7 +58,6 @@
     "小红书开源dots3-note，API限时免费",
     "RAG就是一坨，知识库的版本答案叫Skill的references",
     "一文讲透KV Cache和Prompt Caching",
-    "一文讲透预训练+后训练、pass@1+pass@k",
     "一文讲透AI的智能涌现，以及为什么需要世界模型",
     "AI普及是个神话"
   ]

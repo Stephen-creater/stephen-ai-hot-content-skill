@@ -7,7 +7,11 @@
     "published": "2026-08-24T08:00:00Z",
     "source_name": "OpenAI News",
     "source_priority": 5,
-    "source_type": "rss"
+    "source_type": "wechat",
+    "language": "zh",
+    "maturity": "secondary",
+    "content_status": "fulltext",
+    "content_form": "article"
   },
   {
     "title": "Prompt caching and KV cache explained for Agent workflows",
@@ -17,7 +21,11 @@
     "published": "2026-08-23T08:00:00Z",
     "source_name": "Simon Willison",
     "source_priority": 4,
-    "source_type": "rss"
+    "source_type": "bilibili",
+    "language": "zh",
+    "maturity": "secondary",
+    "content_status": "transcript",
+    "content_form": "video"
   },
   {
     "title": "AI adoption is a myth when enterprise workflow stays manual",
@@ -27,7 +35,11 @@
     "published": "2026-08-22T08:00:00Z",
     "source_name": "One Useful Thing",
     "source_priority": 4,
-    "source_type": "rss"
+    "source_type": "xiaoyuzhou",
+    "language": "zh",
+    "maturity": "secondary",
+    "content_status": "transcript",
+    "content_form": "podcast"
   },
   {
     "title": "Startup raises $900M at a $12B valuation",
@@ -98,5 +110,31 @@
     "source_name": "Simon Willison",
     "source_priority": 4,
     "source_type": "rss"
+  },
+  {
+    "title": "DeepSeek上线多模态；特斯拉发布新车；神秘模型爆火",
+    "link": "https://example.com/multi-event",
+    "summary": "多个无关 AI 新闻合集。",
+    "content": "这是一篇包含多个事件的中文早报合集。",
+    "published": "2026-08-24T10:00:00Z",
+    "source_name": "中文媒体",
+    "source_priority": 4,
+    "source_type": "web",
+    "language": "zh",
+    "maturity": "secondary",
+    "content_status": "fulltext"
+  },
+  {
+    "title": "130亿美元，Hugging Face要卖了",
+    "link": "https://example.com/acquisition",
+    "summary": "AI 公司资本事件。",
+    "content": "文章主要讨论收购价格，没有产品机制与用户价值。",
+    "published": "2026-08-24T10:00:00Z",
+    "source_name": "中文媒体",
+    "source_priority": 4,
+    "source_type": "web",
+    "language": "zh",
+    "maturity": "secondary",
+    "content_status": "fulltext"
   }
 ]

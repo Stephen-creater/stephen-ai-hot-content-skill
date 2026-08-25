@@ -5,6 +5,8 @@ import concurrent.futures
 import json
 import os
 import re
+import shutil
+import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -51,6 +53,11 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
                 "source_category": source["category"],
                 "source_priority": source["priority"],
                 "source_type": "rss",
+                "source_role": source.get("role", "candidate"),
+                "language": source.get("language", "unknown"),
+                "maturity": source.get("maturity", "unknown"),
+                "content_form": "article",
+                "content_status": "summary",
             }
         )
     return items
@@ -82,6 +89,11 @@ def fetch_web_index(source: dict, settings: dict) -> list[dict]:
                 "source_category": source["category"],
                 "source_priority": source["priority"],
                 "source_type": "web",
+                "source_role": source.get("role", "candidate"),
+                "language": source.get("language", "unknown"),
+                "maturity": source.get("maturity", "unknown"),
+                "content_form": "article",
+                "content_status": "summary",
             }
         )
         if len(items) >= settings["web_links_per_source"]:
@@ -89,11 +101,58 @@ def fetch_web_index(source: dict, settings: dict) -> list[dict]:
     return items
 
 
+def fetch_aihot(source: dict, settings: dict) -> list[dict]:
+    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response.raise_for_status()
+    soup = BeautifulSoup(response.text, "html.parser")
+    allowed = set(source.get("allowed_platforms", []))
+    items = []
+    for card in soup.find_all("div", class_=lambda value: value and "bg-card" in value and "text-card-foreground" in value):
+        header = card.find("div", class_=lambda value: value and "justify-between" in value)
+        platform = ""
+        if header:
+            name = header.find("span", class_=lambda value: value and "font-semibold" in value)
+            platform = clean_text(name.get_text(" ", strip=True) if name else "")
+        if allowed and platform not in allowed:
+            continue
+        for anchor in card.find_all("a", href=True):
+            title_node = anchor.find("div", class_="font-[500]")
+            title = clean_text(title_node.get_text(" ", strip=True) if title_node else anchor.get_text(" ", strip=True))
+            link = urljoin(source["url"], anchor["href"])
+            if len(title) < 10 or not link.startswith("http"):
+                continue
+            description_node = anchor.find("div", class_=lambda value: value and "text-[#7a7b79]" in value)
+            description = clean_text(description_node.get_text(" ", strip=True) if description_node else "")
+            published = description if re.fullmatch(r"\d{4}-\d{2}-\d{2}", description) else ""
+            items.append(
+                {
+                    "title": re.sub(r"^\d+\s*\.?\s*", "", title),
+                    "link": link.replace(".com//", ".com/"),
+                    "summary": "" if published else description,
+                    "published": published,
+                    "source_name": platform or source["name"],
+                    "source_category": source["category"],
+                    "source_priority": source["priority"],
+                    "source_type": "web",
+                    "source_role": source.get("role", "candidate"),
+                    "language": source.get("language", "zh"),
+                    "maturity": source.get("maturity", "secondary"),
+                    "content_form": "article",
+                    "content_status": "summary",
+                }
+            )
+    return items
+
+
 def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
     try:
         if source["type"] == "rss":
-            return fetch_rss(source, settings), None
-        return fetch_web_index(source, settings), None
+            rows = fetch_rss(source, settings)
+        elif source["type"] == "aihot":
+            rows = fetch_aihot(source, settings)
+        else:
+            rows = fetch_web_index(source, settings)
+        return rows, None if rows else f"{source['name']}: 未发现条目"
     except Exception as exc:
         return [], f"{source['name']}: {exc}"
 
@@ -124,6 +183,7 @@ def hydrate(item: dict, settings: dict) -> dict:
         extracted = trafilatura.extract(text, include_comments=False, include_tables=True) or ""
         if extracted:
             item["content"] = clean_text(extracted)[:5000]
+            item["content_status"] = "shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext"
         metadata = trafilatura.bare_extraction(text, include_comments=False)
         meta = metadata.as_dict() if hasattr(metadata, "as_dict") else metadata or {}
         if not item.get("published") and isinstance(meta, dict):
@@ -133,6 +193,57 @@ def hydrate(item: dict, settings: dict) -> dict:
     except Exception as exc:
         item["fetch_error"] = str(exc)
     return item
+
+
+def inbox_item(row: dict, settings: dict) -> dict:
+    platform = row.get("platform", "web")
+    item = {
+        "title": clean_text(row.get("title")),
+        "link": row.get("url", ""),
+        "summary": clean_text(row.get("notes")),
+        "content": "",
+        "published": row.get("published", ""),
+        "source_name": row.get("creator") or platform,
+        "source_category": "中文人工投喂",
+        "source_priority": int(row.get("priority", 5)),
+        "source_type": platform,
+        "source_role": "candidate",
+        "language": row.get("language", "zh"),
+        "maturity": "secondary",
+        "content_form": "video" if platform == "bilibili" else "podcast" if platform == "xiaoyuzhou" else "article",
+        "content_status": "summary",
+    }
+    transcript_path = row.get("transcript_path")
+    if transcript_path:
+        path = Path(transcript_path).expanduser()
+        if path.exists():
+            item["content"] = clean_text(path.read_text(encoding="utf-8", errors="replace"))[:20000]
+            item["content_status"] = "transcript"
+            return item
+        item["fetch_error"] = f"逐字稿不存在: {path}"
+
+    if platform == "bilibili" and item["link"] and shutil.which("yt-dlp"):
+        try:
+            output = subprocess.check_output(["yt-dlp", "--dump-single-json", "--skip-download", item["link"]], text=True, timeout=45)
+            metadata = json.loads(output)
+            item["title"] = item["title"] or clean_text(metadata.get("title"))
+            item["summary"] = item["summary"] or clean_text(metadata.get("description"))
+            upload_date = metadata.get("upload_date", "")
+            if upload_date and not item["published"]:
+                item["published"] = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}"
+        except Exception as exc:
+            item["fetch_error"] = f"B站元数据读取失败: {exc}"
+
+    return hydrate(item, settings)
+
+
+def load_inbox(path: Path | None, settings: dict) -> list[dict]:
+    if not path or not path.exists():
+        return []
+    rows = load_json(path)
+    if not isinstance(rows, list):
+        raise ValueError("source inbox 必须是 JSON 数组")
+    return [inbox_item(row, settings) for row in rows]
 
 
 def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
@@ -198,6 +309,8 @@ def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
 def main() -> None:
     parser = argparse.ArgumentParser(description="为 Stephen 筛选 AI 热点选题")
     parser.add_argument("--fixture", type=Path, help="使用本地 JSON 数据，不联网")
+    parser.add_argument("--inbox", type=Path, default=ROOT / ".local" / "source_inbox.json", help="公众号、B站、播客和本地逐字稿入口")
+    parser.add_argument("--include-verification", action="store_true", help="同时抓取英文官方核验来源")
     parser.add_argument("--no-ai", action="store_true", help="不调用模型复排")
     parser.add_argument("--model", default="google/gemini-3-flash-preview")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
@@ -211,9 +324,10 @@ def main() -> None:
     if args.fixture:
         items = load_json(args.fixture)
     else:
-        items = []
+        items = load_inbox(args.inbox, settings)
+        enabled_sources = [source for source in source_config["sources"] if args.include_verification or source.get("role") != "verification"]
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(fetch_source, source, settings) for source in source_config["sources"]]
+            futures = [executor.submit(fetch_source, source, settings) for source in enabled_sources]
             for future in concurrent.futures.as_completed(futures):
                 rows, error = future.result()
                 items.extend(rows)

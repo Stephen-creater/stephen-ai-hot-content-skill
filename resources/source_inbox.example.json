@@ -1,0 +1,24 @@
+[
+  {
+    "url": "https://mp.weixin.qq.com/s/example",
+    "platform": "wechat",
+    "creator": "公众号作者",
+    "title": "可选，抓取失败时使用",
+    "published": "2026-08-25",
+    "notes": "为什么值得关注"
+  },
+  {
+    "url": "https://www.bilibili.com/video/BVexample",
+    "platform": "bilibili",
+    "creator": "B站UP主",
+    "transcript_path": "/absolute/path/to/transcript.txt",
+    "published": "2026-08-25"
+  },
+  {
+    "url": "https://www.xiaoyuzhoufm.com/episode/example",
+    "platform": "xiaoyuzhou",
+    "creator": "播客名称",
+    "transcript_path": "/absolute/path/to/transcript.txt",
+    "published": "2026-08-25"
+  }
+]

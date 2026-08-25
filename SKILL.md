@@ -9,22 +9,24 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 
 ## 选题标准
 
-优先选择：
+优先选择已经完成中文整合、可以低成本二创的内容：
 
+- 国内高质量公众号文章、中文播客、B站小众深度视频和中文长文。
+- 已有完整正文、字幕、逐字稿或详细 Show Notes 的内容。
 - Agent、Codex、Claude Code、Harness、Skill、MCP 等系统与工作流变化。
-- 重要模型、API、开源项目或产品发布，且能说清普通人的使用价值。
 - AI 对工作、组织、知识、教育和个人效率的真实影响。
 - KV Cache、训练、上下文、智能涌现等能够用大白话讲透的机制。
-- 有明确事件、事实、数字、案例、冲突或反常识判断，能形成单一因果链。
+- 作者已经提供明确判断、案例和因果链，二创时只需删减、重组和必要核验。
 
 默认排除：
 
 - 只有融资、估值、跑分、榜单或小版本更新。
+- 只有英文一手发布，需要从零补背景和中文解释。
 - 多事件周报、新闻合集、商业通稿和缺少正文的标题党。
 - 政治、娱乐、监控、武器等偏离既有文章谱系的内容。
 - 需要大量专业背景，且无法转化成小白可理解价值的技术细节。
 
-详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)。
+详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。
 
 ## 运行
 
@@ -40,6 +42,16 @@ python3 -m pip install -r scripts/requirements.txt
 python3 scripts/scrape_aihot.py
 ```
 
+公众号、B站、播客或本地逐字稿先加入 inbox：
+
+```bash
+python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
+python3 scripts/add_source.py "B站链接" --platform bilibili --creator "UP主" --transcript "/path/to/transcript.txt"
+python3 scripts/add_source.py "播客链接" --platform xiaoyuzhou --creator "节目" --transcript "/path/to/transcript.txt"
+```
+
+英文官方来源默认不进入候选池。需要为候选题补充核验线索时，运行 `--include-verification`。
+
 没有 API Key 时使用确定性评分。需要模型复排时，配置环境变量 `OPENROUTER_API_KEY`，或把 Key 写入本地 `.config/openrouter_api_key.txt`。Key 禁止提交。
 
 离线验证：
@@ -52,7 +64,7 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 
 每次运行在 `topics/<时间戳>/` 生成：
 
-- `candidates.json`：候选选题、分数、推荐理由与排除原因。
+- `candidates.json`：候选选题、分数、推荐理由、文字材料状态、二创成熟度与研究成本。
 - `index.html`：人工审核页面。
 - `run.json`：抓取数量和失败来源。
 
