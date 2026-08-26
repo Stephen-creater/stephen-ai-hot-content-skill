@@ -48,7 +48,7 @@
   ],
   "editorial_fit": {
     "evergreen_angle_terms": ["harness", "skill", "mcp", "开源", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理", "agent runtime"],
-    "hype_or_gossip_terms": ["被扒出", "匿名模型", "匿名公测", "怀疑cursor", "神秘模型", "爆火", "杀进", "拿走", "野心已经藏不住", "全数sota", "模型团战", "第一枪", "巨头战役", "gpt3时刻", "gpt3 时刻", "这ai比赛办得有点绝", "我用它做了"],
+    "hype_or_gossip_terms": ["被扒出", "匿名模型", "匿名公测", "怀疑cursor", "神秘模型", "爆火", "杀进", "拿走", "干翻", "老黄", "股价不跌反涨", "野心已经藏不住", "全数sota", "模型团战", "第一枪", "巨头战役", "gpt3时刻", "gpt3 时刻", "这ai比赛办得有点绝", "我用它做了"],
     "broad_or_pr_terms": ["重塑商业", "决定未来", "未来商业", "最大误判", "发展路线", "研究成果", "从模拟世界到交互世界", "中国大模型为啥选最难的路"],
     "niche_professional_terms": ["ai4s", "ai科研", "科研评价", "ai科学家", "ai音乐", "物理ai", "物理 ai", "肝癌", "肿瘤", "药物发现", "材料研发"],
     "major_ai_entities": ["openai", "anthropic", "claude", "google deepmind", "deepmind", "gemini", "microsoft", "nvidia", "英伟达", "deepseek", "阿里", "通义", "qwen", "字节", "腾讯", "百度", "智谱", "kimi", "minimax", "小红书", "codex"],

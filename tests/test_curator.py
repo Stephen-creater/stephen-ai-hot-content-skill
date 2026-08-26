@@ -250,6 +250,7 @@ class CuratorTest(unittest.TestCase):
             "AI 音乐走到该怎么做，中国大模型为啥选最难的路",
             "字节 AI 产品向豆包集结，Agent 时代第一场巨头战役打响",
             "Gen1.5 模型带来重要进展：物理 AI 正在接近 GPT3 时刻",
+            "OpenAI 辣椒芯干翻英伟达，老黄股价不跌反涨",
         ]
         items = [{**common, "title": title, "link": f"https://example.com/noise-{index}"} for index, title in enumerate(titles)]
         ranked = rank_candidates(items, self.profile, now=self.now)
