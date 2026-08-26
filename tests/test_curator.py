@@ -211,8 +211,8 @@ class CuratorTest(unittest.TestCase):
         items = [
             {
                 **common,
-                "title": "Agent 成本失控背后：上下文、人工审核与维护成本正在被低估",
-                "summary": "拆解 Agent 任务的真实成本结构",
+                "title": "Agent 任务为什么越跑越慢：上下文如何影响响应速度",
+                "summary": "用大白话拆解 Agent 上下文机制",
                 "content": "文中会讨论不同模型和产品，但这不是一篇模型发布稿。" * 120,
                 "link": "https://example.com/agent-cost",
             },
@@ -254,6 +254,53 @@ class CuratorTest(unittest.TestCase):
         items = [{**common, "title": title, "link": f"https://example.com/noise-{index}"} for index, title in enumerate(titles)]
         ranked = rank_candidates(items, self.profile, now=self.now)
         self.assertTrue(all(not item["recommended"] for item in ranked))
+
+    def test_event_recency_and_reader_distance_follow_latest_feedback(self) -> None:
+        common = {
+            "content": "一篇具有完整中文正文的深度材料。" * 120,
+            "source_name": "中文深度媒体",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "AI 时代，Claude Code 创始人谈一人军队",
+                "summary": "Anthropic 权威访谈，以下是对话全文",
+                "published": "2026-08-05T08:00:00Z",
+                "link": "https://example.com/old-interview",
+            },
+            {
+                **common,
+                "title": "耗时 41 分钟，千问办公押注了怎样的 Agent 未来",
+                "summary": "三款 Agent 使用同一任务实测",
+                "published": "2026-08-06T08:00:00Z",
+                "link": "https://example.com/old-comparison",
+            },
+            {
+                **common,
+                "title": "Agent 成本失控背后：上下文、人工审核与维护成本正在被低估",
+                "summary": "讨论供应商锁定与企业治理框架",
+                "published": "2026-07-31T08:00:00Z",
+                "link": "https://example.com/enterprise-cost",
+            },
+            {
+                **common,
+                "title": "Codex 也断了：Agent 时代的宕机账单怎么算",
+                "summary": "OpenAI 故障导致任务中断",
+                "published": "2026-07-26T08:00:00Z",
+                "link": "https://example.com/stale-outage",
+            },
+        ]
+        now = datetime(2026, 8, 26, tzinfo=timezone.utc)
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
+        self.assertTrue(lookup["https://example.com/old-interview"]["recommended"])
+        self.assertTrue(lookup["https://example.com/old-comparison"]["recommended"])
+        self.assertIn("距离目标读者过远", lookup["https://example.com/enterprise-cost"]["penalty"])
+        self.assertIn("超过时效窗口", lookup["https://example.com/stale-outage"]["penalty"])
 
 
 if __name__ == "__main__":

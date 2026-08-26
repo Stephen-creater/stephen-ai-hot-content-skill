@@ -207,6 +207,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     interview_terms = [word for word in editorial_fit.get("authoritative_interview_terms", []) if word.lower() in haystack]
     event_terms = [word for word in editorial_fit.get("event_or_ad_terms", []) if word.lower() in title_summary]
     people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
+    time_sensitive_terms = [word for word in editorial_fit.get("time_sensitive_event_terms", []) if word.lower() in title_summary]
+    reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
     concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
     authoritative_interview = bool(interview_terms and major_entities_in_content)
     if evergreen_terms:
@@ -233,6 +235,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if people_terms and not authoritative_interview:
         score -= 30
         penalties.append("纯人物群像，缺少可复用的核心机制")
+    if age_days is not None and time_sensitive_terms and age_days > int(profile.get("time_sensitive_max_age_days", 14)):
+        score -= 60
+        penalties.append("事件新闻已超过时效窗口")
+    if reader_distance_terms:
+        score -= 35
+        penalties.append("企业维护或治理议题，距离目标读者过远")
 
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:
