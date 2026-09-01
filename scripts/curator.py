@@ -212,6 +212,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
     generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
     hardware_news_terms = [word for word in editorial_fit.get("hardware_news_terms", []) if word.lower() in title_summary]
+    too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
+    low_reuse_story_terms = [word for word in editorial_fit.get("low_reuse_story_terms", []) if word.lower() in title_summary]
+    concrete_practice_terms = [word for word in editorial_fit.get("concrete_practice_terms", []) if word.lower() in title_summary]
     concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
     authoritative_interview = bool(interview_terms and major_entities_in_content)
     if evergreen_terms:
@@ -256,6 +259,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if title.count("、") >= 2:
         score -= 40
         penalties.append("标题包含多个事件")
+    if too_technical_terms:
+        score -= 45
+        penalties.append("技术细节过深，目标读者难以理解或使用")
+    if low_reuse_story_terms:
+        score -= 40
+        penalties.append("一次性 AI 奇闻，缺少长期回看价值")
+    if concrete_practice_terms:
+        score += 18
+        reasons.insert(0, "持续实践复盘，有流程、结果和调整过程")
 
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:

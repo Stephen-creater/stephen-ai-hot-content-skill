@@ -355,6 +355,50 @@ class CuratorTest(unittest.TestCase):
         self.assertIn("泛化工具清单或横评", lookup["https://trusted.example.com/generic-list"]["penalty"])
         self.assertTrue(lookup["https://trusted.example.com/controlled-test"]["recommended"])
 
+    def test_reader_usability_and_long_term_value_gate(self) -> None:
+        common = {
+            "content": "一篇完整的中文深度文章。" * 120,
+            "published": "2026-08-31T08:00:00Z",
+            "source_name": "可信中文媒体",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "AI 本地部署不如官方版的元凶找到了：734 个依赖包",
+                "summary": "深入 CUDA 核函数、logit 和 KV 缓存量化",
+                "link": "https://example.com/too-technical",
+            },
+            {
+                **common,
+                "title": "OpenAI 内部，AI 建立了三代「文明」",
+                "summary": "一次多 Agent 异常事件",
+                "link": "https://example.com/one-off-story",
+            },
+            {
+                **common,
+                "title": "编辑部来了 AI 实习生：千问入职 20 天实习小结",
+                "summary": "定时任务、选题评分系统与真实复盘",
+                "link": "https://example.com/long-practice",
+            },
+            {
+                **common,
+                "title": "Claude 发布连接硬件的 MHS 标准",
+                "summary": "统一设备描述与 Agent 调用边界",
+                "link": "https://example.com/mhs-standard",
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=self.now)}
+        self.assertIn("目标读者难以理解或使用", lookup["https://example.com/too-technical"]["penalty"])
+        self.assertIn("缺少长期回看价值", lookup["https://example.com/one-off-story"]["penalty"])
+        self.assertTrue(lookup["https://example.com/long-practice"]["recommended"])
+        self.assertIn("持续实践复盘", lookup["https://example.com/long-practice"]["reason"])
+        self.assertTrue(lookup["https://example.com/mhs-standard"]["recommended"])
+
 
 if __name__ == "__main__":
     unittest.main()
