@@ -303,6 +303,47 @@ class CuratorTest(unittest.TestCase):
         self.assertIn("距离目标读者过远", lookup["https://example.com/enterprise-cost"]["penalty"])
         self.assertIn("超过时效窗口", lookup["https://example.com/stale-outage"]["penalty"])
 
+    def test_source_quality_and_generic_comparison_gate(self) -> None:
+        common = {
+            "summary": "完整的中文深度文章",
+            "content": "文章有足够长的正文材料。" * 120,
+            "published": "2026-08-25T08:00:00Z",
+            "source_name": "中文来源",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "独立开发者 AI 编程工具横测：6 组方案付费实测",
+                "link": "https://kylinlabai.github.io/knowledge/review.html",
+            },
+            {
+                **common,
+                "title": "Codex vs Claude Code：真实偏好实测对比",
+                "link": "https://claudemax.shop/blog/comparison",
+            },
+            {
+                **common,
+                "title": "2026 年 8 月主流 AI Agent 怎么选？五大场景逐一对比",
+                "link": "https://trusted.example.com/generic-list",
+            },
+            {
+                **common,
+                "title": "耗时 41 分钟，三款 Agent 同题实测",
+                "summary": "三款 Agent 使用同一任务，保留时间和结果差异",
+                "link": "https://trusted.example.com/controlled-test",
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=self.now)}
+        self.assertIn("AI 批量内容站", lookup["https://kylinlabai.github.io/knowledge/review.html"]["penalty"])
+        self.assertIn("商业导流站", lookup["https://claudemax.shop/blog/comparison"]["penalty"])
+        self.assertIn("泛化工具清单或横评", lookup["https://trusted.example.com/generic-list"]["penalty"])
+        self.assertTrue(lookup["https://trusted.example.com/controlled-test"]["recommended"])
+
 
 if __name__ == "__main__":
     unittest.main()

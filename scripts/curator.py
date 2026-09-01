@@ -90,6 +90,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     maturity = item.get("maturity", "unknown")
     content_status = item.get("content_status", "fulltext" if len(content) >= 500 else "summary")
     source_role = item.get("source_role", "candidate")
+    source_domain = urlsplit(item.get("link", "")).netloc.lower()
 
     published = parse_datetime(item.get("published") or item.get("article_date"))
     age_days = None
@@ -209,6 +210,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
     time_sensitive_terms = [word for word in editorial_fit.get("time_sensitive_event_terms", []) if word.lower() in title_summary]
     reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
+    generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
     concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
     authoritative_interview = bool(interview_terms and major_entities_in_content)
     if evergreen_terms:
@@ -241,6 +243,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if reader_distance_terms:
         score -= 35
         penalties.append("企业维护或治理议题，距离目标读者过远")
+    if any(source_domain == domain or source_domain.endswith(f".{domain}") for domain in profile.get("blocked_domains", [])):
+        score -= 80
+        penalties.append("来源为 AI 批量内容站或商业导流站")
+    if generic_comparison_terms:
+        score -= 40
+        penalties.append("泛化工具清单或横评，缺少可提炼的核心结论")
 
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:

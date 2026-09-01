@@ -36,6 +36,8 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - 只讲人物经历或群像的文章，权威访谈与完整对话材料除外。
 - 宕机、故障、上线、发布等事件新闻超过两周时效窗口；权威访谈和深度实测不套用该短窗口。
 - 只讨论企业维护成本、供应商锁定、准入基线或治理架构，难以转化成普通读者价值的内容。
+- SEO 站、AI 批量内容站、商业导流站以及缺少真实作者判断的内容。
+- 只做主流工具清单和泛化横评的文章；有统一任务、真实数字和明确结论的对比实测除外。
 
 详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。
 

@@ -9,6 +9,7 @@
   "minimum_score": 48,
   "preferred_language": "zh",
   "preferred_maturity": "secondary",
+  "blocked_domains": ["kylinlabai.github.io", "claudemax.shop"],
   "topic_pillars": [
     {
       "name": "Agent与编程系统",
@@ -57,7 +58,8 @@
     "event_or_ad_terms": ["waic connect", "wrc 2026", "采购需求", "带你拿下", "活动将", "盛大开启", "达成合作", "签署合作", "首发上线活动", "合作协议", "学习机"],
     "people_profile_terms": ["创业里的", "教授们", "人物故事", "创始人故事", "从业者群像"],
     "time_sensitive_event_terms": ["宕机", "故障", "中断", "召回", "涨价", "更新", "发布", "上线", "融资", "估值"],
-    "reader_distance_terms": ["维护成本", "供应商锁定", "企业agent安全", "ai基础设施", "准入基线", "成熟度模型", "企业治理框架"]
+    "reader_distance_terms": ["维护成本", "供应商锁定", "企业agent安全", "ai基础设施", "准入基线", "成熟度模型", "企业治理框架"],
+    "generic_comparison_terms": ["主流ai agent怎么选", "主流 ai agent怎么选", "五大场景逐一对比", "真实偏好实测对比", "终极横评", "全盘点"]
   },
   "exclude_keywords": ["融资快讯", "估值快讯", "榜单", "周报", "本周汇总", "派早报", "本周看什么", "近期值得关注的 App", "娱乐", "明星", "政治", "选举", "监控", "武器", "升降桌", "Surface Pro", "HomePod"],
   "weak_signals": [
@@ -74,6 +76,8 @@
     "只讲人物经历或群像，没有权威访谈和完整对话材料",
     "宕机、故障、发布等事件新闻已超过两周时效窗口",
     "只讨论企业维护、供应商锁定或治理架构，难以转化成普通读者的价值",
+    "随机SEO站、AI批量内容站或商业导流站",
+    "只做主流工具清单与泛化对比，缺少统一任务和真实结果",
     "没有适合写成一篇文章的具体切入点",
     "只有时效性，缺少长期回看价值",
     "二创前仍需大量补充研究",
