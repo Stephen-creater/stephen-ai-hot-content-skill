@@ -202,15 +202,16 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     hype_terms = [word for word in editorial_fit.get("hype_or_gossip_terms", []) if word.lower() in title_summary]
     broad_terms = [word for word in editorial_fit.get("broad_or_pr_terms", []) if word.lower() in title_summary]
     niche_terms = [word for word in editorial_fit.get("niche_professional_terms", []) if word.lower() in title_summary]
-    major_entities = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in title_summary]
+    major_entities = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in title.lower()]
     major_entities_in_content = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in haystack]
     release_terms = [word for word in editorial_fit.get("release_terms", []) if word.lower() in title_summary]
-    interview_terms = [word for word in editorial_fit.get("authoritative_interview_terms", []) if word.lower() in haystack]
+    interview_terms = [word for word in editorial_fit.get("authoritative_interview_terms", []) if word.lower() in title_summary]
     event_terms = [word for word in editorial_fit.get("event_or_ad_terms", []) if word.lower() in title_summary]
     people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
     time_sensitive_terms = [word for word in editorial_fit.get("time_sensitive_event_terms", []) if word.lower() in title_summary]
     reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
     generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
+    hardware_news_terms = [word for word in editorial_fit.get("hardware_news_terms", []) if word.lower() in title_summary]
     concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
     authoritative_interview = bool(interview_terms and major_entities_in_content)
     if evergreen_terms:
@@ -249,6 +250,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if generic_comparison_terms:
         score -= 40
         penalties.append("泛化工具清单或横评，缺少可提炼的核心结论")
+    if hardware_news_terms:
+        score -= 45
+        penalties.append("纯芯片、显存或硬件性能新闻")
+    if title.count("、") >= 2:
+        score -= 40
+        penalties.append("标题包含多个事件")
 
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:

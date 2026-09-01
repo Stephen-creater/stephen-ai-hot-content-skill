@@ -251,6 +251,17 @@ class CuratorTest(unittest.TestCase):
             "字节 AI 产品向豆包集结，Agent 时代第一场巨头战役打响",
             "Gen1.5 模型带来重要进展：物理 AI 正在接近 GPT3 时刻",
             "OpenAI 辣椒芯干翻英伟达，老黄股价不跌反涨",
+            "腾讯重金投入 AI 之后，混元 Hy4 preview 交出了什么答卷",
+            "OpenAI 买几万台 Mac 搞强化训练，英伟达的活被苹果抢了",
+            "VC 疯了，200 万现金冠军奖，又花 4000 万造了一座 AI 创业乌托邦",
+            "世界模型突破三大瓶颈，让虚拟世界成为机器人训练场",
+            "Coding 自由之后，人开始成为最大的瓶颈",
+            "高德发布首个无长程依赖的万帧级流式 3D 重建模型 ABot-Recon",
+            "范式与华为达成重磅算力战略合作，成为首批拥抱国产高端算力底座的 AI 企业",
+            "32GB 大显存加持，英特尔锐炫 Pro B70 搞定 AI 漫剧创作",
+            "AQuA：让量化研究 Agent 持续进化",
+            "OpenAI 芯片实测跑分揭晓，为模型造芯片时代来了",
+            "造物 100：AI 为爱做鸭、PLAUD 推新作、字节 TRAE 造了数字工牌",
         ]
         items = [{**common, "title": title, "link": f"https://example.com/noise-{index}"} for index, title in enumerate(titles)]
         ranked = rank_candidates(items, self.profile, now=self.now)
