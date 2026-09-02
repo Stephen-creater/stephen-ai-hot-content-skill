@@ -92,6 +92,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     content_form = item.get("content_form", "article")
     source_role = item.get("source_role", "candidate")
     source_domain = urlsplit(item.get("link", "")).netloc.lower()
+    source_name = clean_text(item.get("source_name")).lower()
 
     published = parse_datetime(item.get("published") or item.get("article_date"))
     age_days = None
@@ -221,6 +222,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     code_barrier_terms = [word for word in editorial_fit.get("code_barrier_terms", []) if word.lower() in haystack]
     abstract_business_terms = [word for word in editorial_fit.get("abstract_business_terms", []) if word.lower() in haystack]
     formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
+    benchmark_article_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in haystack]
+    citation_collage_terms = [word for word in editorial_fit.get("citation_collage_terms", []) if word.lower() in haystack]
+    ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in haystack]
     generic_interview_angle_terms = [word for word in editorial_fit.get("generic_interview_angle_terms", []) if word.lower() in title_summary]
     long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
     reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
@@ -265,6 +269,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if any(source_domain == domain or source_domain.endswith(f".{domain}") for domain in profile.get("blocked_domains", [])):
         score -= 80
         penalties.append("来源为 AI 批量内容站或商业导流站")
+    if any(term.lower() in f"{source_name} {haystack}" for term in profile.get("blocked_creators", [])):
+        score -= 100
+        penalties.append("作者或个人 IP 已被明确排除")
     if generic_comparison_terms:
         score -= 40
         penalties.append("泛化工具清单或横评，缺少可提炼的核心结论")
@@ -289,6 +296,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(formulaic_framework_terms) >= 2 and not long_horizon_framework:
         score -= 45
         penalties.append("框架化表达多于扎实证据，信息密度偏低")
+    if benchmark_article_terms:
+        score -= 55
+        penalties.append("以 Benchmark、评测集或跑分为主体，缺少实际使用价值")
+    if len(citation_collage_terms) >= 3:
+        score -= 45
+        penalties.append("研究、报告与人物引语堆叠，缺少作者自己的高密度结论")
+    if ai_summary_or_translation_terms:
+        score -= 55
+        penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
     if low_reuse_story_terms:
         score -= 40
         penalties.append("一次性 AI 奇闻，缺少长期回看价值")

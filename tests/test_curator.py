@@ -547,6 +547,57 @@ class CuratorTest(unittest.TestCase):
         self.assertIn("框架化表达多于扎实证据", lookup["https://example.com/formulaic"]["penalty"])
         self.assertTrue(all(not item["recommended"] for item in lookup.values()))
 
+    def test_latest_feedback_blocks_benchmarks_collages_translations_and_creator(self) -> None:
+        common = {
+            "published": "2026-08-30T08:00:00Z",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "AI辅助编程让资深工程师慢了19%",
+                "summary": "结合多项研究解释效率错觉",
+                "content": "Hacker News、METR、微软研究院、卡内基梅隆的研究显示，报告显示并调查了大量案例。" * 30,
+                "source_name": "中文媒体",
+                "link": "https://example.com/citation-collage",
+            },
+            {
+                **common,
+                "title": "Agent在真实工作场景的成功率很低",
+                "summary": "真实任务评测",
+                "content": "这套评测集包含107个任务，并对多个模型做Benchmark和基准测试。" * 40,
+                "source_name": "数字生命卡兹克",
+                "link": "https://example.com/blocked-creator",
+            },
+            {
+                **common,
+                "title": "DHH谈AI革命、模型实测与智能体编程",
+                "summary": "AI总结与双语整理",
+                "content": "打开互动全文版（中英对照 + 朗读 + 问答），以下是AI摘要。" * 50,
+                "source_name": "AI Podcast 中文逐字稿",
+                "link": "https://aipodcast.jasonlin.tech/example",
+            },
+            {
+                **common,
+                "title": "DeepSeek在8个Agent工具链上的表现",
+                "summary": "成本与速度Benchmark",
+                "content": "围绕评测集、跑分、排行榜和基准测试比较模型表现。" * 50,
+                "source_name": "中文媒体",
+                "link": "https://example.com/benchmark",
+            },
+        ]
+        now = datetime(2026, 9, 2, tzinfo=timezone.utc)
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
+        self.assertIn("人物引语堆叠", lookup["https://example.com/citation-collage"]["penalty"])
+        self.assertIn("个人 IP 已被明确排除", lookup["https://example.com/blocked-creator"]["penalty"])
+        self.assertIn("机器翻译感明显", lookup["https://aipodcast.jasonlin.tech/example"]["penalty"])
+        self.assertIn("Benchmark", lookup["https://example.com/benchmark"]["penalty"])
+        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+
 
 if __name__ == "__main__":
     unittest.main()
