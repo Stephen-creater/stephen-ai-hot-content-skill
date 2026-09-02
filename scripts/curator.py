@@ -89,6 +89,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     language = item.get("language", "unknown")
     maturity = item.get("maturity", "unknown")
     content_status = item.get("content_status", "fulltext" if len(content) >= 500 else "summary")
+    content_form = item.get("content_form", "article")
     source_role = item.get("source_role", "candidate")
     source_domain = urlsplit(item.get("link", "")).netloc.lower()
 
@@ -150,6 +151,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     else:
         score -= 14
         penalties.append("缺少完整文字材料")
+    if content_form == "podcast" and content_status != "transcript":
+        score -= 55
+        penalties.append("播客缺少逐字稿，无法低成本二创")
 
     if NUMBER_RE.search(haystack):
         score += 6
@@ -214,6 +218,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     hardware_news_terms = [word for word in editorial_fit.get("hardware_news_terms", []) if word.lower() in title_summary]
     too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
     implementation_heavy_terms = [word for word in editorial_fit.get("implementation_heavy_terms", []) if word.lower() in title_summary]
+    code_barrier_terms = [word for word in editorial_fit.get("code_barrier_terms", []) if word.lower() in haystack]
+    abstract_business_terms = [word for word in editorial_fit.get("abstract_business_terms", []) if word.lower() in haystack]
+    formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
     generic_interview_angle_terms = [word for word in editorial_fit.get("generic_interview_angle_terms", []) if word.lower() in title_summary]
     long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
     reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
@@ -273,6 +280,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(implementation_heavy_terms) >= 2:
         score -= 45
         penalties.append("系统实现概念过密，普通读者难以理解或复用")
+    if len(code_barrier_terms) >= 4:
+        score -= 45
+        penalties.append("正文工程门槛过高，包含大量代码与基础设施细节")
+    if len(abstract_business_terms) >= 3:
+        score -= 45
+        penalties.append("理论或商业评论过多，缺少对普通读者的实际价值")
+    if len(formulaic_framework_terms) >= 2 and not long_horizon_framework:
+        score -= 45
+        penalties.append("框架化表达多于扎实证据，信息密度偏低")
     if low_reuse_story_terms:
         score -= 40
         penalties.append("一次性 AI 奇闻，缺少长期回看价值")

@@ -499,6 +499,54 @@ class CuratorTest(unittest.TestCase):
         self.assertTrue(all(not lookup[title]["recommended"] for title in rejected_titles))
         self.assertTrue(lookup["李飞飞发布：全球首个多模态世界模型"]["recommended"])
 
+    def test_latest_feedback_requires_adaptable_and_information_dense_material(self) -> None:
+        common = {
+            "published": "2026-08-26T08:00:00Z",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "聊聊半年的 AI Agent 与 AI Coding 项目实战经验",
+                "summary": "74 天一人一 Agent 正式项目复盘",
+                "content": "Commit 数、代码量、测试用例、React 前端、容器化、daemon 线程、事件队列、向量索引、Docker 与反向代理。" * 40,
+                "link": "https://example.com/code-heavy",
+            },
+            {
+                **common,
+                "title": "AI把创新效率拉满，为什么好想法却越来越少？",
+                "summary": "生成式 AI 与创新的实证研究",
+                "content": "创新流程、创新管理者、消费者洞察、市场学习、组织偏见、创意筛选与商业评论。" * 40,
+                "link": "https://example.com/abstract-business",
+            },
+            {
+                **common,
+                "title": "用 AI 让我们变笨了吗？",
+                "summary": "认知债务与学习方法",
+                "content": "节目时间轴和核心观点。" * 80,
+                "content_form": "podcast",
+                "content_status": "shownotes",
+                "link": "https://example.com/podcast-shownotes",
+            },
+            {
+                **common,
+                "title": "Agent 跑不起来，可能恰恰因为它太好做了",
+                "summary": "业务门槛、工程门槛与五问自检清单",
+                "content": "第一道门槛、第二道门槛、五问和自检清单。" * 80,
+                "link": "https://example.com/formulaic",
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 2, tzinfo=timezone.utc))}
+        self.assertIn("工程门槛过高", lookup["https://example.com/code-heavy"]["penalty"])
+        self.assertIn("理论或商业评论过多", lookup["https://example.com/abstract-business"]["penalty"])
+        self.assertIn("播客缺少逐字稿", lookup["https://example.com/podcast-shownotes"]["penalty"])
+        self.assertIn("框架化表达多于扎实证据", lookup["https://example.com/formulaic"]["penalty"])
+        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+
 
 if __name__ == "__main__":
     unittest.main()
