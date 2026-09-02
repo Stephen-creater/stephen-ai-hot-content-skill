@@ -450,6 +450,41 @@ class CuratorTest(unittest.TestCase):
         self.assertFalse(lookup["https://example.com/codebase-debt"]["recommended"])
         self.assertIn("系统实现概念过密", lookup["https://example.com/codebase-debt"]["penalty"])
 
+    def test_next_batch_blocks_hype_updates_and_personnel_pr(self) -> None:
+        common = {
+            "content": "一篇具有完整中文正文的 AI 文章。" * 160,
+            "published": "2026-09-02T08:00:00Z",
+            "source_name": "量子位",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        rejected_titles = [
+            "GitHub最热架构图Agent，开发者故事看哭了",
+            "阿里更新旗舰模型Qwen3.8-Max，前端编程能力跃居全球第一",
+            "Claude最强Fable 5.1发布！8项屠榜，最高降价45%",
+            "A社化身A割！Claude官宣永久提额25%，结果到手反而少17%",
+            "前字节强化学习专家孙鹏博士加盟星尘智能，完善Physical AI全栈技术布局",
+        ]
+        items = [
+            {**common, "title": title, "summary": "Agent、模型与产品动态", "link": f"https://example.com/noise-{index}"}
+            for index, title in enumerate(rejected_titles)
+        ]
+        items.append(
+            {
+                **common,
+                "title": "李飞飞发布：全球首个多模态世界模型",
+                "summary": "一张图补全3D世界，并为机器人生成训练场，解释空间与时间建模能力",
+                "link": "https://example.com/world-model",
+            }
+        )
+        now = datetime(2026, 9, 2, tzinfo=timezone.utc)
+        lookup = {item["title"]: item for item in rank_candidates(items, self.profile, now=now)}
+        self.assertTrue(all(not lookup[title]["recommended"] for title in rejected_titles))
+        self.assertTrue(lookup["李飞飞发布：全球首个多模态世界模型"]["recommended"])
+
 
 if __name__ == "__main__":
     unittest.main()
