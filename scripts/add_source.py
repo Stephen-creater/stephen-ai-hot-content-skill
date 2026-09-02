@@ -12,7 +12,7 @@ DEFAULT_INBOX = ROOT / ".local" / "source_inbox.json"
 def main() -> None:
     parser = argparse.ArgumentParser(description="向本地中文来源 inbox 添加内容")
     parser.add_argument("url")
-    parser.add_argument("--platform", choices=["wechat", "bilibili", "xiaoyuzhou", "web"], required=True)
+    parser.add_argument("--platform", choices=["wechat", "bilibili", "xiaoyuzhou", "podcast", "web"], required=True)
     parser.add_argument("--creator", default="")
     parser.add_argument("--title", default="")
     parser.add_argument("--published", default="")

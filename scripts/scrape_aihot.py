@@ -30,6 +30,13 @@ def load_json(path: Path) -> dict | list:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def decode_html(raw: bytes, declared_encoding: str | None) -> str:
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode(declared_encoding or "utf-8", errors="replace")
+
+
 def api_key() -> str:
     value = os.getenv("OPENROUTER_API_KEY", "").strip()
     if value:
@@ -180,7 +187,7 @@ def hydrate(item: dict, settings: dict) -> dict:
                 chunks.append(chunk[:remaining])
                 size += min(len(chunk), remaining)
             raw = b"".join(chunks)
-            text = raw.decode(response.encoding or "utf-8", errors="replace")
+            text = decode_html(raw, response.encoding)
         extracted = trafilatura.extract(text, include_comments=False, include_tables=True) or ""
         if extracted:
             item["content"] = clean_text(extracted)[:5000]
@@ -211,7 +218,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "source_role": "candidate",
         "language": row.get("language", "zh"),
         "maturity": "secondary",
-        "content_form": "video" if platform == "bilibili" else "podcast" if platform == "xiaoyuzhou" else "article",
+        "content_form": "video" if platform == "bilibili" else "podcast" if platform in {"xiaoyuzhou", "podcast"} else "article",
         "content_status": "summary",
     }
     transcript_path = row.get("transcript_path")

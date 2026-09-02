@@ -71,7 +71,7 @@
     {"name": "中文AI播客", "platform": "xiaoyuzhou", "priority": 4, "notes": "优先附 Show Notes、RSS 或本地逐字稿"},
     {"name": "中文独立博客与 newsletter", "platform": "web", "priority": 5, "notes": "优先第一人称长期实践、失败复盘和可复用方法"},
     {"name": "产品与开发者社区长文", "platform": "web", "priority": 4, "notes": "覆盖人人都是产品经理、SegmentFault、掘金、博客园和 V2EX；社区热度只作线索"},
-    {"name": "中文深度播客与访谈", "platform": "xiaoyuzhou", "priority": 5, "notes": "覆盖小宇宙、Apple Podcasts 和 Podwise；优先完整 Show Notes、逐字稿和具体问题"},
+    {"name": "中文深度播客与访谈", "platform": "podcast", "priority": 5, "notes": "覆盖小宇宙、Apple Podcasts 和 Podwise；优先完整 Show Notes、逐字稿和具体问题"},
     {"name": "GitHub与海外社区线索", "platform": "web", "priority": 3, "notes": "GitHub、Hacker News、Reddit 和英文博客只用于发现线索，继续寻找中文成熟材料"}
   ],
   "fetch": {

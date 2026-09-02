@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from curator import rank_candidates
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import inbox_item, select_report_candidates
+from scrape_aihot import decode_html, inbox_item, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -93,6 +93,11 @@ class CuratorTest(unittest.TestCase):
             self.assertEqual(item["content_status"], "transcript")
             self.assertEqual(item["language"], "zh")
             self.assertGreater(len(item["content"]), 500)
+
+    def test_utf8_page_ignores_misleading_latin1_header(self) -> None:
+        raw = "用 AI 让我们变笨了吗？认知债务与长期记忆".encode("utf-8")
+        decoded = decode_html(raw, "ISO-8859-1")
+        self.assertEqual(decoded, "用 AI 让我们变笨了吗？认知债务与长期记忆")
 
     def test_feedback_patterns_downrank_hype_broad_and_niche_topics(self) -> None:
         common = {

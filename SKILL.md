@@ -71,6 +71,7 @@ python3 scripts/scrape_aihot.py
 python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
 python3 scripts/add_source.py "B站链接" --platform bilibili --creator "UP主" --transcript "/path/to/transcript.txt"
 python3 scripts/add_source.py "播客链接" --platform xiaoyuzhou --creator "节目" --transcript "/path/to/transcript.txt"
+python3 scripts/add_source.py "Apple Podcasts 或 Podwise 链接" --platform podcast --creator "节目"
 ```
 
 英文官方来源默认不进入候选池。需要为候选题补充核验线索时，运行 `--include-verification`。
