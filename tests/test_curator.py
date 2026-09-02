@@ -399,6 +399,57 @@ class CuratorTest(unittest.TestCase):
         self.assertIn("持续实践复盘", lookup["https://example.com/long-practice"]["reason"])
         self.assertTrue(lookup["https://example.com/mhs-standard"]["recommended"])
 
+    def test_latest_feedback_separates_deep_frameworks_from_dense_implementation(self) -> None:
+        common = {
+            "content": "一篇已经完成中文整理的完整深度文章。" * 160,
+            "published": "2026-08-28T08:00:00Z",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "吴恩达访谈：AI最大的机遇并不在你想象的地方",
+                "summary": "吴恩达讨论岗位任务、人类判断与年轻人的时代机会，以下是对话全文",
+                "source_name": "信鸽中文",
+                "link": "https://example.com/broad-interview",
+            },
+            {
+                **common,
+                "title": "AI写代码飞快，为何交付没有变快？小红书Muse的Agentic架构实践",
+                "summary": "围绕业务本体、Agent Team、分层评测与失败分类的实践",
+                "source_name": "InfoQ",
+                "link": "https://example.com/implementation-heavy",
+            },
+            {
+                **common,
+                "title": "Agent评测漫谈：美团两年实践如何从结果、轨迹和组件分层评测",
+                "summary": "解释结果正确不等于过程合格，以及如何构建真实评测体系",
+                "source_name": "美团技术团队",
+                "link": "https://example.com/long-horizon-framework",
+            },
+            {
+                **common,
+                "title": "Claude Code额度回落：Agent正在制造新的祖传代码屎山？",
+                "summary": "解释Agent Loop、上下文压缩与设计理由丢失如何让局部合理补丁不断累积",
+                "source_name": "雷锋网",
+                "link": "https://example.com/codebase-debt",
+            },
+        ]
+        now = datetime(2026, 9, 2, tzinfo=timezone.utc)
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
+        self.assertFalse(lookup["https://example.com/broad-interview"]["recommended"])
+        self.assertIn("访谈角度过宽", lookup["https://example.com/broad-interview"]["penalty"])
+        self.assertFalse(lookup["https://example.com/implementation-heavy"]["recommended"])
+        self.assertIn("系统实现概念过密", lookup["https://example.com/implementation-heavy"]["penalty"])
+        self.assertTrue(lookup["https://example.com/long-horizon-framework"]["recommended"])
+        self.assertIn("长期实践沉淀", lookup["https://example.com/long-horizon-framework"]["reason"])
+        self.assertFalse(lookup["https://example.com/codebase-debt"]["recommended"])
+        self.assertIn("系统实现概念过密", lookup["https://example.com/codebase-debt"]["penalty"])
+
 
 if __name__ == "__main__":
     unittest.main()

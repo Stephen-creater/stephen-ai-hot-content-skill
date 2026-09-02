@@ -213,10 +213,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
     hardware_news_terms = [word for word in editorial_fit.get("hardware_news_terms", []) if word.lower() in title_summary]
     too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
+    implementation_heavy_terms = [word for word in editorial_fit.get("implementation_heavy_terms", []) if word.lower() in title_summary]
+    generic_interview_angle_terms = [word for word in editorial_fit.get("generic_interview_angle_terms", []) if word.lower() in title_summary]
+    long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
+    reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
     low_reuse_story_terms = [word for word in editorial_fit.get("low_reuse_story_terms", []) if word.lower() in title_summary]
     concrete_practice_terms = [word for word in editorial_fit.get("concrete_practice_terms", []) if word.lower() in title_summary]
     concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
     authoritative_interview = bool(interview_terms and major_entities_in_content)
+    long_horizon_framework = bool(long_horizon_practice_terms and reusable_framework_terms)
     if evergreen_terms:
         score += 12
         reasons.append("具备可长期回看的机制切口")
@@ -232,6 +237,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if authoritative_interview:
         score += 24
         reasons.insert(0, "核心 AI 团队权威人物访谈，材料完整")
+    if interview_terms and generic_interview_angle_terms and not long_horizon_framework:
+        score -= 45
+        penalties.append("访谈角度过宽，缺少可直接展开的具体问题或方法")
     if release_terms and not major_entities and not any(term in title_summary for term in concept_terms):
         score -= 35
         penalties.append("主体知名度或事件级别不足")
@@ -262,12 +270,18 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if too_technical_terms:
         score -= 45
         penalties.append("技术细节过深，目标读者难以理解或使用")
+    if len(implementation_heavy_terms) >= 2:
+        score -= 45
+        penalties.append("系统实现概念过密，普通读者难以理解或复用")
     if low_reuse_story_terms:
         score -= 40
         penalties.append("一次性 AI 奇闻，缺少长期回看价值")
     if concrete_practice_terms:
         score += 18
         reasons.insert(0, "持续实践复盘，有流程、结果和调整过程")
+    if long_horizon_framework:
+        score += 18
+        reasons.insert(0, "长期实践沉淀出可复用的方法框架")
 
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:
