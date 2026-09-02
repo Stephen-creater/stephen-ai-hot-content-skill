@@ -3,6 +3,7 @@
   "target_readers": ["中文偏小白 AI 使用者", "产品、运营与管理者", "知识工作者与内容创作者"],
   "selection_count": 8,
   "report_candidate_count": 15,
+  "minimum_delivery_count": 3,
   "priority_days": 14,
   "max_age_days": 45,
   "time_sensitive_max_age_days": 14,

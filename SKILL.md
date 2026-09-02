@@ -45,7 +45,7 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - 权威人物访谈只有宽泛机会判断，没有一个可直接展开的具体问题、方法或长期实践框架。
 - 只有故事性的一次性 AI 奇闻或异常事件，即使文章质量高，缺少长期回看价值也不入选。
 
-详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。
+详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，不足 3 条时按 [扩源清单](resources/source_discovery_playbook.md) 持续搜索，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。
 
 ## 运行
 
@@ -61,7 +61,7 @@ python3 -m pip install -r scripts/requirements.txt
 python3 scripts/scrape_aihot.py
 ```
 
-正常报告只展示通过硬门槛的内容。`report_candidate_count` 是最大数量，不是必须凑满的配额。0 条合格时应直接输出 0 条，不得用低质量内容补位。
+正常报告只展示通过硬门槛的内容。`report_candidate_count` 是最大数量，不是凑数配额；`minimum_delivery_count` 是交付门槛。候选不足 3 条时，不得把当前审核页交给用户，也不得降低质量标准，必须继续扩展信息源、补充材料并重新运行，直到至少找到 3 条合格候选。
 
 只有调试筛选规则时才可显式运行 `--include-rejected`，该模式不用于日常选题。
 
@@ -107,7 +107,7 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-sou
 
 反馈写入本地 `.local/editorial_feedback.jsonl`，不会进入公开仓库。后续根据反馈修改编辑画像、来源与评分逻辑。
 
-已明确标记为入选或不入选的同一条内容，后续运行会自动跳过；待定内容仍可再次进入候选。
+已明确标记为入选、不入选或待定的同一条内容，后续运行都会自动跳过。待定表示暂缓，不算最终正负判断；用户以后重新改判时，以最新状态为准。
 
 ## 交付要求
 
@@ -115,4 +115,5 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-sou
 - 抓取失败的来源写入 `run.json`，其余来源继续运行。
 - 同一事件只保留信息最完整的一篇。
 - 硬门槛未通过的内容禁止进入正常审核页。没有足够强的候选时允许少选或 0 条，不得用弱题凑数量。
+- 正式交付必须至少包含 3 条合格候选；不足 3 条时，持续执行来源发现、人工投喂、抓取和筛选循环，不得停止在“没有内容”。
 - 运行测试后才能提交代码。

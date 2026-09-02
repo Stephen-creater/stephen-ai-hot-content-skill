@@ -358,6 +358,7 @@ def main() -> None:
     skipped_reviewed_count = sum(1 for item in ranked if str(item["id"]) in reviewed_ids)
     ranked = [item for item in ranked if str(item["id"]) not in reviewed_ids]
     report_count = profile["report_candidate_count"]
+    minimum_delivery_count = int(profile.get("minimum_delivery_count", 3))
     rejected_by_gate_count = sum(1 for item in ranked if not item.get("recommended"))
     candidates = select_report_candidates(ranked, report_count, include_rejected=args.include_rejected)
     if not args.no_ai and api_key():
@@ -382,6 +383,8 @@ def main() -> None:
                 "skipped_reviewed_count": skipped_reviewed_count,
                 "rejected_by_gate_count": rejected_by_gate_count,
                 "candidate_count": len(candidates),
+                "minimum_delivery_count": minimum_delivery_count,
+                "delivery_ready": len(candidates) >= minimum_delivery_count,
                 "include_rejected": args.include_rejected,
                 "errors": errors,
             },
@@ -392,6 +395,8 @@ def main() -> None:
     )
     generate_report(candidates, output_dir / "index.html", timestamp)
     print(f"合格候选 {len(candidates)} 条，输入 {len(items)} 条，硬门槛拒绝 {rejected_by_gate_count} 条")
+    if len(candidates) < minimum_delivery_count and not args.fixture:
+        print(f"尚未达到交付门槛 {minimum_delivery_count} 条：继续扩展来源并检索，不得交付或用弱题补位")
     if errors:
         print("抓取告警：")
         for error in errors:

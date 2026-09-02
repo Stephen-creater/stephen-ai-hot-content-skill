@@ -34,7 +34,7 @@ def final_reviewed_ids(target: Path) -> set[str]:
             status = review.get("status")
             if status in {"selected", "rejected", "pending"}:
                 decisions[str(item_id)] = status
-    return {item_id for item_id, status in decisions.items() if status in {"selected", "rejected"}}
+    return {item_id for item_id, status in decisions.items() if status in {"selected", "rejected", "pending"}}
 
 
 def import_feedback(feedback: Path, delete_source: bool = False) -> tuple[Path, bool]:

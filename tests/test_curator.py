@@ -138,6 +138,15 @@ class CuratorTest(unittest.TestCase):
                 self.assertEqual(len(target.read_text().splitlines()), 1)
                 self.assertEqual(feedback_module.final_reviewed_ids(target), {"x"})
 
+    def test_pending_feedback_is_deferred_until_reclassified(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "editorial_feedback.jsonl"
+            target.write_text(json.dumps({"reviews": {"later": {"status": "pending"}}}) + "\n")
+            self.assertEqual(feedback_module.final_reviewed_ids(target), {"later"})
+            with target.open("a") as handle:
+                handle.write(json.dumps({"reviews": {"later": {"status": "selected"}}}) + "\n")
+            self.assertEqual(feedback_module.final_reviewed_ids(target), {"later"})
+
     def test_second_feedback_batch_prefers_authoritative_interview(self) -> None:
         common = {
             "content": "已完成中文整理的长文材料。" * 120,
