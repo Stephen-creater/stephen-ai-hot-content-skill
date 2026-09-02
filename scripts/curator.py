@@ -16,7 +16,8 @@ PACKAGE_VERSION_RE = re.compile(r"^[a-z0-9_.-]+\s+v?\d+\.\d+(?:\.\d+)?(?:[-.][a-
 CORE_AI_TERMS = (
     "ai", "agent", "llm", "model", "codex", "claude", "openai", "anthropic",
     "gemini", "deepmind", "skill", "mcp", "prompt", "inference", "training",
-    "reasoning", "人工智能", "模型", "智能体", "推理", "训练", "上下文", "缓存",
+    "reasoning", "kimi", "workbuddy", "qoder", "cursor", "copilot", "openclaw",
+    "人工智能", "模型", "智能体", "推理", "训练", "上下文", "缓存", "豆包",
 )
 
 

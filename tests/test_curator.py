@@ -41,6 +41,24 @@ class CuratorTest(unittest.TestCase):
         self.assertFalse(next(item for item in ranked if item["title"].startswith("DeepSeek上线多模态；"))["recommended"])
         self.assertFalse(next(item for item in ranked if item["title"] == "130亿美元，Hugging Face要卖了")["recommended"])
 
+    def test_named_ai_products_count_as_explicit_ai_objects(self) -> None:
+        item = {
+            "title": "Kimi Work一个月使用复盘：120个真实任务中的坑和红利",
+            "summary": "记录多文件汇总、表格分析、网页抓取与人工校验",
+            "content": "一个月完成120个任务，逐项记录有效场景、翻车场景、Token消耗和人工检查。" * 80,
+            "published": "2026-08-10T08:00:00Z",
+            "source_name": "中文独立博客",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+            "link": "https://example.com/kimi-work-month-review",
+        }
+        result = rank_candidates([item], self.profile, now=datetime(2026, 9, 2, tzinfo=timezone.utc))[0]
+        self.assertTrue(result["recommended"])
+        self.assertNotIn("缺少明确 AI 对象", result["penalty"])
+
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
         with tempfile.TemporaryDirectory() as directory:
