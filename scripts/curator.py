@@ -156,6 +156,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if content_form == "podcast" and content_status != "transcript":
         score -= 55
         penalties.append("播客缺少逐字稿，无法低成本二创")
+    if content_form == "video" and content_status != "transcript":
+        score -= 55
+        penalties.append("视频缺少逐字稿，无法核验完整论证")
 
     if NUMBER_RE.search(haystack):
         score += 6

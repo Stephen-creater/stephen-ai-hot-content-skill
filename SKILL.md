@@ -85,11 +85,12 @@ python3 scripts/scrape_aihot.py
 ```bash
 python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
 python3 scripts/add_source.py "B站链接" --platform bilibili --creator "UP主" --transcript "/path/to/transcript.txt"
+python3 scripts/add_source.py "YouTube 链接" --platform youtube --creator "频道名"
 python3 scripts/add_source.py "播客链接" --platform xiaoyuzhou --creator "节目" --transcript "/path/to/transcript.txt"
 python3 scripts/add_source.py "Apple Podcasts 或 Podwise 链接" --platform podcast --creator "节目"
 ```
 
-英文官方来源默认不进入候选池。需要为候选题补充核验线索时，运行 `--include-verification`。播客在取得逐字稿前只能保留为线索，不得进入正式候选。
+英文官方来源默认不进入候选池。需要为候选题补充核验线索时，运行 `--include-verification`。YouTube 会优先通过 OpenCLI 自动读取字幕；任何视频或播客在取得逐字稿前只能保留为线索，不得进入正式候选。
 
 没有 API Key 时使用确定性评分。需要模型复排时，配置环境变量 `OPENROUTER_API_KEY`，或把 Key 写入本地 `.config/openrouter_api_key.txt`。Key 禁止提交。
 

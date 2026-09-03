@@ -72,5 +72,6 @@ opencli youtube transcript "URL" -f yaml
 - 先看 `status` 中的 `channels` 和 `missing_or_unverified_channels`。
 - `doctor` 为避免读取 Cookie，可能把已经可用的 OpenCLI 平台标成未验证；只有任务需要该平台时，执行一次只读搜索，以真实非空结果验收。
 - OpenCLI 未连接时，引导用户安装浏览器扩展；不得自动登录。
+- 普通 HTTP 抓取遇到 403 或动态渲染页时，抓取脚本会用 OpenCLI 浏览器阅读自动兜底；只有正文达到最低完整度才标记为完整材料。
 - Exa 不可用时继续使用公众号、知乎、B站和现有网页检索，不降低质量标准。
 - 任何渠道失败都不能用低质量候选补足 3 条；继续切换其他渠道。

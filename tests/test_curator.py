@@ -12,10 +12,10 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from curator import rank_candidates
+from curator import rank_candidates, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import decode_html, inbox_item, select_report_candidates
+from scrape_aihot import decode_html, hydrate, inbox_item, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -153,6 +153,91 @@ class CuratorTest(unittest.TestCase):
             self.assertEqual(item["content_status"], "transcript")
             self.assertEqual(item["language"], "zh")
             self.assertGreater(len(item["content"]), 500)
+
+    @patch("scrape_aihot.subprocess.check_output")
+    @patch("scrape_aihot.shutil.which", return_value="/usr/local/bin/opencli")
+    def test_youtube_uses_opencli_transcript(self, _which, check_output) -> None:
+        check_output.return_value = json.dumps(
+            [{"timestamp": "0:00", "text": "AI Agent 工作流实测，包含步骤和结果。" * 30}],
+            ensure_ascii=False,
+        )
+        item = inbox_item(
+            {
+                "url": "https://www.youtube.com/watch?v=test",
+                "platform": "youtube",
+                "creator": "测试频道",
+                "title": "AI Agent 工作流复盘",
+            },
+            {"request_timeout_seconds": 1, "max_article_bytes": 1000},
+        )
+        self.assertEqual(item["content_form"], "video")
+        self.assertEqual(item["content_status"], "transcript")
+        self.assertGreater(len(item["content"]), 200)
+        check_output.assert_called_once_with(
+            [
+                "opencli",
+                "youtube",
+                "transcript",
+                "https://www.youtube.com/watch?v=test",
+                "-f",
+                "json",
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=90,
+        )
+
+    def test_hydrate_never_downgrades_a_transcript(self) -> None:
+        item = {
+            "link": "https://www.youtube.com/watch?v=test",
+            "content": "完整字幕" * 200,
+            "content_form": "video",
+            "content_status": "transcript",
+        }
+        self.assertIs(hydrate(item, {"request_timeout_seconds": 1, "max_article_bytes": 1000}), item)
+        self.assertEqual(item["content_status"], "transcript")
+
+    @patch("scrape_aihot.subprocess.check_output")
+    @patch("scrape_aihot.shutil.which", return_value="/usr/local/bin/opencli")
+    @patch("scrape_aihot.requests.get", side_effect=RuntimeError("403"))
+    def test_hydrate_uses_opencli_for_blocked_pages(self, _get, _which, check_output) -> None:
+        check_output.return_value = "# 标题\n\n" + "完整中文正文。" * 100
+        item = hydrate(
+            {
+                "link": "https://zhuanlan.zhihu.com/p/test",
+                "content": "",
+                "content_form": "article",
+                "content_status": "summary",
+            },
+            {"request_timeout_seconds": 1, "max_article_bytes": 1000},
+        )
+        self.assertEqual(item["content_status"], "fulltext")
+        self.assertNotIn("fetch_error", item)
+        self.assertGreater(len(item["content"]), 400)
+
+    def test_video_without_transcript_is_not_recommended(self) -> None:
+        profile = json.loads((ROOT / "resources" / "editorial_profile.json").read_text())
+        result = score_item(
+            {
+                "title": "AI Agent 工作流深度复盘",
+                "link": "https://www.youtube.com/watch?v=missing",
+                "summary": "创作者介绍自己的长期实践。",
+                "content": "详细 Show Notes。" * 100,
+                "published": "2026-08-24",
+                "source_name": "中文频道",
+                "source_priority": 5,
+                "source_type": "youtube",
+                "language": "zh",
+                "maturity": "secondary",
+                "content_form": "video",
+                "content_status": "shownotes",
+            },
+            profile,
+            now=datetime(2026, 8, 25, tzinfo=timezone.utc),
+        )
+        self.assertFalse(result["recommended"])
+        self.assertIn("视频缺少逐字稿", result["penalty"])
 
     def test_utf8_page_ignores_misleading_latin1_header(self) -> None:
         raw = "用 AI 让我们变笨了吗？认知债务与长期记忆".encode("utf-8")

@@ -168,6 +168,8 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
 def hydrate(item: dict, settings: dict) -> dict:
     if not item.get("link"):
         return item
+    if item.get("content_status") == "transcript" and item.get("content"):
+        return item
     try:
         with requests.get(
             item["link"],
@@ -200,7 +202,53 @@ def hydrate(item: dict, settings: dict) -> dict:
             item["title"] = clean_text(meta.get("title"))
     except Exception as exc:
         item["fetch_error"] = str(exc)
+        if shutil.which("opencli"):
+            try:
+                rendered = subprocess.check_output(
+                    [
+                        "opencli",
+                        "web",
+                        "read",
+                        "--url",
+                        item["link"],
+                        "--stdout",
+                        "true",
+                        "-f",
+                        "md",
+                    ],
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=60,
+                )
+                rendered = clean_text(rendered)
+                if len(rendered) >= 400:
+                    item["content"] = rendered[:5000]
+                    item["content_status"] = "shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext"
+                    item.pop("fetch_error", None)
+            except Exception as fallback_exc:
+                item["fetch_error"] = f"{exc}; OpenCLI 兜底失败: {fallback_exc}"
     return item
+
+
+def fetch_opencli_youtube_transcript(url: str) -> str:
+    if not shutil.which("opencli"):
+        raise RuntimeError("未找到 opencli")
+    output = subprocess.check_output(
+        ["opencli", "youtube", "transcript", url, "-f", "json"],
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=90,
+    )
+    rows = json.loads(output)
+    if not isinstance(rows, list):
+        raise ValueError("OpenCLI YouTube 字幕格式不是数组")
+    parts = [clean_text(row.get("text")) for row in rows if isinstance(row, dict)]
+    transcript = clean_text("\n".join(part for part in parts if part))
+    if len(transcript) < 200:
+        raise ValueError("OpenCLI YouTube 字幕为空或过短")
+    return transcript
 
 
 def inbox_item(row: dict, settings: dict) -> dict:
@@ -218,7 +266,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "source_role": "candidate",
         "language": row.get("language", "zh"),
         "maturity": "secondary",
-        "content_form": "video" if platform == "bilibili" else "podcast" if platform in {"xiaoyuzhou", "podcast"} else "article",
+        "content_form": "video" if platform in {"bilibili", "youtube"} else "podcast" if platform in {"xiaoyuzhou", "podcast"} else "article",
         "content_status": "summary",
     }
     transcript_path = row.get("transcript_path")
@@ -230,7 +278,15 @@ def inbox_item(row: dict, settings: dict) -> dict:
             return item
         item["fetch_error"] = f"逐字稿不存在: {path}"
 
-    if platform == "bilibili" and item["link"] and shutil.which("yt-dlp"):
+    if platform == "youtube" and item["link"]:
+        try:
+            item["content"] = fetch_opencli_youtube_transcript(item["link"])[:20000]
+            item["content_status"] = "transcript"
+            return item
+        except Exception as exc:
+            item["fetch_error"] = f"YouTube 字幕读取失败: {exc}"
+
+    if platform in {"bilibili", "youtube"} and item["link"] and shutil.which("yt-dlp"):
         try:
             output = subprocess.check_output(["yt-dlp", "--dump-single-json", "--skip-download", item["link"]], text=True, timeout=45)
             metadata = json.loads(output)
@@ -240,7 +296,8 @@ def inbox_item(row: dict, settings: dict) -> dict:
             if upload_date and not item["published"]:
                 item["published"] = f"{upload_date[:4]}-{upload_date[4:6]}-{upload_date[6:8]}"
         except Exception as exc:
-            item["fetch_error"] = f"B站元数据读取失败: {exc}"
+            label = "B站" if platform == "bilibili" else "YouTube"
+            item["fetch_error"] = f"{label} 元数据读取失败: {exc}"
 
     return hydrate(item, settings)
 

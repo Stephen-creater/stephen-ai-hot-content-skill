@@ -15,6 +15,13 @@
     "published": "2026-08-25"
   },
   {
+    "url": "https://www.youtube.com/watch?v=example",
+    "platform": "youtube",
+    "creator": "YouTube 创作者",
+    "published": "2026-08-25",
+    "notes": "OpenCLI 已连接时自动读取完整字幕"
+  },
+  {
     "url": "https://www.xiaoyuzhoufm.com/episode/example",
     "platform": "xiaoyuzhou",
     "creator": "播客名称",

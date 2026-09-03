@@ -22,6 +22,7 @@ Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研�
 python3 -m pip install -r scripts/requirements.txt
 python3 scripts/agent_reach_runtime.py install
 python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
+python3 scripts/add_source.py "YouTube 链接" --platform youtube --creator "频道名"
 python3 scripts/scrape_aihot.py
 ```
 
