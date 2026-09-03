@@ -226,6 +226,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     benchmark_article_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in haystack]
     citation_collage_terms = [word for word in editorial_fit.get("citation_collage_terms", []) if word.lower() in haystack]
     ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in haystack]
+    locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
+    community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
+    thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
     generic_interview_angle_terms = [word for word in editorial_fit.get("generic_interview_angle_terms", []) if word.lower() in title_summary]
     long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
     reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
@@ -306,6 +309,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if ai_summary_or_translation_terms:
         score -= 55
         penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
+    if locked_content_terms:
+        score -= 70
+        penalties.append("正文被登录、关注或付费墙截断，材料不完整")
+    if community_question_terms and any(term in source_name for term in ("v2ex", "reddit", "论坛", "社区讨论")):
+        score -= 55
+        penalties.append("社区提问求助帖没有形成可直接改写的完整结论")
+    if len(thin_personal_reflection_terms) >= 3:
+        score -= 45
+        penalties.append("只有个人感受与情绪，缺少事实或新机制支撑")
     if low_reuse_story_terms:
         score -= 40
         penalties.append("一次性 AI 奇闻，缺少长期回看价值")

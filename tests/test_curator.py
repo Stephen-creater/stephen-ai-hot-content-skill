@@ -59,6 +59,48 @@ class CuratorTest(unittest.TestCase):
         self.assertTrue(result["recommended"])
         self.assertNotIn("缺少明确 AI 对象", result["penalty"])
 
+    def test_latest_feedback_rejects_questions_locks_and_thin_diaries(self) -> None:
+        common = {
+            "published": "2026-09-02T08:00:00Z",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "Codex多Agent工作流为什么只开会不干活",
+                "summary": "社区讨论",
+                "content": "我搭了一套多Agent流程，就想问问，到底是我这流程本身有病，还是额度不够？" * 50,
+                "source_name": "作者 / V2EX社区讨论",
+                "link": "https://example.com/question",
+            },
+            {
+                **common,
+                "title": "Kimi Work一个月使用复盘",
+                "summary": "真实任务中的坑和红利",
+                "content": "真香场景 Top 5，翻车场景 Top 5。点击解锁完整内容，关注后自动获取验证码。" * 50,
+                "source_name": "中文博客",
+                "link": "https://example.com/locked",
+            },
+            {
+                **common,
+                "title": "度假三周后，我意识到自己被AI工具奴役了",
+                "summary": "个人反思",
+                "content": "我没有想念它。它成了习惯性的拐杖，让我变笨了，也让我有点抑郁。效率的衔尾蛇让我仍然谨慎乐观。" * 50,
+                "source_name": "个人博客",
+                "link": "https://example.com/diary",
+            },
+        ]
+        now = datetime(2026, 9, 3, tzinfo=timezone.utc)
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
+        self.assertIn("社区提问求助帖", lookup["https://example.com/question"]["penalty"])
+        self.assertIn("材料不完整", lookup["https://example.com/locked"]["penalty"])
+        self.assertIn("只有个人感受与情绪", lookup["https://example.com/diary"]["penalty"])
+        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
         with tempfile.TemporaryDirectory() as directory:
