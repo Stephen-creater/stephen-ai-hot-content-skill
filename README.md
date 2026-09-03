@@ -14,14 +14,24 @@ Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研�
 - 支持标记入选、淘汰和遗漏，并导入本地反馈。
 - 已入选或已淘汰的同一条内容不会在后续报告中重复出现。
 - 区分权威人物深度访谈与普通人物稿，并过滤活动广告、合作通稿和无名小发布。
+- 内置经过 SHA-256 校验的 Agent Reach 运行时，用户无需单独安装另一个 Skill 即可启用多平台检索。
 
 ## 快速开始
 
 ```bash
 python3 -m pip install -r scripts/requirements.txt
+python3 scripts/agent_reach_runtime.py install
 python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
 python3 scripts/scrape_aihot.py
 ```
+
+需要一次性补齐 Exa、B站、OpenCLI 等系统渠道时，在明确允许用户级和全局工具安装后运行：
+
+```bash
+python3 scripts/agent_reach_runtime.py install --system --channels all
+```
+
+运行状态保存在用户自己的 `~/.agent-reach/`，Cookie、Token 和浏览器登录态不会进入本仓库。
 
 输出位于 `topics/<时间戳>/index.html`。
 

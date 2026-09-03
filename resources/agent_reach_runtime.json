@@ -1,0 +1,22 @@
+{
+  "package": "agent-reach",
+  "minimum_version": "1.5.0",
+  "bundled_wheel": "vendor/agent_reach-1.5.0-py3-none-any.whl",
+  "bundled_wheel_sha256": "07ecabccdf2ecd1217a13f30f8348f7b7bb0d290729406e291807f66014cf658",
+  "archive_source": "https://github.com/Panniantong/Agent-Reach/archive/da5044d26fc6adddb6554d5679c94ac22e76e428.zip",
+  "source": "git+https://github.com/Panniantong/Agent-Reach.git@da5044d26fc6adddb6554d5679c94ac22e76e428",
+  "runtime_dir": "~/.agent-reach/stephen-hot-content-runtime",
+  "default_system_channels": "all",
+  "required_discovery_channels": [
+    "exa_search",
+    "web",
+    "rss",
+    "github",
+    "youtube",
+    "bilibili",
+    "v2ex",
+    "twitter",
+    "reddit",
+    "xiaohongshu"
+  ]
+}

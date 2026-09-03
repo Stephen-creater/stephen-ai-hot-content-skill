@@ -56,9 +56,11 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - 权威人物访谈只有宽泛机会判断，没有一个可直接展开的具体问题、方法或长期实践框架。
 - 只有故事性的一次性 AI 奇闻或异常事件，即使文章质量高，缺少长期回看价值也不入选。
 
-详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，不足 3 条时按 [扩源清单](resources/source_discovery_playbook.md) 持续搜索，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。
+详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，不足 3 条时按 [扩源清单](resources/source_discovery_playbook.md) 持续搜索，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。多平台命令与失败降级见 [内置 Agent Reach 路由](references/agent-reach-discovery.md)。
 
-扩源前先运行 `agent-reach doctor --json`。正常调研组合使用 Exa 找全网线索，微信公众号、知乎、小红书和B站寻找中文材料，Twitter、Reddit、V2EX 与 GitHub 只发现一手线索，再回到完整中文文章、字幕或逐字稿。社区搜索结果本身不得直接当作候选。
+Agent Reach 是本 Skill 的内置能力层。不要要求用户先单独安装或理解 Agent Reach。扩源前运行 `python3 scripts/agent_reach_runtime.py status`；缺失时先用同一脚本安装隔离运行时。只有安装全局上游工具、读取登录态或配置 Cookie 时才需要额外说明和授权。
+
+正常调研组合使用 Exa 找全网线索，微信公众号、知乎、小红书和B站寻找中文材料，Twitter、Reddit、V2EX 与 GitHub 只发现一手线索，再回到完整中文文章、字幕或逐字稿。社区搜索结果本身不得直接当作候选。
 
 ## 运行
 
