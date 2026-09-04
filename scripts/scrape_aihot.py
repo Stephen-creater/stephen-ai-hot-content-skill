@@ -519,7 +519,7 @@ def main() -> None:
     skipped_content_duplicate_count = sum(1 for item in ranked if is_historical_content_duplicate(item, reviewed_candidates))
     ranked = [item for item in ranked if not is_historical_content_duplicate(item, reviewed_candidates)]
     report_count = profile["report_candidate_count"]
-    minimum_delivery_count = int(profile.get("minimum_delivery_count", 3))
+    minimum_delivery_count = int(profile.get("minimum_delivery_count", 5))
 
     aigc_status = "disabled" if args.no_aigc or args.fixture else "not_configured"
     aigc_checked_count = 0

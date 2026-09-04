@@ -271,6 +271,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
     ai_summary_surface = f"{title_summary} {source_name}"
     ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in ai_summary_surface]
+    saturated_humanizer_terms = [word for word in editorial_fit.get("saturated_humanizer_terms", []) if word.lower() in title_summary]
     legal_compliance_topic_terms = [word for word in editorial_fit.get("legal_compliance_topic_terms", []) if word.lower() in haystack]
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
@@ -394,6 +395,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if ai_summary_or_translation_terms:
         score -= 55
         penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
+    if saturated_humanizer_terms:
+        score -= 55
+        penalties.append("去 AI 味工具赛道高度同质化，缺少可验证的新突破")
     if len(legal_compliance_topic_terms) >= 3:
         score -= 55
         penalties.append("法律合规、署名责任或社会争议为主，不符合长期干货调性")

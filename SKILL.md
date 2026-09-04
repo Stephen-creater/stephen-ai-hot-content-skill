@@ -68,6 +68,7 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - 通篇围绕 Benchmark、评测集、跑分或排行榜解释模型表现的文章。作者亲自完成真实任务的实践复盘可以保留；权威演讲中把 Benchmark 作为局部验证证据也不等于跑分文章。
 - 主要拼接研究、报告、人物经历和他人引语，却缺少作者自己的高密度判断与实际价值。
 - AI 总结页、机器翻译感明显、中英混杂且不便直接中文二创的材料。
+- 以“去 AI 味”“Humanizer”“去痕迹”为卖点的工具或 Skill 已高度同质化，默认不再作为选题；只有出现可独立复现、明显改变效果上限的新突破时才重新考虑。
 - 海外播客或访谈即使原始内容很强，如果中文页面只是 AI 翻译、规范化问答和条目摘要，整理者没有自己的理解、体感与判断，也不作为二创底稿。
 - 文章主动披露“本文/本篇内容由 AI、Codex、Claude、豆包等生成或组合完成”的材料；它可以提供线索，但不能当作可信的二创底稿。
 - 数字生命卡兹克及其同名、别名或转载渠道的文章。
@@ -78,7 +79,7 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - 只有故事性的一次性 AI 奇闻或异常事件，即使文章质量高，缺少长期回看价值也不入选。
 - 以法律合规、版权归属、署名责任、AI 标识或社会争议为主的开放性讨论，不符合当前长期干货调性。
 
-详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，不足 3 条时按 [扩源清单](resources/source_discovery_playbook.md) 持续搜索，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。多平台命令与失败降级见 [内置 Agent Reach 路由](references/agent-reach-discovery.md)。
+详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，不足 5 条时按 [扩源清单](resources/source_discovery_playbook.md) 持续搜索，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。多平台命令与失败降级见 [内置 Agent Reach 路由](references/agent-reach-discovery.md)。
 
 朱雀 AIGC 检测是候选入报告前的证据层。已配置时，只检测通过其他硬门槛的完整正文：AI 内容占比达到 98% 时硬淘汰；AI 或疑似 AI 占比超过 50% 时降低优先级；不得把接口失败或未配置解释为“人工写作”。逐段结果必须进入审核报告，供人工复核。首次配置、费用边界、缓存和真实测试命令见 [朱雀接入说明](references/zhuque-aigc.md)。
 
@@ -104,7 +105,7 @@ python3 scripts/scrape_aihot.py
 
 朱雀未配置时继续使用原有确定性规则，并在 `run.json` 标记 `not_configured`。只有调试或明确不希望产生本次检测费用时才使用 `--no-aigc`。朱雀结果是辅助证据，不得因为检测通过就降低原创性、信息密度和作者经验等其他标准。
 
-正常报告只展示通过硬门槛的内容。`report_candidate_count` 是最大数量，不是凑数配额；`minimum_delivery_count` 是交付门槛。候选不足 3 条时，不得把当前审核页交给用户，也不得降低质量标准，必须继续扩展信息源、补充材料并重新运行，直到至少找到 3 条合格候选。
+正常报告只展示通过硬门槛的内容。`report_candidate_count` 是最大数量，不是凑数配额；`minimum_delivery_count` 是交付门槛。候选不足 5 条时，不得把当前审核页交给用户，也不得降低质量标准，必须继续扩展信息源、补充材料并重新运行，直到至少找到 5 条合格候选。
 
 只有调试筛选规则时才可显式运行 `--include-rejected`，该模式不用于日常选题。
 
@@ -160,5 +161,5 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-sou
 - 抓取失败的来源写入 `run.json`，其余来源继续运行。
 - 同一事件只保留信息最完整的一篇。
 - 硬门槛未通过的内容禁止进入正常审核页。没有足够强的候选时允许少选或 0 条，不得用弱题凑数量。
-- 正式交付必须至少包含 3 条合格候选；不足 3 条时，持续执行来源发现、人工投喂、抓取和筛选循环，不得停止在“没有内容”。
+- 正式交付必须至少包含 5 条合格候选；不足 5 条时，持续执行来源发现、人工投喂、抓取和筛选循环，不得停止在“没有内容”。
 - 运行测试后才能提交代码。

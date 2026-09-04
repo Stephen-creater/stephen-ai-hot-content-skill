@@ -339,6 +339,29 @@ Language: zh
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
         self.assertNotIn("嵌套多级编号", result["penalty"])
 
+    def test_humanizer_tools_are_rejected_as_saturated_topic(self) -> None:
+        item = {
+            "title": "去 AI 味不能只改词：一个新的 Humanizer Skill",
+            "summary": "通过叙事结构修复降低 AI 痕迹",
+            "content": ("项目提供完整研究、规则、案例和测试。" * 220),
+            "published": "2026-09-04",
+            "source_name": "开源项目作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/another-humanizer",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("高度同质化", result["penalty"])
+
+    def test_delivery_threshold_is_five(self) -> None:
+        self.assertEqual(self.profile["minimum_delivery_count"], 5)
+
     def test_personal_project_journey_is_rejected_even_with_methods(self) -> None:
         item = {
             "title": "我的 AI 原生开发方法",
