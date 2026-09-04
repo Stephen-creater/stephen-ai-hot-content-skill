@@ -299,6 +299,68 @@ Language: zh
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
         self.assertNotIn("AI 总结或机器翻译感明显", result["penalty"])
 
+    def test_deeply_nested_large_checklist_is_rejected(self) -> None:
+        item = {
+            "title": "我与 AI 协作的 19 条实战经验",
+            "summary": "从需求到交付的完整方法",
+            "content": ("12.1 文件安全。12.2 完整阅读。12.3 反编造。17.1 多会话。17.2 子代理。" * 80),
+            "published": "2026-09-04",
+            "source_name": "个人作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/nested-checklist",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("嵌套多级编号", result["penalty"])
+
+    def test_personal_project_journey_is_rejected_even_with_methods(self) -> None:
+        item = {
+            "title": "我的 AI 原生开发方法",
+            "summary": "包含可复用方法和操作规则",
+            "content": ("我的 App 先改设置页。我在原型上反复调整。我的注意力放在界面上。"
+                        "接着处理我的项目，这是我的路径，也是我的答案。" * 90),
+            "published": "2026-09-04",
+            "source_name": "个人作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/personal-project-journey",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("难以脱离作者经历", result["penalty"])
+
+    def test_vendor_supplied_robotics_article_is_rejected(self) -> None:
+        item = {
+            "title": "机器人不能停下来等模型：在线强化学习进入真实部署",
+            "summary": "VLA 通过 action chunk 提高投掷成功率",
+            "content": ("World-Action Model 采用在线强化学习。本文由星尘智能提供，获授权转载，观点归原作者所有。" * 100),
+            "published": "2026-09-04",
+            "source_name": "中文科技媒体",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/vendor-robotics",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("普通读者难以使用", result["penalty"])
+        self.assertIn("厂商供稿或授权转载", result["penalty"])
+
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
         with tempfile.TemporaryDirectory() as directory:

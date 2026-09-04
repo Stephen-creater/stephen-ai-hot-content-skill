@@ -229,6 +229,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     hype_terms = [word for word in editorial_fit.get("hype_or_gossip_terms", []) if word.lower() in title_summary]
     broad_terms = [word for word in editorial_fit.get("broad_or_pr_terms", []) if word.lower() in title_summary]
     niche_terms = [word for word in editorial_fit.get("niche_professional_terms", []) if word.lower() in title_summary]
+    robotics_topic_terms = [word for word in editorial_fit.get("robotics_topic_terms", []) if word.lower() in title_summary]
     major_entities = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in title.lower()]
     major_entities_in_content = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in haystack]
     release_terms = [word for word in editorial_fit.get("release_terms", []) if word.lower() in title_summary]
@@ -253,6 +254,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     institutional_tone_terms = [word for word in editorial_fit.get("institutional_tone_terms", []) if word.lower() in haystack]
     synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
     synthetic_structure_terms = [word for word in editorial_fit.get("synthetic_structure_terms", []) if word.lower() in haystack]
+    nested_outline_count = len(re.findall(r"(?<!\d)(?:1[0-9]|[2-9])\.(?:[1-9]\d?)(?!\d)", content))
+    oversized_checklist = bool(re.search(r"(?:1[2-9]|2\d)(?:条|个)(?:实战经验|经验|方法|原则|技巧)", title_summary))
     self_disclosed_ai_authorship = bool(
         re.search(
             r"(?:本文|本篇内容).{0,24}(?:由|使用).{0,40}(?:ai|codex|豆包|claude|gpt).{0,24}(?:生成|完成|创作)",
@@ -263,6 +266,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     institutional_source = any(word.lower() in source_name for word in editorial_fit.get("institutional_sources", []))
     news_reporting_terms = [word for word in editorial_fit.get("news_reporting_terms", []) if word.lower() in haystack]
     news_source = any(word.lower() in source_name for word in editorial_fit.get("news_sources", []))
+    promotional_disclosure_terms = [word for word in editorial_fit.get("promotional_disclosure_terms", []) if word.lower() in haystack]
     personal_project_story_terms = [word for word in editorial_fit.get("personal_project_story_terms", []) if word.lower() in title.lower()]
     transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
     ai_summary_surface = f"{title_summary} {source_name}"
@@ -290,6 +294,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if niche_terms:
         score -= 30
         penalties.append("科研或医疗垂直题，大众切口偏弱")
+    if len(robotics_topic_terms) >= 2:
+        score -= 55
+        penalties.append("具身机器人或在线强化学习过于垂直，普通读者难以使用")
     if authoritative_interview:
         score += 24
         reasons.insert(0, "核心 AI 团队权威人物访谈，材料完整")
@@ -365,15 +372,24 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(synthetic_structure_terms) >= 3 and not authoritative_interview and not concrete_practice_terms:
         score -= 65
         penalties.append("小标题与清单过度整齐，呈现明显 AI 批量加工结构")
+    if (nested_outline_count >= 3 or oversized_checklist) and not authoritative_interview:
+        score -= 65
+        penalties.append("十几条大清单并嵌套多级编号，AI 加工痕迹过重")
     if self_disclosed_ai_authorship:
         score -= 100
         penalties.append("文章主动披露由 AI 生成，不作为 Stephen 二创底稿")
     if news_source and len(news_reporting_terms) >= 2 and not concrete_practice_terms:
         score -= 45
         penalties.append("以记者采访和行业报道为主，不适合作为个人写作底稿")
+    if promotional_disclosure_terms:
+        score -= 70
+        penalties.append("正文由厂商供稿或授权转载，推广属性过重")
     if personal_project_story_terms and not transferable_artifact_terms:
         score -= 55
         penalties.append("价值依赖作者本人项目经历与体感，难以转换成 Stephen 的写作视角")
+    if len(personal_workflow_detail_terms) >= 3:
+        score -= 55
+        penalties.append("项目路径与个人操作过程占比过高，难以脱离作者经历进行二创")
     if ai_summary_or_translation_terms:
         score -= 55
         penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
