@@ -127,6 +127,28 @@ class CuratorTest(unittest.TestCase):
         self.assertEqual([item["id"] for item in select_report_candidates(ranked, 15)], ["good"])
         self.assertEqual(len(select_report_candidates(ranked, 15, include_rejected=True)), 3)
 
+    def test_video_report_exposes_full_transcript(self) -> None:
+        candidate = {
+            "id": "video-1",
+            "title": "AI 工作流真实复盘",
+            "link": "https://www.youtube.com/watch?v=test",
+            "summary": "有完整材料",
+            "content": "这是审核时需要直接阅读的完整逐字稿。" * 30,
+            "source_name": "测试频道",
+            "content_form": "video",
+            "content_status": "transcript",
+            "adaptation_readiness": "高",
+            "research_cost": "低",
+            "score": 100,
+            "recommended": True,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "index.html"
+            generate_report([candidate], path, "2026-09-04-120000")
+            report = path.read_text()
+        self.assertIn("查看完整逐字稿", report)
+        self.assertIn("这是审核时需要直接阅读的完整逐字稿", report)
+
     def test_empty_report_explains_that_nothing_passed(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "index.html"
@@ -154,13 +176,22 @@ class CuratorTest(unittest.TestCase):
             self.assertEqual(item["language"], "zh")
             self.assertGreater(len(item["content"]), 500)
 
-    @patch("scrape_aihot.subprocess.check_output")
-    @patch("scrape_aihot.shutil.which", return_value="/usr/local/bin/opencli")
-    def test_youtube_uses_opencli_transcript(self, _which, check_output) -> None:
-        check_output.return_value = json.dumps(
-            [{"timestamp": "0:00", "text": "AI Agent 工作流实测，包含步骤和结果。" * 30}],
-            ensure_ascii=False,
-        )
+    def test_inbox_preserves_primary_source_maturity(self) -> None:
+        with patch("scrape_aihot.hydrate", side_effect=lambda item, _settings: item):
+            item = inbox_item(
+                {
+                    "url": "https://openai.com/example",
+                    "platform": "web",
+                    "creator": "OpenAI",
+                    "title": "ChatGPT 研究",
+                    "maturity": "primary",
+                },
+                {"request_timeout_seconds": 1, "max_article_bytes": 1000},
+            )
+        self.assertEqual(item["maturity"], "primary")
+
+    @patch("scrape_aihot.fetch_youtube_transcript", return_value="AI Agent 工作流实测。" * 40)
+    def test_youtube_uses_non_browser_transcript(self, fetch_transcript) -> None:
         item = inbox_item(
             {
                 "url": "https://www.youtube.com/watch?v=test",
@@ -173,20 +204,7 @@ class CuratorTest(unittest.TestCase):
         self.assertEqual(item["content_form"], "video")
         self.assertEqual(item["content_status"], "transcript")
         self.assertGreater(len(item["content"]), 200)
-        check_output.assert_called_once_with(
-            [
-                "opencli",
-                "youtube",
-                "transcript",
-                "https://www.youtube.com/watch?v=test",
-                "-f",
-                "json",
-            ],
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=90,
-        )
+        fetch_transcript.assert_called_once_with("https://www.youtube.com/watch?v=test")
 
     def test_hydrate_never_downgrades_a_transcript(self) -> None:
         item = {
@@ -198,11 +216,8 @@ class CuratorTest(unittest.TestCase):
         self.assertIs(hydrate(item, {"request_timeout_seconds": 1, "max_article_bytes": 1000}), item)
         self.assertEqual(item["content_status"], "transcript")
 
-    @patch("scrape_aihot.subprocess.check_output")
-    @patch("scrape_aihot.shutil.which", return_value="/usr/local/bin/opencli")
     @patch("scrape_aihot.requests.get", side_effect=RuntimeError("403"))
-    def test_hydrate_uses_opencli_for_blocked_pages(self, _get, _which, check_output) -> None:
-        check_output.return_value = "# 标题\n\n" + "完整中文正文。" * 100
+    def test_hydrate_does_not_fall_back_to_browser_bridge(self, _get) -> None:
         item = hydrate(
             {
                 "link": "https://zhuanlan.zhihu.com/p/test",
@@ -212,9 +227,8 @@ class CuratorTest(unittest.TestCase):
             },
             {"request_timeout_seconds": 1, "max_article_bytes": 1000},
         )
-        self.assertEqual(item["content_status"], "fulltext")
-        self.assertNotIn("fetch_error", item)
-        self.assertGreater(len(item["content"]), 400)
+        self.assertEqual(item["content_status"], "summary")
+        self.assertIn("403", item["fetch_error"])
 
     def test_video_without_transcript_is_not_recommended(self) -> None:
         profile = json.loads((ROOT / "resources" / "editorial_profile.json").read_text())
@@ -238,6 +252,42 @@ class CuratorTest(unittest.TestCase):
         )
         self.assertFalse(result["recommended"])
         self.assertIn("视频缺少逐字稿", result["penalty"])
+
+    def test_latest_feedback_rejects_short_engineering_and_commercial_noise(self) -> None:
+        common = {
+            "summary": "中文完整材料",
+            "content": "这是中文正文，包含真实数字和产品案例。" * 160,
+            "published": "2026-09-03",
+            "source_name": "中文媒体",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+        }
+        rows = [
+            {**common, "title": "腾讯WorkBuddy联名硬件来了", "link": "https://example.com/hardware"},
+            {**common, "title": "智谱和 MiniMax，把大模型做成了两种生意", "link": "https://example.com/business"},
+            {**common, "title": "AI 如何重构广告定向", "link": "https://example.com/ads"},
+            {**common, "title": "MiniMax打开了AI视频的实时商业化路径", "link": "https://example.com/commercial"},
+            {**common, "title": "成立不到一年连融三轮，这个睡眠 AI 产品火了", "link": "https://example.com/funding"},
+            {**common, "title": "一个模型场景通吃，它的泛化能力有点狠", "link": "https://example.com/hype"},
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(rows, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))}
+        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+
+        short_engineering = score_item(
+            {
+                **common,
+                "title": "GitHub 用 AI Agent 优化工作流",
+                "link": "https://example.com/short-engineering",
+                "content": ("持续集成中的 MCP Schema 与 Pull Request Diff。" * 30),
+            },
+            self.profile,
+            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
+        )
+        self.assertFalse(short_engineering["recommended"])
+        self.assertIn("文章偏短且技术术语密集", short_engineering["penalty"])
 
     def test_utf8_page_ignores_misleading_latin1_header(self) -> None:
         raw = "用 AI 让我们变笨了吗？认知债务与长期记忆".encode("utf-8")

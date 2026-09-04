@@ -7,6 +7,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
@@ -202,52 +203,50 @@ def hydrate(item: dict, settings: dict) -> dict:
             item["title"] = clean_text(meta.get("title"))
     except Exception as exc:
         item["fetch_error"] = str(exc)
-        if shutil.which("opencli"):
-            try:
-                rendered = subprocess.check_output(
-                    [
-                        "opencli",
-                        "web",
-                        "read",
-                        "--url",
-                        item["link"],
-                        "--stdout",
-                        "true",
-                        "-f",
-                        "md",
-                    ],
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    timeout=60,
-                )
-                rendered = clean_text(rendered)
-                if len(rendered) >= 400:
-                    item["content"] = rendered[:5000]
-                    item["content_status"] = "shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext"
-                    item.pop("fetch_error", None)
-            except Exception as fallback_exc:
-                item["fetch_error"] = f"{exc}; OpenCLI 兜底失败: {fallback_exc}"
     return item
 
 
-def fetch_opencli_youtube_transcript(url: str) -> str:
-    if not shutil.which("opencli"):
-        raise RuntimeError("未找到 opencli")
-    output = subprocess.check_output(
-        ["opencli", "youtube", "transcript", url, "-f", "json"],
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=90,
-    )
-    rows = json.loads(output)
-    if not isinstance(rows, list):
-        raise ValueError("OpenCLI YouTube 字幕格式不是数组")
-    parts = [clean_text(row.get("text")) for row in rows if isinstance(row, dict)]
-    transcript = clean_text("\n".join(part for part in parts if part))
+def fetch_youtube_transcript(url: str) -> str:
+    if not shutil.which("yt-dlp"):
+        raise RuntimeError("未找到 yt-dlp")
+    with tempfile.TemporaryDirectory(prefix="stephen-youtube-") as directory:
+        template = str(Path(directory) / "%(id)s")
+        subprocess.check_output(
+            [
+                "yt-dlp",
+                "--write-sub",
+                "--write-auto-sub",
+                "--sub-lang",
+                "zh-Hans,zh,en",
+                "--sub-format",
+                "vtt",
+                "--skip-download",
+                "-o",
+                template,
+                url,
+            ],
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            stderr=subprocess.STDOUT,
+            timeout=90,
+        )
+        paths = sorted(Path(directory).glob("*.vtt"))
+        if not paths:
+            raise ValueError("yt-dlp 没有生成字幕文件")
+        raw = paths[0].read_text(encoding="utf-8", errors="replace")
+    lines = []
+    previous = ""
+    for line in raw.splitlines():
+        text = clean_text(line)
+        if not text or text == "WEBVTT" or "-->" in text or text.startswith(("Kind:", "Language:", "NOTE")):
+            continue
+        if text != previous:
+            lines.append(text)
+            previous = text
+    transcript = clean_text("\n".join(lines))
     if len(transcript) < 200:
-        raise ValueError("OpenCLI YouTube 字幕为空或过短")
+        raise ValueError("YouTube 字幕为空或过短")
     return transcript
 
 
@@ -265,7 +264,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "source_type": platform,
         "source_role": "candidate",
         "language": row.get("language", "zh"),
-        "maturity": "secondary",
+        "maturity": row.get("maturity", "secondary"),
         "content_form": "video" if platform in {"bilibili", "youtube"} else "podcast" if platform in {"xiaoyuzhou", "podcast"} else "article",
         "content_status": "summary",
     }
@@ -280,7 +279,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
 
     if platform == "youtube" and item["link"]:
         try:
-            item["content"] = fetch_opencli_youtube_transcript(item["link"])[:20000]
+            item["content"] = fetch_youtube_transcript(item["link"])[:20000]
             item["content_status"] = "transcript"
             return item
         except Exception as exc:

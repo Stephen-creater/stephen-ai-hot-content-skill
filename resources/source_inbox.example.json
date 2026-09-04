@@ -19,7 +19,7 @@
     "platform": "youtube",
     "creator": "YouTube 创作者",
     "published": "2026-08-25",
-    "notes": "OpenCLI 已连接时自动读取完整字幕"
+    "notes": "优先用 yt-dlp 自动读取字幕；失败时先取得本地逐字稿再加入"
   },
   {
     "url": "https://www.xiaoyuzhoufm.com/episode/example",

@@ -26,13 +26,15 @@ python3 scripts/add_source.py "YouTube 链接" --platform youtube --creator "频
 python3 scripts/scrape_aihot.py
 ```
 
-需要一次性补齐 Exa、B站、OpenCLI 等系统渠道时，在明确允许用户级和全局工具安装后运行：
+需要一次性补齐 Exa、B站等系统渠道时，在明确允许用户级和全局工具安装后运行：
 
 ```bash
 python3 scripts/agent_reach_runtime.py install --system --channels all
 ```
 
 运行状态保存在用户自己的 `~/.agent-reach/`，Cookie、Token 和浏览器登录态不会进入本仓库。
+
+本项目不使用 OpenCLI，以免 Browser Bridge 调试或抢占用户的 Google Chrome。动态网页和登录态页面统一由 Ego Browser 的隔离任务空间处理。
 
 输出位于 `topics/<时间戳>/index.html`。
 

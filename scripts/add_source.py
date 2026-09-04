@@ -21,6 +21,7 @@ def main() -> None:
     parser.add_argument("--title", default="")
     parser.add_argument("--published", default="")
     parser.add_argument("--notes", default="")
+    parser.add_argument("--maturity", choices=["secondary", "primary"], default="secondary")
     parser.add_argument("--transcript", dest="transcript_path", default="")
     parser.add_argument("--inbox", type=Path, default=DEFAULT_INBOX)
     args = parser.parse_args()
@@ -37,6 +38,7 @@ def main() -> None:
             "title": args.title,
             "published": args.published,
             "notes": args.notes,
+            "maturity": args.maturity,
             "transcript_path": args.transcript_path,
         }
     )

@@ -24,6 +24,12 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 
 不得把 API Key、Token、Cookie 或浏览器登录态写入本仓库。登录态平台只使用用户已经存在且明确控制的会话，不替用户登录。
 
+## 浏览器隔离硬规则
+
+本项目不得运行 `opencli`。当前 OpenCLI Browser Bridge 会连接用户的 Google Chrome，不能可靠绑定 Ego Browser 的隔离 Task Space，会弹出调试提示并干扰用户操作。
+
+所有需要浏览器渲染、登录态或交互的页面统一直接使用 `ego-browser`，为热点选题复用同一个独立任务空间。任务完成后关闭该空间；不得启动、调试或操作用户的 Chrome。公开网页优先使用 HTTP、RSS、Exa 和平台 CLI，只有这些路径拿不到完整内容时才进入 Ego Browser。
+
 ## 热点选题检索组合
 
 不要只跑一个搜索引擎。每轮至少组合三个互补渠道：
@@ -34,44 +40,44 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 mcporter call exa.web_search_exa query="查询词" numResults=10
 ```
 
-2. 中文成品材料：
+2. 中文成品材料：B站先用非浏览器 CLI；公众号、知乎和小红书等动态页面使用 Ego Browser 独立空间检索。
 
 ```bash
-opencli weixin search "查询词" -f yaml
-opencli zhihu search "查询词" -f yaml
-opencli xiaohongshu search "查询词" -f yaml
 bili search "查询词" --type video -n 10
-opencli youtube search "查询词" -f yaml
+
+ego-browser nodejs <<'EOF'
+const task = await useOrCreateTaskSpace('stephen topic research')
+await openOrReuseTab('搜索页面 URL', { wait: true, timeout: 30 })
+cliLog(await snapshotText())
+EOF
 ```
 
 3. 一手线索和反面意见：
 
 ```bash
-opencli twitter search "查询词" -f yaml
-opencli reddit search "查询词" -f yaml
 curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1.0"
 gh search repos "查询词" --sort updated --limit 10
 ```
+
+X、Reddit 等没有稳定非浏览器后端时，只能在 Ego Browser 独立空间中读取，不能回退 OpenCLI。
 
 Twitter、Reddit、V2EX、小红书短笔记和 GitHub 项目页默认只是线索。必须继续追到完整中文文章、原始长文、字幕或逐字稿，才能写入 `.local/source_inbox.json`。
 
 ## 阅读与字幕
 
 ```bash
-opencli web read "URL" -f yaml
-opencli bilibili subtitle BV号 -f yaml
-opencli youtube transcript "URL" -f yaml
+curl -s "https://r.jina.ai/URL"
+yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "YOUTUBE_URL"
 ```
 
-把通过人工判断的 YouTube 长视频直接加入 inbox 后，抓取脚本会调用 OpenCLI 获取完整字幕；字幕为空、过短或读取失败时，该视频不得进入正式候选。
+把通过人工判断的 YouTube 长视频直接加入 inbox 后，抓取脚本会调用 `yt-dlp` 获取字幕。字幕为空、过短或读取失败时，该视频不得进入正式候选；如需浏览器补充，只能用 Ego Browser，取得的逐字稿以本地文件路径加入 inbox。
 
 公众号搜索结果需要继续打开原文。不能只拿搜狗摘要作为候选。遇到登录墙、关注墙、机器翻译、AI 总结页或正文截断，直接淘汰。
 
 ## 失败处理
 
 - 先看 `status` 中的 `channels` 和 `missing_or_unverified_channels`。
-- `doctor` 为避免读取 Cookie，可能把已经可用的 OpenCLI 平台标成未验证；只有任务需要该平台时，执行一次只读搜索，以真实非空结果验收。
-- OpenCLI 未连接时，引导用户安装浏览器扩展；不得自动登录。
-- 普通 HTTP 抓取遇到 403 或动态渲染页时，抓取脚本会用 OpenCLI 浏览器阅读自动兜底；只有正文达到最低完整度才标记为完整材料。
+- 不得因为 `doctor` 显示 OpenCLI 已连接而使用它；本项目明确禁用该后端。
+- 普通 HTTP 抓取遇到 403 或动态渲染页时，使用 Ego Browser 隔离空间人工获取正文，再作为本地材料加入；不得回退用户 Chrome。
 - Exa 不可用时继续使用公众号、知乎、B站和现有网页检索，不降低质量标准。
 - 任何渠道失败都不能用低质量候选补足 3 条；继续切换其他渠道。

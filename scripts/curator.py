@@ -194,11 +194,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if any(word in haystack for word in finance_terms) and not any(word in haystack for word in substance_terms):
         score -= 35
         penalties.append("只有融资或估值")
-    title_finance = ("融资", "估值", "收购", "卖了", "亿美元")
+    title_finance = ("融资", "估值", "收购", "卖了", "亿美元", "连融", "融三轮")
     title_substance = ("开源", "模型发布", "模型上线", "产品发布", "产品上线", "技术", "案例", "工作流", "agent")
     if any(word.lower() in title.lower() for word in title_finance) and not any(word.lower() in title.lower() for word in title_substance):
         score -= 35
         penalties.append("标题只有资本事件")
+    if any(word in title for word in ("连融", "融三轮")):
+        score -= 35
+        penalties.append("标题以连续融资制造热度")
     if any(word in title for word in ("重磅发布", "深度参与", "主论坛", "峰会")):
         score -= 30
         penalties.append("疑似会议或商业通稿")
@@ -297,6 +300,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(code_barrier_terms) >= 4:
         score -= 45
         penalties.append("正文工程门槛过高，包含大量代码与基础设施细节")
+    elif len(content) < 2500 and len(code_barrier_terms) >= 2:
+        score -= 45
+        penalties.append("文章偏短且技术术语密集，普通读者难以获得可复用价值")
     if len(abstract_business_terms) >= 3:
         score -= 45
         penalties.append("理论或商业评论过多，缺少对普通读者的实际价值")

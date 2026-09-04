@@ -44,6 +44,7 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 - 深入到依赖包、CUDA 核函数、logit、量化精度等底层实现，目标读者用不到也难以理解的技术题。
 - 标题与摘要同时堆叠多个系统实现概念，普通读者难以找到理解和复用入口的技术题。
 - 即使是真实项目复盘，如果正文要求读者理解大量代码、框架和基础设施细节，也不适合当前读者。
+- 篇幅较短且主要解释 CI/CD、运行时、服务端契约、MCP Schema 等工程细节的文章，即使数字充分也不入选；“有数字”不能替代普通读者价值。
 - 理论化或商业评论式长文，如果读完不能改变普通读者的行动、判断或认知，不因引用研究而入选。
 - 结构过度工整、满篇编号和抽象框架，却缺少原始证据、细节与真实经验的信息稀薄内容。
 - 通篇围绕 Benchmark、评测集、跑分或排行榜解释模型表现的文章。作者亲自完成真实任务的实践复盘可以保留，但不能以榜单分数为主体。
@@ -59,6 +60,8 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，不足 3 条时按 [扩源清单](resources/source_discovery_playbook.md) 持续搜索，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。多平台命令与失败降级见 [内置 Agent Reach 路由](references/agent-reach-discovery.md)。
 
 Agent Reach 是本 Skill 的内置能力层。不要要求用户先单独安装或理解 Agent Reach。扩源前运行 `python3 scripts/agent_reach_runtime.py status`；缺失时先用同一脚本安装隔离运行时。只有安装全局上游工具、读取登录态或配置 Cookie 时才需要额外说明和授权。
+
+浏览器边界：本项目禁止调用 OpenCLI，因为当前 OpenCLI Browser Bridge 会接管用户的 Google Chrome，无法可靠绑定 Ego Browser 的隔离 Task Space。需要浏览器渲染、登录态或动态网页时，必须直接使用 `ego-browser` 的独立任务空间；不得启动、调试或弹出用户的 Chrome。
 
 正常调研组合使用 Exa 找全网线索，微信公众号、知乎、小红书和B站寻找中文材料，Twitter、Reddit、V2EX 与 GitHub 只发现一手线索，再回到完整中文文章、字幕或逐字稿。社区搜索结果本身不得直接当作候选。
 
@@ -90,7 +93,7 @@ python3 scripts/add_source.py "播客链接" --platform xiaoyuzhou --creator "�
 python3 scripts/add_source.py "Apple Podcasts 或 Podwise 链接" --platform podcast --creator "节目"
 ```
 
-英文官方来源默认不进入候选池。需要为候选题补充核验线索时，运行 `--include-verification`。YouTube 会优先通过 OpenCLI 自动读取字幕；任何视频或播客在取得逐字稿前只能保留为线索，不得进入正式候选。
+英文官方来源默认不进入候选池。需要为候选题补充核验线索时，运行 `--include-verification`。YouTube 优先通过不读取浏览器登录态的 `yt-dlp` 获取字幕；任何视频或播客在取得逐字稿前只能保留为线索，不得进入正式候选。视频候选的审核卡必须提供可展开阅读的完整逐字稿。
 
 没有 API Key 时使用确定性评分。需要模型复排时，配置环境变量 `OPENROUTER_API_KEY`，或把 Key 写入本地 `.config/openrouter_api_key.txt`。Key 禁止提交。
 

@@ -41,7 +41,7 @@
 
 ## 持续搜索循环
 
-1. 运行 `agent-reach doctor --json`，确认本机各平台的实际后端；已连接 OpenCLI 时优先使用其只读搜索能力。
+1. 运行 `agent-reach doctor --json`，确认本机各平台的非浏览器后端；禁用 OpenCLI，浏览器任务统一使用 Ego Browser 隔离空间。
 2. 运行常规来源与本地 inbox。
 3. 合格候选不足 3 条时，组合 Exa、微信公众号、知乎、小红书、B站/YouTube 字幕搜索；Twitter、Reddit、V2EX 与 GitHub 只负责发现线索。
 4. 从尚未覆盖的层级选择至少两个渠道继续搜索，不得只重复同一组网页关键词。
