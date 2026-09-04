@@ -50,6 +50,7 @@ def main() -> None:
     parser.add_argument("--transcript", dest="transcript_path", default="")
     parser.add_argument("--content-url", default="", help="用于抓取正文的公开原始文本链接；展示仍使用位置参数 URL")
     parser.add_argument("--content-json-key", default="", help="content-url 返回 JS/JSON 映射时选取指定正文键")
+    parser.add_argument("--github-stars", type=int, default=None, help="GitHub 仓库当前 Star 数；GitHub 候选必须提供")
     parser.add_argument("--inbox", type=Path, default=DEFAULT_INBOX)
     args = parser.parse_args()
 
@@ -66,6 +67,7 @@ def main() -> None:
             "transcript_path": args.transcript_path,
             "content_url": args.content_url,
             "content_json_key": args.content_json_key,
+            "github_stars": args.github_stars,
         },
     )
     print(args.inbox)

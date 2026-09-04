@@ -17,7 +17,7 @@ from add_source import append_source
 from curator import deduplicate, rank_candidates, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import clean_transcript, decode_html, embedded_original_date, fetch_web_index, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -361,6 +361,58 @@ Language: zh
 
     def test_delivery_threshold_is_five(self) -> None:
         self.assertEqual(self.profile["minimum_delivery_count"], 5)
+        self.assertEqual(self.profile["minimum_non_github_candidates"], 1)
+
+    def test_delivery_mix_cannot_be_all_github(self) -> None:
+        github_items = [{"link": f"https://github.com/example/repo-{index}"} for index in range(5)]
+        mixed_items = github_items[:4] + [{"link": "https://example.com/original-article"}]
+        self.assertFalse(delivery_mix_ready(github_items, minimum_count=5, minimum_non_github=1))
+        self.assertTrue(delivery_mix_ready(mixed_items, minimum_count=5, minimum_non_github=1))
+
+    def test_github_candidates_require_at_least_one_hundred_verified_stars(self) -> None:
+        common = {
+            "title": "把真实任务封装成一个可复用的中文 Skill",
+            "summary": "包含完整案例、验证结果和可执行方法",
+            "content": ("作者公开真实输入、失败过程、成品与自动测试。" * 180),
+            "published": "2026-09-04",
+            "source_name": "GitHub 项目作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        missing = score_item({**common, "link": "https://github.com/example/missing"}, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        low = score_item({**common, "link": "https://github.com/example/low", "github_stars": 99}, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        enough = score_item({**common, "link": "https://github.com/example/enough", "github_stars": 100}, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(missing["recommended"])
+        self.assertIn("Star 数未核验", missing["penalty"])
+        self.assertFalse(low["recommended"])
+        self.assertIn("低于 100", low["penalty"])
+        self.assertNotIn("Star", enough["penalty"])
+        self.assertIn("GitHub 100 Star", enough["reason"])
+
+    def test_coding_agent_instruction_maintenance_is_too_deep(self) -> None:
+        item = {
+            "title": "审计 AGENTS.md 和 CLAUDE.md 中过期的 Skill 规则",
+            "summary": "检查常驻说明与 instruction file",
+            "content": ("工具扫描深层配置并生成修复建议。" * 180),
+            "published": "2026-09-04",
+            "source_name": "中文工具作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/instruction-maintenance",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("普通读者无法使用", result["penalty"])
 
     def test_personal_project_journey_is_rejected_even_with_methods(self) -> None:
         item = {
@@ -501,6 +553,27 @@ Language: zh
             self.assertIn("review-counts", report)
             self.assertIn("state.dirty===undefined", report)
 
+    def test_report_displays_verified_github_stars(self) -> None:
+        candidate = {
+            "id": "github-1",
+            "title": "一个实用的中文 Skill",
+            "link": "https://github.com/example/useful-skill",
+            "summary": "完整说明",
+            "source_name": "项目作者",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "adaptation_readiness": "高",
+            "research_cost": "低",
+            "github_stars": 128,
+            "score": 100,
+            "recommended": True,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "index.html"
+            generate_report([candidate], path, "2026-09-04-120000")
+            report = path.read_text()
+        self.assertIn("GitHub 128 Star", report)
+
     def test_report_gate_does_not_fill_with_rejected_items(self) -> None:
         ranked = [
             {"id": "good", "recommended": True, "score": 100},
@@ -573,6 +646,20 @@ Language: zh
                 {"request_timeout_seconds": 1, "max_article_bytes": 1000},
             )
         self.assertEqual(item["maturity"], "primary")
+
+    def test_inbox_preserves_verified_github_stars(self) -> None:
+        with patch("scrape_aihot.hydrate", side_effect=lambda item, _settings: item):
+            item = inbox_item(
+                {
+                    "url": "https://github.com/example/useful-skill",
+                    "platform": "web",
+                    "creator": "项目作者",
+                    "title": "实用中文 Skill",
+                    "github_stars": 128,
+                },
+                {"request_timeout_seconds": 1, "max_article_bytes": 1000},
+            )
+        self.assertEqual(item["github_stars"], 128)
 
     @patch("scrape_aihot.requests.get")
     def test_inbox_can_fetch_original_content_separately_from_display_url(self, get) -> None:

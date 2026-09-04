@@ -109,6 +109,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     source_role = item.get("source_role", "candidate")
     source_domain = urlsplit(item.get("link", "")).netloc.lower()
     source_name = clean_text(item.get("source_name")).lower()
+    github_stars = item.get("github_stars")
 
     published = parse_datetime(item.get("published") or item.get("article_date"))
     age_days = None
@@ -273,6 +274,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in ai_summary_surface]
     saturated_humanizer_terms = [word for word in editorial_fit.get("saturated_humanizer_terms", []) if word.lower() in title_summary]
     legal_compliance_topic_terms = [word for word in editorial_fit.get("legal_compliance_topic_terms", []) if word.lower() in haystack]
+    coding_agent_only_terms = [word for word in editorial_fit.get("coding_agent_only_terms", []) if word.lower() in haystack]
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
     thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
@@ -323,6 +325,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if any(source_domain == domain or source_domain.endswith(f".{domain}") for domain in profile.get("blocked_domains", [])):
         score -= 80
         penalties.append("来源为 AI 批量内容站或商业导流站")
+    if source_domain == "github.com":
+        if github_stars is None:
+            score -= 70
+            penalties.append("GitHub Star 数未核验，不能进入候选")
+        elif int(github_stars) < int(profile.get("minimum_github_stars", 100)):
+            score -= 70
+            penalties.append("GitHub Star 低于 100，不进入候选")
+        else:
+            reasons.insert(0, f"GitHub {int(github_stars)} Star，达到入场门槛")
     if any(term.lower() in f"{source_name} {title.lower()}" for term in profile.get("blocked_creators", [])):
         score -= 100
         penalties.append("作者或个人 IP 已被明确排除")
@@ -401,6 +412,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(legal_compliance_topic_terms) >= 3:
         score -= 55
         penalties.append("法律合规、署名责任或社会争议为主，不符合长期干货调性")
+    if len(coding_agent_only_terms) >= 2:
+        score -= 55
+        penalties.append("围绕 AGENTS.md、CLAUDE.md 等深层配置，普通读者无法使用")
     if locked_content_terms:
         score -= 70
         penalties.append("正文被登录、关注或付费墙截断，材料不完整")

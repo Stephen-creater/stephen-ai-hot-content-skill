@@ -36,6 +36,7 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
     cards = []
     for item in candidates:
         aigc_detection = render_aigc_detection(item)
+        github_stars = f" · GitHub {int(item['github_stars'])} Star" if item.get("github_stars") is not None else ""
         transcript = ""
         if item.get("content_form") == "video" and item.get("content_status") == "transcript":
             transcript = f"""
@@ -43,7 +44,7 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
         cards.append(
             f"""
 <article class="card" data-id="{html.escape(str(item['id']))}">
-  <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}</span><span>评分 {item['score']}</span></div>
+  <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}{github_stars}</span><span>评分 {item['score']}</span></div>
   <h2><a href="{html.escape(item.get('link', '#'))}" target="_blank" rel="noreferrer">{html.escape(item.get('title_zh') or item['title'])}</a></h2>
   <p>{html.escape(item.get('summary') or item.get('content', '')[:240])}</p>
   <p class="reason">{html.escape(item.get('reason', ''))}</p>

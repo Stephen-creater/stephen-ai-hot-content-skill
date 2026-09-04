@@ -318,6 +318,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "maturity": row.get("maturity", "secondary"),
         "content_form": "video" if platform in {"bilibili", "youtube"} else "podcast" if platform in {"xiaoyuzhou", "podcast"} else "article",
         "content_status": "summary",
+        "github_stars": row.get("github_stars"),
     }
     transcript_path = row.get("transcript_path")
     if transcript_path:
@@ -457,6 +458,11 @@ def select_report_candidates(ranked: list[dict], limit: int, include_rejected: b
     return eligible[:limit]
 
 
+def delivery_mix_ready(candidates: list[dict], minimum_count: int, minimum_non_github: int = 1) -> bool:
+    non_github_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() != "github.com")
+    return len(candidates) >= minimum_count and non_github_count >= minimum_non_github
+
+
 def normalized_content_shingles(value: str, size: int = 24) -> set[str]:
     normalized = re.sub(r"\W+", "", clean_text(value).lower())[:12000]
     if len(normalized) < 800:
@@ -520,6 +526,7 @@ def main() -> None:
     ranked = [item for item in ranked if not is_historical_content_duplicate(item, reviewed_candidates)]
     report_count = profile["report_candidate_count"]
     minimum_delivery_count = int(profile.get("minimum_delivery_count", 5))
+    minimum_non_github_candidates = int(profile.get("minimum_non_github_candidates", 1))
 
     aigc_status = "disabled" if args.no_aigc or args.fixture else "not_configured"
     aigc_checked_count = 0
@@ -586,6 +593,9 @@ def main() -> None:
     for index, item in enumerate(candidates):
         item["selected_by_default"] = index < selection_count and item["recommended"]
 
+    non_github_candidate_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() != "github.com")
+    ready_to_deliver = delivery_mix_ready(candidates, minimum_delivery_count, minimum_non_github_candidates)
+
     timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     output_dir = args.output_root / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -604,7 +614,9 @@ def main() -> None:
                 "aigc_estimated_max_cost_yuan": aigc_estimated_max_cost_yuan,
                 "candidate_count": len(candidates),
                 "minimum_delivery_count": minimum_delivery_count,
-                "delivery_ready": len(candidates) >= minimum_delivery_count,
+                "minimum_non_github_candidates": minimum_non_github_candidates,
+                "non_github_candidate_count": non_github_candidate_count,
+                "delivery_ready": ready_to_deliver,
                 "include_rejected": args.include_rejected,
                 "errors": errors,
             },
@@ -617,6 +629,8 @@ def main() -> None:
     print(f"合格候选 {len(candidates)} 条，输入 {len(items)} 条，硬门槛拒绝 {rejected_by_gate_count} 条")
     if len(candidates) < minimum_delivery_count and not args.fixture:
         print(f"尚未达到交付门槛 {minimum_delivery_count} 条：继续扩展来源并检索，不得交付或用弱题补位")
+    elif non_github_candidate_count < minimum_non_github_candidates and not args.fixture:
+        print("候选全部来自 GitHub：继续补充高质量中文文章、博客或完整音视频材料，不得交付单一来源批次")
     if errors:
         print("抓取告警：")
         for error in errors:
