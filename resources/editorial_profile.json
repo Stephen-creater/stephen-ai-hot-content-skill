@@ -10,7 +10,7 @@
   "minimum_score": 48,
   "preferred_language": "zh",
   "preferred_maturity": "secondary",
-  "blocked_domains": ["kylinlabai.github.io", "claudemax.shop", "aipodcast.jasonlin.tech"],
+  "blocked_domains": ["kylinlabai.github.io", "claudemax.shop", "aipodcast.jasonlin.tech", "onepod.site"],
   "blocked_creators": ["数字生命卡兹克", "数字生命卡茨克", "卡兹克", "卡茨克", "khazix0918"],
   "topic_pillars": [
     {
@@ -52,8 +52,8 @@
   "editorial_fit": {
     "evergreen_angle_terms": ["harness", "skill", "mcp", "开源", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理", "agent runtime"],
     "hype_or_gossip_terms": ["被扒出", "匿名模型", "匿名公测", "怀疑cursor", "神秘模型", "爆火", "杀进", "拿走", "干翻", "老黄", "股价不跌反涨", "野心已经藏不住", "全数sota", "模型团战", "第一枪", "巨头战役", "gpt3时刻", "gpt3 时刻", "买几万台mac", "英伟达的活被苹果抢了", "交出了什么答卷", "vc疯了", "创业乌托邦", "突破三大瓶颈", "这ai比赛办得有点绝", "我用它做了", "github最热", "看哭了", "屠榜", "全球第一", "a割", "明升暗降", "理直气壮", "场景通吃", "有点狠", "欢迎来到agi时代", "agi来了", "agi 来了", "刚刚，gpt-6正式发布", "gpt-6 曝光"],
-    "broad_or_pr_terms": ["重塑商业", "决定未来", "未来商业", "最大误判", "发展路线", "研究成果", "从模拟世界到交互世界", "中国大模型为啥选最难的路", "人开始成为最大的瓶颈", "两种生意", "商业化路径", "谁能成为 agent 的「上下文操作系统」", "落地样板间", "硅基员工批量上岗", "按结果领工资"],
-    "niche_professional_terms": ["ai4s", "ai科研", "科研评价", "ai科学家", "ai音乐", "物理ai", "物理 ai", "量化研究", "肝癌", "肿瘤", "药物发现", "材料研发"],
+    "broad_or_pr_terms": ["重塑商业", "决定未来", "未来商业", "最大误判", "发展路线", "研究成果", "从模拟世界到交互世界", "中国大模型为啥选最难的路", "人开始成为最大的瓶颈", "两种生意", "商业化路径", "谁能成为 agent 的「上下文操作系统」", "落地样板间", "硅基员工批量上岗", "按结果领工资", "人力资源巨头", "百万次候选人对话", "交付周期缩短一半"],
+    "niche_professional_terms": ["ai4s", "ai科研", "科研评价", "ai科学家", "ai音乐", "物理ai", "物理 ai", "量化研究", "肝癌", "肿瘤", "药物发现", "材料研发", "科学发现", "物理科学", "通用积分器", "树搜索驱动"],
     "robotics_topic_terms": ["具身智能", "机器人", "vla", "world-action model", "action chunk", "在线强化学习", "物理 ai", "physical ai"],
     "major_ai_entities": ["openai", "anthropic", "claude", "google deepmind", "deepmind", "gemini", "microsoft", "nvidia", "英伟达", "deepseek", "阿里", "通义", "qwen", "字节", "腾讯", "百度", "智谱", "kimi", "minimax", "小红书", "codex"],
     "release_terms": ["发布", "上线", "开源", "推出", "首发"],
@@ -84,6 +84,7 @@
     "personal_project_story_terms": ["我为什么停掉", "我为什么仍停掉", "最后只赚了", "我的 ai app", "我做了", "我上架了"],
     "transferable_artifact_terms": ["写作 skill", "对照实验", "语料测试", "评分规则", "可复用方法", "操作规则"],
     "ai_summary_or_translation_terms": ["ai 总结", "ai总结", "ai摘要", "中英对照 + 朗读 + 问答", "互动全文版", "机器翻译"],
+    "legal_compliance_topic_terms": ["法律合规", "版权归属", "作者身份", "署名", "ai参与声明", "人工智能生成合成内容标识办法", "版权局", "法院", "社会争议", "责任归属", "标识办法"],
     "locked_content_terms": ["点击解锁完整内容", "关注后自动获取验证码", "登录后查看全文", "登录解锁", "付费阅读"],
     "community_question_terms": ["就想问问", "请问各位", "求助", "到底是我这流程本身有病", "有没有人知道"],
     "thin_personal_reflection_terms": ["我没有想念它", "习惯性的拐杖", "让我变笨了", "让我有点抑郁", "效率的衔尾蛇", "谨慎乐观"],

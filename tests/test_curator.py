@@ -319,6 +319,26 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("嵌套多级编号", result["penalty"])
 
+    def test_model_versions_and_decimal_metrics_are_not_nested_headings(self) -> None:
+        item = {
+            "title": "去 AI 味不能只改词，真正暴露模型的是叙事架构",
+            "summary": "研究覆盖六万多篇文本并给出三层修订方法",
+            "content": ("Claude Fable 5.1、Opus 4.8 与 GPT-5.6 都有不同特征。"
+                        "分类器达到 93.2% macro-F1，表层修改后从 95.5% 变成 93.9%。" * 80),
+            "published": "2026-09-04",
+            "source_name": "开源研究型 Skill",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/model-version-decimals",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertNotIn("嵌套多级编号", result["penalty"])
+
     def test_personal_project_journey_is_rejected_even_with_methods(self) -> None:
         item = {
             "title": "我的 AI 原生开发方法",
@@ -360,6 +380,86 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("普通读者难以使用", result["penalty"])
         self.assertIn("厂商供稿或授权转载", result["penalty"])
+
+    def test_translation_only_podcast_digest_domain_is_blocked(self) -> None:
+        item = {
+            "title": "OpenAI 产品负责人谈 AI 时代的知识工作",
+            "summary": "海外播客中文问答整理",
+            "content": ("主持人提问。嘉宾回答。编辑补充。" * 220),
+            "published": "2026-09-04",
+            "source_name": "海外科技播客中文整理",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://onepod.site/p/example/",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("AI 批量内容站或商业导流站", result["penalty"])
+
+    def test_legal_authorship_controversy_is_not_long_term_practical_content(self) -> None:
+        item = {
+            "title": "AI 写完全文后，署名者还能算作者吗",
+            "summary": "讨论作者身份、版权归属与责任归属",
+            "content": ("文章结合版权局、法院案例和人工智能生成合成内容标识办法，讨论社会争议与 AI 参与声明。" * 100),
+            "published": "2026-09-04",
+            "source_name": "中文原创作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/ai-authorship-law",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("不符合长期干货调性", result["penalty"])
+
+    def test_enterprise_recruiting_agent_case_study_is_rejected(self) -> None:
+        item = {
+            "title": "人力资源巨头用 AI Agent 完成百万次候选人对话，交付周期缩短一半",
+            "summary": "大型企业招聘自动化案例",
+            "content": ("企业通过招聘 Agent 扩大候选人沟通规模并优化交付。" * 180),
+            "published": "2026-09-04",
+            "source_name": "中文案例整理站",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/recruiting-agent-case",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("通稿式表述", result["penalty"])
+
+    def test_scientific_discovery_tree_search_is_too_vertical(self) -> None:
+        item = {
+            "title": "树搜索驱动科学发现，小时级写出通用积分器",
+            "summary": "低成本找出物理科学规律",
+            "content": ("系统通过树搜索驱动科研工作流，发现新的物理科学规律。" * 180),
+            "published": "2026-09-04",
+            "source_name": "中文科技媒体",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/science-discovery-tree-search",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("大众切口偏弱", result["penalty"])
 
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]

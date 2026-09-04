@@ -254,7 +254,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     institutional_tone_terms = [word for word in editorial_fit.get("institutional_tone_terms", []) if word.lower() in haystack]
     synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
     synthetic_structure_terms = [word for word in editorial_fit.get("synthetic_structure_terms", []) if word.lower() in haystack]
-    nested_outline_count = len(re.findall(r"(?<!\d)(?:1[0-9]|[2-9])\.(?:[1-9]\d?)(?!\d)", content))
+    nested_outline_count = len(re.findall(r"(?<!\d)(?:1[0-9]|2[0-9])\.(?:[1-9]\d?)(?:[.、\s]|$)", content))
     oversized_checklist = bool(re.search(r"(?:1[2-9]|2\d)(?:条|个)(?:实战经验|经验|方法|原则|技巧)", title_summary))
     self_disclosed_ai_authorship = bool(
         re.search(
@@ -271,6 +271,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
     ai_summary_surface = f"{title_summary} {source_name}"
     ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in ai_summary_surface]
+    legal_compliance_topic_terms = [word for word in editorial_fit.get("legal_compliance_topic_terms", []) if word.lower() in haystack]
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
     thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
@@ -393,6 +394,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if ai_summary_or_translation_terms:
         score -= 55
         penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
+    if len(legal_compliance_topic_terms) >= 3:
+        score -= 55
+        penalties.append("法律合规、署名责任或社会争议为主，不符合长期干货调性")
     if locked_content_terms:
         score -= 70
         penalties.append("正文被登录、关注或付费墙截断，材料不完整")
