@@ -65,15 +65,30 @@ def title_similarity(left: str, right: str) -> float:
 
 def deduplicate(items: list[dict]) -> list[dict]:
     kept: list[dict] = []
-    seen_urls: set[str] = set()
+
+    def richness(item: dict) -> tuple[int, int, int]:
+        status_rank = {"transcript": 3, "fulltext": 2, "shownotes": 1, "summary": 0}
+        return (
+            status_rank.get(item.get("content_status", "summary"), 0),
+            len(clean_text(item.get("content"))),
+            int(item.get("source_priority", 0)),
+        )
+
     for item in items:
         url = canonical_url(item.get("link", ""))
-        if url and url in seen_urls:
+        duplicate_index = next(
+            (
+                index
+                for index, old in enumerate(kept)
+                if (url and url == canonical_url(old.get("link", "")))
+                or title_similarity(item.get("title", ""), old.get("title", "")) >= 0.86
+            ),
+            None,
+        )
+        if duplicate_index is not None:
+            if richness(item) > richness(kept[duplicate_index]):
+                kept[duplicate_index] = item
             continue
-        if any(title_similarity(item.get("title", ""), old.get("title", "")) >= 0.86 for old in kept):
-            continue
-        if url:
-            seen_urls.add(url)
         kept.append(item)
     return kept
 
@@ -237,6 +252,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     institutional_source = any(word.lower() in source_name for word in editorial_fit.get("institutional_sources", []))
     news_reporting_terms = [word for word in editorial_fit.get("news_reporting_terms", []) if word.lower() in haystack]
     news_source = any(word.lower() in source_name for word in editorial_fit.get("news_sources", []))
+    personal_project_story_terms = [word for word in editorial_fit.get("personal_project_story_terms", []) if word.lower() in title.lower()]
+    transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
     ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in haystack]
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
@@ -333,6 +350,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if news_source and len(news_reporting_terms) >= 2 and not concrete_practice_terms:
         score -= 45
         penalties.append("以记者采访和行业报道为主，不适合作为个人写作底稿")
+    if personal_project_story_terms and not transferable_artifact_terms:
+        score -= 55
+        penalties.append("价值依赖作者本人项目经历与体感，难以转换成 Stephen 的写作视角")
     if ai_summary_or_translation_terms:
         score -= 55
         penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")

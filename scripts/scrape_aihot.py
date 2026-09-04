@@ -208,6 +208,22 @@ def hydrate(item: dict, settings: dict) -> dict:
     return item
 
 
+def clean_transcript(raw: str) -> str:
+    lines = []
+    previous = ""
+    for line in raw.splitlines():
+        text = clean_text(line)
+        if not text or text == "WEBVTT" or "-->" in text or text.startswith(("Kind:", "Language:", "NOTE")):
+            continue
+        if text != previous:
+            lines.append(text)
+            previous = text
+    transcript = clean_text("\n".join(lines))
+    if len(transcript) < 200:
+        raise ValueError("逐字稿为空或过短")
+    return transcript
+
+
 def fetch_youtube_transcript(url: str) -> str:
     if not shutil.which("yt-dlp"):
         raise RuntimeError("未找到 yt-dlp")
@@ -237,19 +253,7 @@ def fetch_youtube_transcript(url: str) -> str:
         if not paths:
             raise ValueError("yt-dlp 没有生成字幕文件")
         raw = paths[0].read_text(encoding="utf-8", errors="replace")
-    lines = []
-    previous = ""
-    for line in raw.splitlines():
-        text = clean_text(line)
-        if not text or text == "WEBVTT" or "-->" in text or text.startswith(("Kind:", "Language:", "NOTE")):
-            continue
-        if text != previous:
-            lines.append(text)
-            previous = text
-    transcript = clean_text("\n".join(lines))
-    if len(transcript) < 200:
-        raise ValueError("YouTube 字幕为空或过短")
-    return transcript
+    return clean_transcript(raw)
 
 
 def inbox_item(row: dict, settings: dict) -> dict:
@@ -274,7 +278,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
     if transcript_path:
         path = Path(transcript_path).expanduser()
         if path.exists():
-            item["content"] = clean_text(path.read_text(encoding="utf-8", errors="replace"))[:20000]
+            item["content"] = clean_transcript(path.read_text(encoding="utf-8", errors="replace"))[:20000]
             item["content_status"] = "transcript"
             return item
         item["fetch_error"] = f"逐字稿不存在: {path}"

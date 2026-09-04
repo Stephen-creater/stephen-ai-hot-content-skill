@@ -1,12 +1,37 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
+import os
+import tempfile
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_INBOX = ROOT / ".local" / "source_inbox.json"
+
+
+def append_source(path: Path, row: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    lock_path = path.with_suffix(path.suffix + ".lock")
+    with lock_path.open("w", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        rows = json.loads(path.read_text(encoding="utf-8")) if path.exists() else []
+        if any(existing.get("url") == row["url"] for existing in rows):
+            raise SystemExit("该链接已经存在")
+        rows.append(row)
+        payload = json.dumps(rows, ensure_ascii=False, indent=2) + "\n"
+        fd, temporary_name = tempfile.mkstemp(prefix=path.name + ".", dir=path.parent)
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as temporary:
+                temporary.write(payload)
+                temporary.flush()
+                os.fsync(temporary.fileno())
+            os.replace(temporary_name, path)
+        finally:
+            if os.path.exists(temporary_name):
+                os.unlink(temporary_name)
 
 
 def main() -> None:
@@ -28,11 +53,8 @@ def main() -> None:
     parser.add_argument("--inbox", type=Path, default=DEFAULT_INBOX)
     args = parser.parse_args()
 
-    args.inbox.parent.mkdir(parents=True, exist_ok=True)
-    rows = json.loads(args.inbox.read_text(encoding="utf-8")) if args.inbox.exists() else []
-    if any(row.get("url") == args.url for row in rows):
-        raise SystemExit("该链接已经存在")
-    rows.append(
+    append_source(
+        args.inbox,
         {
             "url": args.url,
             "platform": args.platform,
@@ -44,9 +66,8 @@ def main() -> None:
             "transcript_path": args.transcript_path,
             "content_url": args.content_url,
             "content_json_key": args.content_json_key,
-        }
+        },
     )
-    args.inbox.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(args.inbox)
 
 

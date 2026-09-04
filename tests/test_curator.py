@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import concurrent.futures
 import json
 import sys
 import tempfile
@@ -12,10 +13,11 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from curator import rank_candidates, score_item
+from add_source import append_source
+from curator import deduplicate, rank_candidates, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import decode_html, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import clean_transcript, decode_html, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -23,6 +25,51 @@ class CuratorTest(unittest.TestCase):
         self.profile = json.loads((ROOT / "resources" / "editorial_profile.json").read_text())
         self.items = json.loads((ROOT / "tests" / "fixtures" / "sample_items.json").read_text())
         self.now = datetime(2026, 8, 25, tzinfo=timezone.utc)
+
+    def test_source_inbox_concurrent_appends_remain_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            inbox = Path(directory) / "source_inbox.json"
+            rows = [
+                {"url": f"https://example.com/{index}", "title": f"source {index}"}
+                for index in range(8)
+            ]
+            with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+                list(executor.map(lambda row: append_source(inbox, row), rows))
+            saved = json.loads(inbox.read_text(encoding="utf-8"))
+            self.assertEqual({row["url"] for row in saved}, {row["url"] for row in rows})
+
+    def test_title_duplicate_prefers_complete_transcript(self) -> None:
+        summary = {
+            "title": "四个工作 Agent 同题实测：好看的报告不等于可信交付",
+            "link": "https://example.com/article",
+            "content_status": "summary",
+            "content": "简介",
+        }
+        transcript = {
+            **summary,
+            "link": "https://youtube.com/watch?v=example",
+            "content_status": "transcript",
+            "content": "完整逐字稿" * 1000,
+        }
+        self.assertEqual(deduplicate([summary, transcript]), [transcript])
+
+    def test_vtt_transcript_removes_timestamps_and_repeated_cues(self) -> None:
+        raw = """WEBVTT
+Kind: captions
+Language: zh
+
+00:00:00.000 --> 00:00:01.000
+第一句话
+
+00:00:01.000 --> 00:00:02.000
+第一句话
+
+00:00:02.000 --> 00:00:03.000
+""" + "第二句话" * 60
+        cleaned = clean_transcript(raw)
+        self.assertNotIn("-->", cleaned)
+        self.assertNotIn("WEBVTT", cleaned)
+        self.assertEqual(cleaned.count("第一句话"), 1)
 
     def test_personalized_ranking_and_exclusions(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)
@@ -447,6 +494,42 @@ class CuratorTest(unittest.TestCase):
         )
         self.assertFalse(result["recommended"])
         self.assertIn("记者采访和行业报道", result["penalty"])
+
+    def test_personal_story_needs_a_transferable_artifact(self) -> None:
+        common = {
+            "content": "作者记录半年项目、真实体感、收入和具体过程。" * 300,
+            "published": "2026-08-27",
+            "source_name": "个人作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        personal = score_item(
+            {
+                **common,
+                "title": "付费用户过百之后，我为什么仍停掉 AI 社交产品",
+                "summary": "个人创业项目的留存、收入与体感",
+                "link": "https://example.com/personal-project",
+            },
+            self.profile,
+            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
+        )
+        transferable = score_item(
+            {
+                **common,
+                "title": "我写了个 AI 写作 Skill，第一次改稿就翻车了",
+                "summary": "包含对照实验、语料测试和可复用方法",
+                "link": "https://example.com/transferable",
+            },
+            self.profile,
+            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
+        )
+        self.assertFalse(personal["recommended"])
+        self.assertIn("作者本人项目经历", personal["penalty"])
+        self.assertNotIn("作者本人项目经历", transferable["penalty"])
 
     def test_utf8_page_ignores_misleading_latin1_header(self) -> None:
         raw = "用 AI 让我们变笨了吗？认知债务与长期记忆".encode("utf-8")

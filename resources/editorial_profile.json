@@ -76,6 +76,8 @@
     "institutional_sources": ["央视网", "中国日报", "科技日报", "人民网", "新华网"],
     "news_reporting_terms": ["记者", "日讯", "责编", "从业者表示", "行业采访", "记者采访"],
     "news_sources": ["科创板日报", "财联社", "央视网", "中国日报", "科技日报", "人民网", "新华网"],
+    "personal_project_story_terms": ["我为什么停掉", "我为什么仍停掉", "最后只赚了", "我的 ai app", "我做了", "我上架了"],
+    "transferable_artifact_terms": ["写作 skill", "对照实验", "语料测试", "评分规则", "可复用方法", "操作规则"],
     "ai_summary_or_translation_terms": ["ai 总结", "ai摘要", "中英对照 + 朗读 + 问答", "互动全文版", "机器翻译"],
     "locked_content_terms": ["点击解锁完整内容", "关注后自动获取验证码", "登录后查看全文", "登录解锁", "付费阅读"],
     "community_question_terms": ["就想问问", "请问各位", "求助", "到底是我这流程本身有病", "有没有人知道"],
