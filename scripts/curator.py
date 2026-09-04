@@ -252,6 +252,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     feature_inventory_terms = [word for word in editorial_fit.get("feature_inventory_terms", []) if word.lower() in title_summary]
     institutional_tone_terms = [word for word in editorial_fit.get("institutional_tone_terms", []) if word.lower() in haystack]
     synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
+    synthetic_structure_terms = [word for word in editorial_fit.get("synthetic_structure_terms", []) if word.lower() in haystack]
     self_disclosed_ai_authorship = bool(
         re.search(
             r"(?:本文|本篇内容).{0,24}(?:由|使用).{0,40}(?:ai|codex|豆包|claude|gpt).{0,24}(?:生成|完成|创作)",
@@ -264,7 +265,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     news_source = any(word.lower() in source_name for word in editorial_fit.get("news_sources", []))
     personal_project_story_terms = [word for word in editorial_fit.get("personal_project_story_terms", []) if word.lower() in title.lower()]
     transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
-    ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in haystack]
+    ai_summary_surface = f"{title_summary} {source_name}"
+    ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in ai_summary_surface]
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
     thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
@@ -360,6 +362,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(synthetic_official_tone_terms) >= 4 and not concrete_practice_terms:
         score -= 55
         penalties.append("AI 式官方包装语言过重，真实作者判断不足")
+    if len(synthetic_structure_terms) >= 3 and not authoritative_interview and not concrete_practice_terms:
+        score -= 65
+        penalties.append("小标题与清单过度整齐，呈现明显 AI 批量加工结构")
     if self_disclosed_ai_authorship:
         score -= 100
         penalties.append("文章主动披露由 AI 生成，不作为 Stephen 二创底稿")

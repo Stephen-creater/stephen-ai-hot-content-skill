@@ -260,6 +260,45 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("距离目标读者过远", result["penalty"])
 
+    def test_formulaic_ai_headings_are_rejected_without_disclosure(self) -> None:
+        item = {
+            "title": "你的 AI 额度为什么总是不够用",
+            "summary": "从 Context 管理出发的实用建议",
+            "content": ("一句话结论。三个动作。第一招：丢掉。第二招：缩小。第三招：打折。记住两句自问。" * 90),
+            "published": "2026-08-25",
+            "source_name": "中文整理站",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/formulaic-ai-headings",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("AI 批量加工结构", result["penalty"])
+
+    def test_author_discussing_ai_summaries_is_not_an_ai_summary_page(self) -> None:
+        item = {
+            "title": "前文字记者公开 Writing DNA Skill",
+            "summary": "用语言学分层沉淀写作风格",
+            "content": ("作者解释为什么 AI 总结往往只学会口头禅，以及怎样用原始语料修正。" * 160),
+            "published": "2026-09-04",
+            "source_name": "前文字记者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/writing-dna",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertNotIn("AI 总结或机器翻译感明显", result["penalty"])
+
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
         with tempfile.TemporaryDirectory() as directory:
