@@ -1,0 +1,9 @@
+{
+  "gateway": "https://your-gateway-domain",
+  "api_key": "replace-with-your-api-key",
+  "timeout_seconds": 60,
+  "hard_reject_ai_ratio": 0.98,
+  "downrank_ratio": 0.5,
+  "downrank_points": 35,
+  "max_cost_yuan_per_run": 5
+}

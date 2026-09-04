@@ -15,6 +15,7 @@ Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研�
 - 已入选或已淘汰的同一条内容不会在后续报告中重复出现。
 - 区分权威人物深度访谈与普通人物稿，并过滤活动广告、合作通稿和无名小发布。
 - 内置经过 SHA-256 校验的 Agent Reach 运行时，用户无需单独安装另一个 Skill 即可启用多平台检索。
+- 原生支持朱雀 AIGC 文本检测，显示人工、AI、疑似 AI 三类占比与逐段判定。
 
 ## 快速开始
 
@@ -58,5 +59,6 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-sou
 - `resources/editorial_profile.json` 管理读者、选题方向、排除项和权重。
 - `.local/source_inbox.json` 保存人工投喂的公众号、视频、播客和逐字稿，仅本地使用。
 - `OPENROUTER_API_KEY` 或 `.config/openrouter_api_key.txt` 用于可选模型复排。
+- `ZHUQUE_GATEWAY` 与 `ZHUQUE_API_KEY`，或 `.config/zhuque.json`，用于可选的朱雀 AIGC 检测。配置与真实调用见 [朱雀接入说明](references/zhuque-aigc.md)。
 
 API Key、本地反馈、缓存和运行结果均不会提交到公开仓库。

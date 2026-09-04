@@ -76,6 +76,8 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 
 详细权重与历史文章见 [编辑画像](resources/editorial_profile.json)，信息源见 [来源配置](resources/content_curator_sources.json)，不足 3 条时按 [扩源清单](resources/source_discovery_playbook.md) 持续搜索，人工投喂格式见 [inbox 示例](resources/source_inbox.example.json)。多平台命令与失败降级见 [内置 Agent Reach 路由](references/agent-reach-discovery.md)。
 
+朱雀 AIGC 检测是候选入报告前的证据层。已配置时，只检测通过其他硬门槛的完整正文：AI 内容占比达到 98% 时硬淘汰；AI 或疑似 AI 占比超过 50% 时降低优先级；不得把接口失败或未配置解释为“人工写作”。逐段结果必须进入审核报告，供人工复核。首次配置、费用边界、缓存和真实测试命令见 [朱雀接入说明](references/zhuque-aigc.md)。
+
 Agent Reach 是本 Skill 的内置能力层。不要要求用户先单独安装或理解 Agent Reach。扩源前运行 `python3 scripts/agent_reach_runtime.py status`；缺失时先用同一脚本安装隔离运行时。只有安装全局上游工具、读取登录态或配置 Cookie 时才需要额外说明和授权。
 
 浏览器边界：本项目禁止调用 OpenCLI，因为当前 OpenCLI Browser Bridge 会接管用户的 Google Chrome，无法可靠绑定 Ego Browser 的隔离 Task Space。需要浏览器渲染、登录态或动态网页时，必须直接使用 `ego-browser` 的独立任务空间；不得启动、调试或弹出用户的 Chrome。
@@ -95,6 +97,8 @@ python3 -m pip install -r scripts/requirements.txt
 ```bash
 python3 scripts/scrape_aihot.py
 ```
+
+朱雀未配置时继续使用原有确定性规则，并在 `run.json` 标记 `not_configured`。只有调试或明确不希望产生本次检测费用时才使用 `--no-aigc`。朱雀结果是辅助证据，不得因为检测通过就降低原创性、信息密度和作者经验等其他标准。
 
 正常报告只展示通过硬门槛的内容。`report_candidate_count` 是最大数量，不是凑数配额；`minimum_delivery_count` 是交付门槛。候选不足 3 条时，不得把当前审核页交给用户，也不得降低质量标准，必须继续扩展信息源、补充材料并重新运行，直到至少找到 3 条合格候选。
 

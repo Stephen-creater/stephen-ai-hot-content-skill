@@ -5,10 +5,37 @@ import json
 from pathlib import Path
 
 
+def render_aigc_detection(item: dict) -> str:
+    detection = item.get("aigc_detection")
+    if not detection:
+        return ""
+    ratios = detection.get("ratios", {})
+    policy_labels = {"passed": "通过", "downranked": "已降权", "rejected": "已淘汰", "unknown": "检测失败"}
+    label_names = {0: "人工", 1: "AI", 2: "疑似 AI"}
+    label_classes = {0: "human", 1: "ai", 2: "suspected"}
+    segments = []
+    for segment in detection.get("segments", []):
+        label = int(segment.get("label", -1))
+        if label not in label_names:
+            continue
+        confidence = float(segment.get("confidence", 0))
+        segments.append(
+            f'<p class="aigc-segment {label_classes[label]}"><strong>{label_names[label]} · {confidence:.0%}</strong>'
+            f'<span>{html.escape(segment.get("text", ""))}</span></p>'
+        )
+    segment_html = "".join(segments) or '<p class="aigc-empty">接口未返回可展示的分段。</p>'
+    return f"""
+  <details class="aigc"><summary>朱雀 AIGC 检测 · {policy_labels.get(item.get('aigc_policy'), '已检测')}</summary>
+    <div class="aigc-ratios"><span>人工 {float(ratios.get('human', 0)):.1%}</span><span>AI {float(ratios.get('ai', 0)):.1%}</span><span>疑似 AI {float(ratios.get('suspected_ai', 0)):.1%}</span></div>
+    <div class="aigc-segments">{segment_html}</div>
+  </details>"""
+
+
 def generate_report(candidates: list[dict], output_path: Path, generated_at: str) -> None:
     payload = json.dumps(candidates, ensure_ascii=False).replace("</", "<\\/")
     cards = []
     for item in candidates:
+        aigc_detection = render_aigc_detection(item)
         transcript = ""
         if item.get("content_form") == "video" and item.get("content_status") == "transcript":
             transcript = f"""
@@ -22,6 +49,7 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
   <p class="reason">{html.escape(item.get('reason', ''))}</p>
   <p class="penalty">{html.escape(item.get('penalty', ''))}</p>
   <p class="readiness">文字材料 {html.escape(item.get('content_status', 'unknown'))} · 二创成熟度 {html.escape(item.get('adaptation_readiness', '未知'))} · 研究成本 {html.escape(item.get('research_cost', '未知'))}</p>
+  {aigc_detection}
   {transcript}
   <div class="review">
     <button data-status="selected">应该入选</button>
@@ -43,7 +71,7 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Stephen AI 热点候选</title>
 <style>
-body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f1eb;color:#222;margin:0}}main{{max-width:900px;margin:auto;padding:24px 18px 80px}}header{{margin-bottom:20px}}h1{{font-size:30px;margin:0 0 8px}}.hint{{color:#666}}.toolbar{{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 22px;padding:12px 14px;background:rgba(244,241,235,.96);border:1px solid #d8cdbc;border-radius:12px;box-shadow:0 6px 18px rgba(70,55,35,.08);backdrop-filter:blur(10px)}}.toolbar-summary{{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:#5c5144}}.export-state{{font-weight:600}}.export-state.dirty{{color:#a13f2c}}.export-state.clean{{color:#35633d}}.export-button{{flex:0 0 auto;background:#222;color:#fff;font-weight:600}}.card{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:20px;margin:16px 0}}.empty-state{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:32px 24px;margin:18px 0;color:#5c5144}}.empty-state h2{{color:#222}}.meta{{display:flex;justify-content:space-between;color:#806b51;font-size:13px}}h2{{font-size:21px;margin:10px 0}}a{{color:#222}}.reason{{color:#365b3b}}.penalty{{color:#9b3d2f}}.readiness{{font-size:13px;color:#6d5d49;background:#f8f4ed;padding:8px;border-radius:7px}}.transcript{{margin:12px 0;border:1px solid #ddd4c7;border-radius:8px;padding:12px;background:#fbfaf7}}.transcript summary{{cursor:pointer;font-weight:700}}.transcript-note{{margin:10px 0;color:#806b51;font-size:13px}}.transcript pre{{white-space:pre-wrap;overflow-wrap:anywhere;max-height:620px;overflow:auto;margin:0;padding:16px 18px;border-radius:8px;background:#fff;font:16px/1.95 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.01em}}.review{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}button{{padding:9px;border:1px solid #cbbda9;background:#f8f4ed;border-radius:8px;cursor:pointer}}button.active{{background:#222;color:#fff}}textarea{{grid-column:1/-1;min-height:58px;padding:8px}}.card-save-status{{grid-column:1/-1;color:#777;font-size:12px}}.card-save-status.saved{{color:#35633d}}.missed{{background:#fff8df;border:1px solid #e2ca77;padding:18px;border-radius:12px;margin-top:30px}}input{{width:100%;box-sizing:border-box;margin:5px 0;padding:9px}}#export-bottom{{margin-top:20px;background:#222;color:#fff}}@media(max-width:620px){{.toolbar{{align-items:stretch;flex-direction:column}}.export-button{{width:100%}}.transcript pre{{font-size:15px;line-height:1.9;padding:14px 12px}}}}
+body{{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#f4f1eb;color:#222;margin:0}}main{{max-width:900px;margin:auto;padding:24px 18px 80px}}header{{margin-bottom:20px}}h1{{font-size:30px;margin:0 0 8px}}.hint{{color:#666}}.toolbar{{position:sticky;top:0;z-index:10;display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 22px;padding:12px 14px;background:rgba(244,241,235,.96);border:1px solid #d8cdbc;border-radius:12px;box-shadow:0 6px 18px rgba(70,55,35,.08);backdrop-filter:blur(10px)}}.toolbar-summary{{display:flex;flex-wrap:wrap;gap:8px 14px;font-size:13px;color:#5c5144}}.export-state{{font-weight:600}}.export-state.dirty{{color:#a13f2c}}.export-state.clean{{color:#35633d}}.export-button{{flex:0 0 auto;background:#222;color:#fff;font-weight:600}}.card{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:20px;margin:16px 0}}.empty-state{{background:#fff;border:1px solid #ddd4c7;border-radius:14px;padding:32px 24px;margin:18px 0;color:#5c5144}}.empty-state h2{{color:#222}}.meta{{display:flex;justify-content:space-between;color:#806b51;font-size:13px}}h2{{font-size:21px;margin:10px 0}}a{{color:#222}}.reason{{color:#365b3b}}.penalty{{color:#9b3d2f}}.readiness{{font-size:13px;color:#6d5d49;background:#f8f4ed;padding:8px;border-radius:7px}}.aigc{{margin:12px 0;border:1px solid #cfc7bb;border-radius:8px;padding:12px;background:#fbfaf7}}.aigc summary{{cursor:pointer;font-weight:700}}.aigc-ratios{{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0}}.aigc-ratios span{{padding:5px 9px;border-radius:999px;background:#eee8de;font-size:13px}}.aigc-segments{{max-height:520px;overflow:auto}}.aigc-segment{{border-left:4px solid #999;padding:9px 11px;margin:8px 0;background:#fff}}.aigc-segment strong{{display:block;font-size:12px;margin-bottom:5px}}.aigc-segment span{{white-space:pre-wrap;line-height:1.75}}.aigc-segment.human{{border-color:#3f7a4f}}.aigc-segment.ai{{border-color:#b94235}}.aigc-segment.suspected{{border-color:#d29a2e}}.transcript{{margin:12px 0;border:1px solid #ddd4c7;border-radius:8px;padding:12px;background:#fbfaf7}}.transcript summary{{cursor:pointer;font-weight:700}}.transcript-note{{margin:10px 0;color:#806b51;font-size:13px}}.transcript pre{{white-space:pre-wrap;overflow-wrap:anywhere;max-height:620px;overflow:auto;margin:0;padding:16px 18px;border-radius:8px;background:#fff;font:16px/1.95 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:.01em}}.review{{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}}button{{padding:9px;border:1px solid #cbbda9;background:#f8f4ed;border-radius:8px;cursor:pointer}}button.active{{background:#222;color:#fff}}textarea{{grid-column:1/-1;min-height:58px;padding:8px}}.card-save-status{{grid-column:1/-1;color:#777;font-size:12px}}.card-save-status.saved{{color:#35633d}}.missed{{background:#fff8df;border:1px solid #e2ca77;padding:18px;border-radius:12px;margin-top:30px}}input{{width:100%;box-sizing:border-box;margin:5px 0;padding:9px}}#export-bottom{{margin-top:20px;background:#222;color:#fff}}@media(max-width:620px){{.toolbar{{align-items:stretch;flex-direction:column}}.export-button{{width:100%}}.transcript pre{{font-size:15px;line-height:1.9;padding:14px 12px}}}}
 </style></head><body><main><header><h1>Stephen AI 热点候选</h1><div class="hint">{html.escape(generated_at)} · 标记和备注会实时保存到当前浏览器。导出文件会暂存在浏览器下载目录，导入 Skill 后再清理</div></header>
 <section class="toolbar" aria-label="审核进度">
   <div class="toolbar-summary"><span id="review-counts"></span><span id="export-state" class="export-state"></span></div>

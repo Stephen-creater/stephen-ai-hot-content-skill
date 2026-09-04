@@ -20,6 +20,7 @@ from bs4 import BeautifulSoup
 from curator import clean_text, rank_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
+from zhuque_aigc import ZhuqueClient, apply_policy, estimate_text_cost_yuan, load_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -484,6 +485,7 @@ def main() -> None:
     parser.add_argument("--include-verification", action="store_true", help="同时抓取英文官方核验来源")
     parser.add_argument("--include-rejected", action="store_true", help="调试时在报告中包含未通过硬门槛的内容")
     parser.add_argument("--no-ai", action="store_true", help="不调用模型复排")
+    parser.add_argument("--no-aigc", action="store_true", help="不调用朱雀 AIGC 文本检测")
     parser.add_argument("--model", default="google/gemini-3-flash-preview")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
     args = parser.parse_args()
@@ -518,6 +520,60 @@ def main() -> None:
     ranked = [item for item in ranked if not is_historical_content_duplicate(item, reviewed_candidates)]
     report_count = profile["report_candidate_count"]
     minimum_delivery_count = int(profile.get("minimum_delivery_count", 3))
+
+    aigc_status = "disabled" if args.no_aigc or args.fixture else "not_configured"
+    aigc_checked_count = 0
+    aigc_rejected_count = 0
+    aigc_estimated_max_cost_yuan = 0.0
+    if not args.no_aigc and not args.fixture:
+        try:
+            zhuque_config = load_config()
+            if zhuque_config:
+                client = ZhuqueClient(zhuque_config)
+                eligible_items = [
+                    item for item in ranked
+                    if (
+                        item.get("recommended")
+                        and item.get("content_status") in {"fulltext", "transcript"}
+                        and len(item.get("content", "")) >= 1000
+                    )
+                ]
+                eligible_ids = {id(item) for item in eligible_items}
+                aigc_estimated_max_cost_yuan = round(
+                    sum(
+                        estimate_text_cost_yuan(item["content"])
+                        for item in eligible_items
+                        if not client.has_cached_text(item["content"])
+                    ),
+                    2,
+                )
+                if aigc_estimated_max_cost_yuan > zhuque_config.max_cost_yuan_per_run:
+                    aigc_status = "budget_exceeded"
+                    errors.append(
+                        f"朱雀本轮费用上限保护：最多约 {aigc_estimated_max_cost_yuan:.2f} 元，"
+                        f"超过配置上限 {zhuque_config.max_cost_yuan_per_run:.2f} 元，未发起检测"
+                    )
+                else:
+                    aigc_status = "completed"
+                    updated_ranked = []
+                    for item in ranked:
+                        eligible = id(item) in eligible_ids
+                        if not eligible:
+                            updated_ranked.append(item)
+                            continue
+                        try:
+                            detected = apply_policy(item, client.classify_text(item["content"]), zhuque_config)
+                            aigc_checked_count += 1
+                            aigc_rejected_count += int(detected.get("aigc_policy") == "rejected")
+                            updated_ranked.append(detected)
+                        except Exception as exc:
+                            errors.append(f"朱雀检测失败 {item.get('title', '未知标题')}: {exc}")
+                            updated_ranked.append({**item, "aigc_policy": "unknown"})
+                    ranked = sorted(updated_ranked, key=lambda item: (item.get("recommended", False), item.get("score", 0)), reverse=True)
+        except Exception as exc:
+            aigc_status = "configuration_error"
+            errors.append(f"朱雀配置无效，未执行 AIGC 检测: {exc}")
+
     rejected_by_gate_count = sum(1 for item in ranked if not item.get("recommended"))
     candidates = select_report_candidates(ranked, report_count, include_rejected=args.include_rejected)
     if not args.no_ai and api_key():
@@ -542,6 +598,10 @@ def main() -> None:
                 "skipped_reviewed_count": skipped_reviewed_count,
                 "skipped_content_duplicate_count": skipped_content_duplicate_count,
                 "rejected_by_gate_count": rejected_by_gate_count,
+                "aigc_status": aigc_status,
+                "aigc_checked_count": aigc_checked_count,
+                "aigc_rejected_count": aigc_rejected_count,
+                "aigc_estimated_max_cost_yuan": aigc_estimated_max_cost_yuan,
                 "candidate_count": len(candidates),
                 "minimum_delivery_count": minimum_delivery_count,
                 "delivery_ready": len(candidates) >= minimum_delivery_count,
