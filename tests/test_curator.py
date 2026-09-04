@@ -361,13 +361,26 @@ Language: zh
 
     def test_delivery_threshold_is_five(self) -> None:
         self.assertEqual(self.profile["minimum_delivery_count"], 5)
-        self.assertEqual(self.profile["minimum_non_github_candidates"], 1)
+        self.assertEqual(self.profile["minimum_non_github_candidates"], 4)
+        self.assertEqual(self.profile["maximum_github_candidates"], 1)
 
     def test_delivery_mix_cannot_be_all_github(self) -> None:
         github_items = [{"link": f"https://github.com/example/repo-{index}"} for index in range(5)]
-        mixed_items = github_items[:4] + [{"link": "https://example.com/original-article"}]
-        self.assertFalse(delivery_mix_ready(github_items, minimum_count=5, minimum_non_github=1))
-        self.assertTrue(delivery_mix_ready(mixed_items, minimum_count=5, minimum_non_github=1))
+        github_heavy = github_items[:4] + [{"link": "https://example.com/original-article"}]
+        article_first = github_items[:1] + [{"link": f"https://example.com/article-{index}"} for index in range(4)]
+        self.assertFalse(delivery_mix_ready(github_items, minimum_count=5, minimum_non_github=4, maximum_github=1))
+        self.assertFalse(delivery_mix_ready(github_heavy, minimum_count=5, minimum_non_github=4, maximum_github=1))
+        self.assertTrue(delivery_mix_ready(article_first, minimum_count=5, minimum_non_github=4, maximum_github=1))
+
+    def test_report_selection_caps_github_at_one(self) -> None:
+        ranked = [
+            {"id": "gh-1", "recommended": True, "link": "https://github.com/example/one"},
+            {"id": "gh-2", "recommended": True, "link": "https://github.com/example/two"},
+            {"id": "web-1", "recommended": True, "link": "https://example.com/one"},
+            {"id": "web-2", "recommended": True, "link": "https://example.com/two"},
+        ]
+        selected = select_report_candidates(ranked, 4, maximum_github=1)
+        self.assertEqual([item["id"] for item in selected], ["gh-1", "web-1", "web-2"])
 
     def test_github_candidates_require_at_least_one_hundred_verified_stars(self) -> None:
         common = {
@@ -413,6 +426,51 @@ Language: zh
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
         self.assertFalse(result["recommended"])
         self.assertIn("普通读者无法使用", result["penalty"])
+
+    def test_dense_quotes_and_em_dashes_are_rejected_as_ai_style(self) -> None:
+        item = {
+            "title": "一个 Agent 稳定性复盘",
+            "summary": "作者记录真实项目经验",
+            "content": ("模型说”完成了”——团队又问”真的完成了吗”——于是补充一轮”验证”——" * 90),
+            "published": "2026-09-04",
+            "source_name": "中文原创作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/punctuation-heavy",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("破折号与引号密度异常高", result["penalty"])
+
+    def test_narrow_avatar_short_drama_and_obsolete_vision_workarounds_are_rejected(self) -> None:
+        common = {
+            "content": "作者提供完整中文说明、案例与验证结果。" * 180,
+            "published": "2026-09-04",
+            "source_name": "中文作者",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        items = [
+            {**common, "title": "数字人视频如何完成口型同步", "summary": "自媒体制作", "link": "https://example.com/avatar"},
+            {**common, "title": "AI 短剧制作工作流", "summary": "角色设定集与分镜", "link": "https://example.com/drama"},
+            {**common, "title": "给纯文本 Agent 装上眼睛", "summary": "Vision Toolkit 外挂视觉", "link": "https://example.com/vision"},
+            {**common, "title": "DeepSeek Harness 桌面工作台", "summary": "技术预览版后续可能破坏性更新", "link": "https://example.com/preview"},
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))}
+        self.assertIn("过于垂直", lookup["https://example.com/avatar"]["penalty"])
+        self.assertIn("过于垂直", lookup["https://example.com/drama"]["penalty"])
+        self.assertIn("绕路方案", lookup["https://example.com/vision"]["penalty"])
+        self.assertIn("技术预览", lookup["https://example.com/preview"]["penalty"])
 
     def test_personal_project_journey_is_rejected_even_with_methods(self) -> None:
         item = {

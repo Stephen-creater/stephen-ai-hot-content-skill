@@ -453,14 +453,37 @@ def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
     return ordered
 
 
-def select_report_candidates(ranked: list[dict], limit: int, include_rejected: bool = False) -> list[dict]:
+def select_report_candidates(
+    ranked: list[dict],
+    limit: int,
+    include_rejected: bool = False,
+    maximum_github: int | None = None,
+) -> list[dict]:
     eligible = ranked if include_rejected else [item for item in ranked if item.get("recommended")]
-    return eligible[:limit]
+    if include_rejected or maximum_github is None:
+        return eligible[:limit]
+    selected = []
+    github_count = 0
+    for item in eligible:
+        is_github = urlparse(item.get("link", "")).netloc.lower() == "github.com"
+        if is_github and github_count >= maximum_github:
+            continue
+        selected.append(item)
+        github_count += int(is_github)
+        if len(selected) >= limit:
+            break
+    return selected
 
 
-def delivery_mix_ready(candidates: list[dict], minimum_count: int, minimum_non_github: int = 1) -> bool:
+def delivery_mix_ready(
+    candidates: list[dict],
+    minimum_count: int,
+    minimum_non_github: int = 1,
+    maximum_github: int = 1,
+) -> bool:
     non_github_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() != "github.com")
-    return len(candidates) >= minimum_count and non_github_count >= minimum_non_github
+    github_count = len(candidates) - non_github_count
+    return len(candidates) >= minimum_count and non_github_count >= minimum_non_github and github_count <= maximum_github
 
 
 def normalized_content_shingles(value: str, size: int = 24) -> set[str]:
@@ -527,6 +550,7 @@ def main() -> None:
     report_count = profile["report_candidate_count"]
     minimum_delivery_count = int(profile.get("minimum_delivery_count", 5))
     minimum_non_github_candidates = int(profile.get("minimum_non_github_candidates", 1))
+    maximum_github_candidates = int(profile.get("maximum_github_candidates", 1))
 
     aigc_status = "disabled" if args.no_aigc or args.fixture else "not_configured"
     aigc_checked_count = 0
@@ -582,7 +606,12 @@ def main() -> None:
             errors.append(f"朱雀配置无效，未执行 AIGC 检测: {exc}")
 
     rejected_by_gate_count = sum(1 for item in ranked if not item.get("recommended"))
-    candidates = select_report_candidates(ranked, report_count, include_rejected=args.include_rejected)
+    candidates = select_report_candidates(
+        ranked,
+        report_count,
+        include_rejected=args.include_rejected,
+        maximum_github=maximum_github_candidates,
+    )
     if not args.no_ai and api_key():
         try:
             candidates = ai_rerank(candidates, profile, args.model)
@@ -594,7 +623,13 @@ def main() -> None:
         item["selected_by_default"] = index < selection_count and item["recommended"]
 
     non_github_candidate_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() != "github.com")
-    ready_to_deliver = delivery_mix_ready(candidates, minimum_delivery_count, minimum_non_github_candidates)
+    github_candidate_count = len(candidates) - non_github_candidate_count
+    ready_to_deliver = delivery_mix_ready(
+        candidates,
+        minimum_delivery_count,
+        minimum_non_github_candidates,
+        maximum_github_candidates,
+    )
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     output_dir = args.output_root / timestamp
@@ -615,7 +650,9 @@ def main() -> None:
                 "candidate_count": len(candidates),
                 "minimum_delivery_count": minimum_delivery_count,
                 "minimum_non_github_candidates": minimum_non_github_candidates,
+                "maximum_github_candidates": maximum_github_candidates,
                 "non_github_candidate_count": non_github_candidate_count,
+                "github_candidate_count": github_candidate_count,
                 "delivery_ready": ready_to_deliver,
                 "include_rejected": args.include_rejected,
                 "errors": errors,

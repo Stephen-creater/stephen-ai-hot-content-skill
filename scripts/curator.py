@@ -275,6 +275,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     saturated_humanizer_terms = [word for word in editorial_fit.get("saturated_humanizer_terms", []) if word.lower() in title_summary]
     legal_compliance_topic_terms = [word for word in editorial_fit.get("legal_compliance_topic_terms", []) if word.lower() in haystack]
     coding_agent_only_terms = [word for word in editorial_fit.get("coding_agent_only_terms", []) if word.lower() in haystack]
+    low_audience_vertical_terms = [word for word in editorial_fit.get("low_audience_vertical_terms", []) if word.lower() in title_summary]
+    obsolete_workaround_terms = [word for word in editorial_fit.get("obsolete_workaround_terms", []) if word.lower() in title_summary]
+    unstable_preview_product_terms = [word for word in editorial_fit.get("unstable_preview_product_terms", []) if word.lower() in title_summary]
+    punctuation_length = max(len(content), 1)
+    em_dash_density = content.count("—") * 1000 / punctuation_length
+    quote_density = sum(content.count(mark) for mark in "“”‘’") * 1000 / punctuation_length
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
     thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
@@ -415,6 +421,18 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(coding_agent_only_terms) >= 2:
         score -= 55
         penalties.append("围绕 AGENTS.md、CLAUDE.md 等深层配置，普通读者无法使用")
+    if low_audience_vertical_terms:
+        score -= 60
+        penalties.append("数字人或 AI 短剧过于垂直，对当前普通读者缺少实际价值")
+    if obsolete_workaround_terms:
+        score -= 60
+        penalties.append("为纯文本模型外挂视觉属于绕路方案，直接使用多模态模型更合适")
+    if unstable_preview_product_terms:
+        score -= 60
+        penalties.append("产品仍处技术预览或破坏性更新阶段，当前实践缺少长期价值")
+    if len(content) >= 2500 and em_dash_density >= 5 and quote_density >= 12:
+        score -= 65
+        penalties.append("破折号与引号密度异常高，呈现明显 AI 写作痕迹")
     if locked_content_terms:
         score -= 70
         penalties.append("正文被登录、关注或付费墙截断，材料不完整")
