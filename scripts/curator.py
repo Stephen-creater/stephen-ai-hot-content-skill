@@ -245,11 +245,19 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     abstract_business_terms = [word for word in editorial_fit.get("abstract_business_terms", []) if word.lower() in haystack]
     formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
     benchmark_article_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in haystack]
+    benchmark_title_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in title_summary]
     citation_collage_terms = [word for word in editorial_fit.get("citation_collage_terms", []) if word.lower() in haystack]
     education_topic_terms = [word for word in editorial_fit.get("education_topic_terms", []) if word.lower() in title_summary]
     feature_inventory_terms = [word for word in editorial_fit.get("feature_inventory_terms", []) if word.lower() in title_summary]
     institutional_tone_terms = [word for word in editorial_fit.get("institutional_tone_terms", []) if word.lower() in haystack]
     synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
+    self_disclosed_ai_authorship = bool(
+        re.search(
+            r"(?:本文|本篇内容).{0,24}(?:由|使用).{0,40}(?:ai|codex|豆包|claude|gpt).{0,24}(?:生成|完成|创作)",
+            haystack[:1200],
+            flags=re.I,
+        )
+    )
     institutional_source = any(word.lower() in source_name for word in editorial_fit.get("institutional_sources", []))
     news_reporting_terms = [word for word in editorial_fit.get("news_reporting_terms", []) if word.lower() in haystack]
     news_source = any(word.lower() in source_name for word in editorial_fit.get("news_sources", []))
@@ -333,7 +341,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(formulaic_framework_terms) >= 2 and not long_horizon_framework:
         score -= 45
         penalties.append("框架化表达多于扎实证据，信息密度偏低")
-    if benchmark_article_terms:
+    if benchmark_title_terms or (len(benchmark_article_terms) >= 2 and not authoritative_interview and not concrete_practice_terms):
         score -= 55
         penalties.append("以 Benchmark、评测集或跑分为主体，缺少实际使用价值")
     if len(citation_collage_terms) >= 3:
@@ -351,6 +359,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(synthetic_official_tone_terms) >= 4 and not concrete_practice_terms:
         score -= 55
         penalties.append("AI 式官方包装语言过重，真实作者判断不足")
+    if self_disclosed_ai_authorship:
+        score -= 100
+        penalties.append("文章主动披露由 AI 生成，不作为 Stephen 二创底稿")
     if news_source and len(news_reporting_terms) >= 2 and not concrete_practice_terms:
         score -= 45
         penalties.append("以记者采访和行业报道为主，不适合作为个人写作底稿")

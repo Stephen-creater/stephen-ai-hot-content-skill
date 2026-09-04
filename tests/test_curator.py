@@ -200,6 +200,46 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("AI 式官方包装语言过重", result["penalty"])
 
+    def test_self_disclosed_ai_generated_article_is_rejected(self) -> None:
+        item = {
+            "title": "AI 内容生产线的六个工位",
+            "summary": "从材料到发布的完整方法",
+            "content": "本篇内容由豆包和 Codex 以及作者知识库组合完成。" + ("真实案例和方法说明。" * 300),
+            "published": "2026-08-23",
+            "source_name": "中文内容站",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/ai-authored",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("文章主动披露由 AI 生成", result["penalty"])
+
+    def test_authoritative_talk_can_use_benchmark_as_supporting_evidence(self) -> None:
+        item = {
+            "title": "Anthropic 长时程 Agent 完整工作坊",
+            "summary": "完整演讲整理，主体是脑手分离、独立验证器和记忆纠错架构",
+            "content": ("讲者拆解长任务架构、会话日志与记忆纠错。" * 220) + "Parameter Golf benchmark 和基准测试只用作一组局部证据。",
+            "published": "2026-07-22",
+            "source_name": "Anthropic 团队演讲",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/anthropic-talk",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertTrue(result["recommended"])
+        self.assertNotIn("以 Benchmark", result["penalty"])
+
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
         with tempfile.TemporaryDirectory() as directory:
@@ -973,6 +1013,9 @@ Language: zh
             "Claude最强Fable 5.1发布！8项屠榜，最高降价45%",
             "A社化身A割！Claude官宣永久提额25%，结果到手反而少17%",
             "前字节强化学习专家孙鹏博士加盟星尘智能，完善Physical AI全栈技术布局",
+            "刚刚，GPT-6正式发布！OpenAI：欢迎来到AGI时代",
+            "GPT-6 曝光，OpenAI 总裁说：AGI 来了",
+            "AI 下一场竞争：谁能成为 Agent 的「上下文操作系统」",
         ]
         items = [
             {**common, "title": title, "summary": "Agent、模型与产品动态", "link": f"https://example.com/noise-{index}"}
