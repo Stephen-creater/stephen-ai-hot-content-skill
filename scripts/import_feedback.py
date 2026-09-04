@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 from datetime import datetime
 from pathlib import Path
@@ -64,14 +65,17 @@ def import_feedback(feedback: Path, delete_source: bool = False) -> tuple[Path, 
 
     target = ROOT / ".local" / "editorial_feedback.jsonl"
     target.parent.mkdir(parents=True, exist_ok=True)
-    duplicate = already_imported(target, payload.get("exported_at"))
-    if not duplicate:
-        record = {"imported_at": datetime.now().isoformat(), **payload}
-        with target.open("a", encoding="utf-8") as handle:
-            handle.write(json.dumps(record, ensure_ascii=False) + "\n")
+    lock_path = target.with_suffix(target.suffix + ".lock")
+    with lock_path.open("w", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        duplicate = already_imported(target, payload.get("exported_at"))
+        if not duplicate:
+            record = {"imported_at": datetime.now().isoformat(), **payload}
+            with target.open("a", encoding="utf-8") as handle:
+                handle.write(json.dumps(record, ensure_ascii=False) + "\n")
 
-    if not already_imported(target, payload.get("exported_at")):
-        raise RuntimeError("反馈未能在本地库中验证，保留原文件")
+        if not already_imported(target, payload.get("exported_at")):
+            raise RuntimeError("反馈未能在本地库中验证，保留原文件")
     if delete_source:
         feedback.unlink()
     return target, duplicate

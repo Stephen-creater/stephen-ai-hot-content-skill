@@ -1006,6 +1006,21 @@ Language: zh
             reviewed = feedback_module.final_reviewed_candidates(target)
             self.assertEqual([item["id"] for item in reviewed], [])
 
+    def test_parallel_feedback_import_is_locked_and_idempotent(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            payload = {"exported_at": "2026-09-04T12:55:00Z", "reviews": {"x": {"status": "selected"}}}
+            first = root / "selection_feedback-1.json"
+            second = root / "selection_feedback-2.json"
+            first.write_text(json.dumps(payload))
+            second.write_text(json.dumps(payload))
+            with patch.object(feedback_module, "ROOT", root):
+                with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+                    results = list(executor.map(feedback_module.import_feedback, [first, second]))
+            target = root / ".local" / "editorial_feedback.jsonl"
+            self.assertEqual(len(target.read_text().splitlines()), 1)
+            self.assertEqual(sorted(duplicate for _, duplicate in results), [False, True])
+
     def test_pending_feedback_is_deferred_until_reclassified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "editorial_feedback.jsonl"
