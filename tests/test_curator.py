@@ -17,7 +17,7 @@ from add_source import append_source
 from curator import deduplicate, rank_candidates, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import clean_transcript, decode_html, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import clean_transcript, decode_html, embedded_original_date, fetch_web_index, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -65,11 +65,43 @@ Language: zh
 第一句话
 
 00:00:02.000 --> 00:00:03.000
-""" + "第二句话" * 60
+""" + "\n\n".join(
+            f"00:00:{index:02d}.000 --> 00:00:{index + 1:02d}.000\n这是第{index}段需要整理的字幕内容它没有标点但应该被自动分句"
+            for index in range(2, 14)
+        )
         cleaned = clean_transcript(raw)
         self.assertNotIn("-->", cleaned)
         self.assertNotIn("WEBVTT", cleaned)
         self.assertEqual(cleaned.count("第一句话"), 1)
+        self.assertIn("\n\n", cleaned)
+        self.assertIn("。", cleaned)
+
+    def test_aggregator_uses_original_publication_date_not_refresh_date(self) -> None:
+        text = "更新时间：2026-09-04\n原文信息\n发布于 2026 年 7 月 24 日，时长 75 分钟。"
+        self.assertEqual(embedded_original_date(text), "2026-07-24")
+
+    def test_web_index_decodes_utf8_and_respects_article_prefix(self) -> None:
+        class Response:
+            encoding = "ISO-8859-1"
+            content = """<main>
+              <article><a href='/ai/articles/one/'><h2>中文 AI 实战长文标题</h2><p>有真实细节</p></a></article>
+              <article><a href='/ai/ai-daily/today/'><h2>每日汇总不应进入</h2></a></article>
+            </main>""".encode("utf-8")
+
+            def raise_for_status(self):
+                return None
+
+        source = {
+            "name": "觉醒AI",
+            "url": "https://www.jxxy.net/ai/",
+            "category": "中文AI实战知识库",
+            "priority": 5,
+            "include_path_prefix": "/ai/articles/",
+        }
+        with patch("scrape_aihot.requests.get", return_value=Response()):
+            rows = fetch_web_index(source, {"request_timeout_seconds": 1, "web_links_per_source": 10})
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["title"], "中文 AI 实战长文标题")
 
     def test_personalized_ranking_and_exclusions(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)
@@ -148,6 +180,26 @@ Language: zh
         self.assertIn("只有个人感受与情绪", lookup["https://example.com/diary"]["penalty"])
         self.assertTrue(all(not item["recommended"] for item in lookup.values()))
 
+    def test_ai_official_packaging_tone_is_rejected(self) -> None:
+        item = {
+            "title": "Agent 重塑软件商业的底层运行逻辑",
+            "summary": "一个极具穿透力、精准击中痛点的判断",
+            "content": ("这场变化正在彻底重写行业，形成自然的闭环，并释放有力的信号。" * 120),
+            "published": "2026-08-19",
+            "source_name": "二手整理站",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/official-ai-tone",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("AI 式官方包装语言过重", result["penalty"])
+
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
         with tempfile.TemporaryDirectory() as directory:
@@ -193,7 +245,8 @@ Language: zh
             path = Path(directory) / "index.html"
             generate_report([candidate], path, "2026-09-04-120000")
             report = path.read_text()
-        self.assertIn("查看完整逐字稿", report)
+        self.assertIn("查看整理后的完整逐字稿", report)
+        self.assertIn("已自动去除时间码", report)
         self.assertIn("这是审核时需要直接阅读的完整逐字稿", report)
 
     def test_empty_report_explains_that_nothing_passed(self) -> None:

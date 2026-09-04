@@ -249,6 +249,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     education_topic_terms = [word for word in editorial_fit.get("education_topic_terms", []) if word.lower() in title_summary]
     feature_inventory_terms = [word for word in editorial_fit.get("feature_inventory_terms", []) if word.lower() in title_summary]
     institutional_tone_terms = [word for word in editorial_fit.get("institutional_tone_terms", []) if word.lower() in haystack]
+    synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
     institutional_source = any(word.lower() in source_name for word in editorial_fit.get("institutional_sources", []))
     news_reporting_terms = [word for word in editorial_fit.get("news_reporting_terms", []) if word.lower() in haystack]
     news_source = any(word.lower() in source_name for word in editorial_fit.get("news_sources", []))
@@ -347,6 +348,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if institutional_source and len(institutional_tone_terms) >= 3 and not concrete_practice_terms:
         score -= 45
         penalties.append("官方调查与治理表达过重，缺少个人经验和行动价值")
+    if len(synthetic_official_tone_terms) >= 4 and not concrete_practice_terms:
+        score -= 55
+        penalties.append("AI 式官方包装语言过重，真实作者判断不足")
     if news_source and len(news_reporting_terms) >= 2 and not concrete_practice_terms:
         score -= 45
         penalties.append("以记者采访和行业报道为主，不适合作为个人写作底稿")

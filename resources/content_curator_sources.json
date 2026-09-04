@@ -1,6 +1,17 @@
 {
   "sources": [
     {
+      "name": "觉醒AI",
+      "category": "中文AI实战知识库",
+      "type": "web",
+      "url": "https://www.jxxy.net/ai/",
+      "include_path_prefix": "/ai/articles/",
+      "priority": 5,
+      "role": "candidate",
+      "language": "zh",
+      "maturity": "secondary"
+    },
+    {
       "name": "少数派",
       "category": "中文科技深度内容",
       "type": "rss",
@@ -63,6 +74,7 @@
     }
   ],
   "manual_registry": [
+    {"name": "觉醒AI", "platform": "web", "priority": 5, "notes": "用户确认的高价值主题汇总站；持续遍历专题和实战长文，仍逐篇检查真实细节与可迁移方法"},
     {"name": "小林coding", "platform": "wechat", "priority": 5, "notes": "技术概念大白话解释"},
     {"name": "MindCode", "platform": "wechat", "priority": 5, "notes": "AI、脑科学、心理学与创业的长逻辑文章"},
     {"name": "得到APP精选", "platform": "web", "priority": 4, "notes": "可复用的概念、方法和商业判断"},

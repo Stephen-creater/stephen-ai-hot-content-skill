@@ -38,6 +38,22 @@ def decode_html(raw: bytes, declared_encoding: str | None) -> str:
         return raw.decode(declared_encoding or "utf-8", errors="replace")
 
 
+def embedded_original_date(text: str) -> str:
+    match = re.search(
+        r"(?:发布于|发布日期|发布时间|来源发布日期)\s*[：:]?\s*"
+        r"(20\d{2})\s*[年./-]\s*(\d{1,2})\s*[月./-]\s*(\d{1,2})\s*日?",
+        text,
+        flags=re.I,
+    )
+    if not match:
+        return ""
+    year, month, day = (int(value) for value in match.groups())
+    try:
+        return datetime(year, month, day).strftime("%Y-%m-%d")
+    except ValueError:
+        return ""
+
+
 def api_key() -> str:
     value = os.getenv("OPENROUTER_API_KEY", "").strip()
     if value:
@@ -75,13 +91,21 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
 def fetch_web_index(source: dict, settings: dict) -> list[dict]:
     response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
     response.raise_for_status()
-    soup = BeautifulSoup(response.text, "html.parser")
+    soup = BeautifulSoup(decode_html(response.content, response.encoding), "html.parser")
     selectors = "article a[href], main a[href], div.bg-card a[href]"
+    include_path_prefix = source.get("include_path_prefix", "")
     seen = set()
     items = []
     for anchor in soup.select(selectors):
         title = clean_text(anchor.get_text(" ", strip=True))
         link = urljoin(source["url"], anchor.get("href", ""))
+        if include_path_prefix:
+            link_path = urlparse(link).path
+            if not link_path.startswith(include_path_prefix) or link_path.rstrip("/") == include_path_prefix.rstrip("/"):
+                continue
+        heading = anchor.select_one("h1, h2, h3, [class*='title']")
+        if heading:
+            title = clean_text(heading.get_text(" ", strip=True))
         if len(title) < 12 or not link.startswith("http") or link in seen:
             continue
         if urlparse(link).netloc == urlparse(source["url"]).netloc and link.rstrip("/") == source["url"].rstrip("/"):
@@ -197,6 +221,8 @@ def hydrate(item: dict, settings: dict) -> dict:
         if extracted:
             item["content"] = clean_text(extracted)[:5000]
             item["content_status"] = "shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext"
+            if urlparse(item["link"]).netloc.lower().endswith("jxxy.net"):
+                item["published"] = embedded_original_date(extracted) or item.get("published", "")
         metadata = trafilatura.bare_extraction(text, include_comments=False)
         meta = metadata.as_dict() if hasattr(metadata, "as_dict") else metadata or {}
         if not item.get("published") and isinstance(meta, dict):
@@ -209,16 +235,34 @@ def hydrate(item: dict, settings: dict) -> dict:
 
 
 def clean_transcript(raw: str) -> str:
-    lines = []
+    fragments = []
     previous = ""
     for line in raw.splitlines():
         text = clean_text(line)
         if not text or text == "WEBVTT" or "-->" in text or text.startswith(("Kind:", "Language:", "NOTE")):
             continue
         if text != previous:
-            lines.append(text)
+            fragments.append(text)
             previous = text
-    transcript = clean_text("\n".join(lines))
+
+    sentences = []
+    current = ""
+    boundary_starters = ("然后", "但是", "所以", "另外", "最后", "接着", "我们", "大家", "这里", "其实", "因为", "那么")
+    for fragment in fragments:
+        if current and current[-1].isascii() and current[-1].isalnum() and fragment[0].isascii() and fragment[0].isalnum():
+            current += " "
+        current += fragment
+        explicit_end = bool(re.search(r"[。！？!?]》?〉?$", fragment))
+        soft_end = len(current) >= 46 and fragment.startswith(boundary_starters)
+        hard_end = len(current) >= 72
+        if explicit_end or soft_end or hard_end:
+            sentences.append(current if explicit_end else current + "。")
+            current = ""
+    if current:
+        sentences.append(current if re.search(r"[。！？!?]$", current) else current + "。")
+
+    paragraphs = ["".join(sentences[index : index + 3]) for index in range(0, len(sentences), 3)]
+    transcript = "\n\n".join(paragraphs).strip()
     if len(transcript) < 200:
         raise ValueError("逐字稿为空或过短")
     return transcript
