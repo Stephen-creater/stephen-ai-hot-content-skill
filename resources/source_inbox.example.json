@@ -15,6 +15,14 @@
     "title": "展示链接与原始正文分离的长文"
   },
   {
+    "url": "https://example.com/article/topic",
+    "content_url": "https://example.com/article-data.js",
+    "content_json_key": "topic",
+    "platform": "web",
+    "creator": "原作者",
+    "title": "从公开 JS 正文映射中选择文章"
+  },
+  {
     "url": "https://www.bilibili.com/video/BVexample",
     "platform": "bilibili",
     "creator": "B站UP主",

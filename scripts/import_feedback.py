@@ -37,6 +37,26 @@ def final_reviewed_ids(target: Path) -> set[str]:
     return {item_id for item_id, status in decisions.items() if status in {"selected", "rejected", "pending"}}
 
 
+def final_reviewed_candidates(target: Path) -> list[dict]:
+    decisions: dict[str, str] = {}
+    candidates: dict[str, dict] = {}
+    if not target.exists():
+        return []
+    for line in target.read_text(encoding="utf-8").splitlines():
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        for candidate in payload.get("candidates", []):
+            if isinstance(candidate, dict) and candidate.get("id"):
+                candidates[str(candidate["id"])] = candidate
+        for item_id, review in payload.get("reviews", {}).items():
+            status = review.get("status")
+            if status in {"selected", "rejected", "pending"}:
+                decisions[str(item_id)] = status
+    return [candidates[item_id] for item_id in decisions if item_id in candidates]
+
+
 def import_feedback(feedback: Path, delete_source: bool = False) -> tuple[Path, bool]:
     payload = json.loads(feedback.read_text(encoding="utf-8"))
     if not isinstance(payload, dict) or not isinstance(payload.get("reviews", {}), dict):

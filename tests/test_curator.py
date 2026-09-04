@@ -15,7 +15,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 from curator import rank_candidates, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import decode_html, hydrate, inbox_item, select_report_candidates
+from scrape_aihot import decode_html, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -207,7 +207,51 @@ class CuratorTest(unittest.TestCase):
         )
         self.assertEqual(item["link"], "https://gist.github.com/example/source")
         self.assertEqual(item["content_status"], "fulltext")
+        self.assertEqual(item["content_origin"], "explicit_content_url")
         self.assertGreater(len(item["content"]), 2500)
+
+    @patch("scrape_aihot.requests.get")
+    def test_inbox_can_select_article_from_public_javascript_map(self, get) -> None:
+        response = get.return_value
+        response.content = ('window.articleContent = ' + json.dumps({"target": "目标正文。" * 500}, ensure_ascii=False) + ';').encode()
+        response.encoding = "utf-8"
+        response.raise_for_status.return_value = None
+        item = inbox_item(
+            {
+                "url": "https://example.com/article/target",
+                "content_url": "https://example.com/article-data.js",
+                "content_json_key": "target",
+                "platform": "web",
+                "title": "AI 写作实验",
+            },
+            {"request_timeout_seconds": 1, "max_article_bytes": 20000},
+        )
+        self.assertEqual(item["content_status"], "fulltext")
+        self.assertTrue(item["content"].startswith("目标正文"))
+        with patch("scrape_aihot.requests.get") as hydrate_get:
+            hydrate(item, {"request_timeout_seconds": 1, "max_article_bytes": 20000})
+        hydrate_get.assert_not_called()
+
+    def test_blocked_creator_mention_does_not_block_another_author(self) -> None:
+        result = score_item(
+            {
+                "title": "我写了个 AI 写作 Skill，第一次改稿就翻车了",
+                "link": "https://example.com/writing-skill",
+                "summary": "另一位作者的独立实验",
+                "content": ("文中提到数字生命卡兹克的 human-writing，然后记录自己的语料筛选、对照测试和失败。" * 120),
+                "published": "2026-08-12",
+                "source_name": "黄晓黑",
+                "source_priority": 5,
+                "source_type": "web",
+                "language": "zh",
+                "maturity": "secondary",
+                "content_form": "article",
+                "content_status": "fulltext",
+            },
+            self.profile,
+            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
+        )
+        self.assertNotIn("作者或个人 IP 已被明确排除", result["penalty"])
 
     @patch("scrape_aihot.fetch_youtube_transcript", return_value="AI Agent 工作流实测。" * 40)
     def test_youtube_uses_non_browser_transcript(self, fetch_transcript) -> None:
@@ -351,7 +395,7 @@ class CuratorTest(unittest.TestCase):
         self.assertIn("正文偏短", lookup["https://example.com/education"]["penalty"])
         self.assertTrue(all(not item["recommended"] for item in lookup.values()))
 
-    def test_old_first_person_failure_review_is_evergreen(self) -> None:
+    def test_old_first_person_failure_review_is_still_outdated(self) -> None:
         item = score_item(
             {
                 "title": "一个 AI 产品从高峰到收缩：内部产品经理复盘",
@@ -370,10 +414,39 @@ class CuratorTest(unittest.TestCase):
             self.profile,
             now=datetime(2026, 9, 4, tzinfo=timezone.utc),
         )
-        self.assertTrue(item["recommended"])
-        self.assertNotIn("超过时效范围", item["penalty"])
-        self.assertNotIn("事件新闻已超过时效窗口", item["penalty"])
-        self.assertIn("长期一手实践复盘", item["reason"])
+        self.assertFalse(item["recommended"])
+        self.assertIn("超过时效范围", item["penalty"])
+        self.assertIn("事件新闻已超过时效窗口", item["penalty"])
+
+    def test_historical_duplicate_uses_body_not_title_or_url(self) -> None:
+        body = "作者记录了真实需求、失败过程、用户反馈和三次调整。" * 180
+        reviewed = [{"title": "旧标题", "link": "https://old.example.com/a", "content": body}]
+        renamed = {"title": "完全不同的新标题", "link": "https://new.example.com/b", "content": body}
+        unrelated = {"title": "另一个主题", "link": "https://new.example.com/c", "content": "另一篇独立正文。" * 400}
+        self.assertTrue(is_historical_content_duplicate(renamed, reviewed))
+        self.assertFalse(is_historical_content_duplicate(unrelated, reviewed))
+
+    def test_news_feature_is_not_a_writing_candidate(self) -> None:
+        result = score_item(
+            {
+                "title": "AI 内容行业谁在赚钱、谁在出局",
+                "link": "https://example.com/news-feature",
+                "summary": "记者采访多位行业从业者",
+                "content": "科创板日报记者采访，多位从业者表示行业正在变化，责编完成审校。" * 180,
+                "published": "2026-08-18",
+                "source_name": "科创板日报",
+                "source_priority": 5,
+                "source_type": "web",
+                "language": "zh",
+                "maturity": "secondary",
+                "content_form": "article",
+                "content_status": "fulltext",
+            },
+            self.profile,
+            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
+        )
+        self.assertFalse(result["recommended"])
+        self.assertIn("记者采访和行业报道", result["penalty"])
 
     def test_utf8_page_ignores_misleading_latin1_header(self) -> None:
         raw = "用 AI 让我们变笨了吗？认知债务与长期记忆".encode("utf-8")
@@ -423,6 +496,8 @@ class CuratorTest(unittest.TestCase):
                 self.assertFalse(feedback.exists())
                 self.assertEqual(len(target.read_text().splitlines()), 1)
                 self.assertEqual(feedback_module.final_reviewed_ids(target), {"x"})
+            reviewed = feedback_module.final_reviewed_candidates(target)
+            self.assertEqual([item["id"] for item in reviewed], [])
 
     def test_pending_feedback_is_deferred_until_reclassified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

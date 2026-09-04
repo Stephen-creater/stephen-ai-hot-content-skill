@@ -18,7 +18,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 from curator import clean_text, rank_candidates
-from import_feedback import final_reviewed_ids
+from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
 
 
@@ -169,7 +169,9 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
 def hydrate(item: dict, settings: dict) -> dict:
     if not item.get("link"):
         return item
-    if item.get("content_status") == "transcript" and item.get("content"):
+    if item.get("content") and (
+        item.get("content_status") == "transcript" or item.get("content_origin") == "explicit_content_url"
+    ):
         return item
     try:
         with requests.get(
@@ -283,10 +285,18 @@ def inbox_item(row: dict, settings: dict) -> dict:
             response = requests.get(content_url, headers=HEADERS, timeout=settings["request_timeout_seconds"])
             response.raise_for_status()
             text = decode_html(response.content[: settings["max_article_bytes"]], response.encoding)
+            content_json_key = row.get("content_json_key", "").strip()
+            if content_json_key:
+                match = re.search(r"=\s*(\{.*\})\s*;?\s*$", text, flags=re.S)
+                if not match:
+                    raise ValueError("原始正文映射格式无法识别")
+                payload = json.loads(match.group(1))
+                text = str(payload.get(content_json_key, ""))
             item["content"] = clean_text(text)[:20000]
             if len(item["content"]) < 400:
                 raise ValueError("原始正文为空或过短")
             item["content_status"] = "fulltext"
+            item["content_origin"] = "explicit_content_url"
             return item
         except Exception as exc:
             item["fetch_error"] = f"原始正文读取失败: {exc}"
@@ -398,6 +408,27 @@ def select_report_candidates(ranked: list[dict], limit: int, include_rejected: b
     return eligible[:limit]
 
 
+def normalized_content_shingles(value: str, size: int = 24) -> set[str]:
+    normalized = re.sub(r"\W+", "", clean_text(value).lower())[:12000]
+    if len(normalized) < 800:
+        return set()
+    return {normalized[index : index + size] for index in range(0, len(normalized) - size + 1, 12)}
+
+
+def is_historical_content_duplicate(item: dict, reviewed_candidates: list[dict], threshold: float = 0.68) -> bool:
+    current = normalized_content_shingles(item.get("content", ""))
+    if not current:
+        return False
+    for reviewed in reviewed_candidates:
+        previous = normalized_content_shingles(reviewed.get("content", ""))
+        if not previous:
+            continue
+        overlap = len(current & previous) / min(len(current), len(previous))
+        if overlap >= threshold:
+            return True
+    return False
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="为 Stephen 筛选 AI 热点选题")
     parser.add_argument("--fixture", type=Path, help="使用本地 JSON 数据，不联网")
@@ -432,8 +463,11 @@ def main() -> None:
     ranked = rank_candidates(items, profile)
     feedback_store = ROOT / ".local" / "editorial_feedback.jsonl"
     reviewed_ids = set() if args.fixture else final_reviewed_ids(feedback_store)
+    reviewed_candidates = [] if args.fixture else final_reviewed_candidates(feedback_store)
     skipped_reviewed_count = sum(1 for item in ranked if str(item["id"]) in reviewed_ids)
     ranked = [item for item in ranked if str(item["id"]) not in reviewed_ids]
+    skipped_content_duplicate_count = sum(1 for item in ranked if is_historical_content_duplicate(item, reviewed_candidates))
+    ranked = [item for item in ranked if not is_historical_content_duplicate(item, reviewed_candidates)]
     report_count = profile["report_candidate_count"]
     minimum_delivery_count = int(profile.get("minimum_delivery_count", 3))
     rejected_by_gate_count = sum(1 for item in ranked if not item.get("recommended"))
@@ -458,6 +492,7 @@ def main() -> None:
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "input_count": len(items),
                 "skipped_reviewed_count": skipped_reviewed_count,
+                "skipped_content_duplicate_count": skipped_content_duplicate_count,
                 "rejected_by_gate_count": rejected_by_gate_count,
                 "candidate_count": len(candidates),
                 "minimum_delivery_count": minimum_delivery_count,
