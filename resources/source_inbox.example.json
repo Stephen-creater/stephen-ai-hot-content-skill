@@ -8,6 +8,13 @@
     "notes": "为什么值得关注"
   },
   {
+    "url": "https://gist.github.com/example/source",
+    "content_url": "https://gist.githubusercontent.com/example/source/raw/article.md",
+    "platform": "web",
+    "creator": "原作者",
+    "title": "展示链接与原始正文分离的长文"
+  },
+  {
     "url": "https://www.bilibili.com/video/BVexample",
     "platform": "bilibili",
     "creator": "B站UP主",

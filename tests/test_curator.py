@@ -190,6 +190,25 @@ class CuratorTest(unittest.TestCase):
             )
         self.assertEqual(item["maturity"], "primary")
 
+    @patch("scrape_aihot.requests.get")
+    def test_inbox_can_fetch_original_content_separately_from_display_url(self, get) -> None:
+        response = get.return_value
+        response.content = ("一手复盘正文。" * 500).encode()
+        response.encoding = "utf-8"
+        response.raise_for_status.return_value = None
+        item = inbox_item(
+            {
+                "url": "https://gist.github.com/example/source",
+                "content_url": "https://gist.githubusercontent.com/example/source/raw/article.md",
+                "platform": "web",
+                "title": "AI 产品一线失败复盘",
+            },
+            {"request_timeout_seconds": 1, "max_article_bytes": 20000},
+        )
+        self.assertEqual(item["link"], "https://gist.github.com/example/source")
+        self.assertEqual(item["content_status"], "fulltext")
+        self.assertGreater(len(item["content"]), 2500)
+
     @patch("scrape_aihot.fetch_youtube_transcript", return_value="AI Agent 工作流实测。" * 40)
     def test_youtube_uses_non_browser_transcript(self, fetch_transcript) -> None:
         item = inbox_item(
@@ -289,6 +308,73 @@ class CuratorTest(unittest.TestCase):
         self.assertFalse(short_engineering["recommended"])
         self.assertIn("文章偏短且技术术语密集", short_engineering["penalty"])
 
+    def test_latest_feedback_rejects_feature_lists_official_tone_and_education(self) -> None:
+        common = {
+            "published": "2026-08-31",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        items = [
+            {
+                **common,
+                "title": "ChatGPT Work 到底是什么？一份功能与风险拆解",
+                "link": "https://example.com/features",
+                "source_name": "中文科技站",
+                "summary": "逐项介绍产品能力",
+                "content": "联网执行、浏览器、共享工作区、子 Agent 和定时任务。" * 200,
+            },
+            {
+                **common,
+                "title": "AI 进入职场，真正要面对的可能不是机器",
+                "link": "https://example.com/official",
+                "source_name": "央视网",
+                "summary": "公众调查",
+                "content": "调查报告分析公众认知、受访者态度与就业治理，并提出公共政策建议。" * 180,
+            },
+            {
+                **common,
+                "title": "千名学生实验：ChatGPT 与课堂批判性思维训练",
+                "link": "https://example.com/education",
+                "source_name": "研究机构",
+                "summary": "学生作业实验",
+                "content": "大学生在学校课堂中使用 AI 完成作业。" * 50,
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))}
+        self.assertIn("产品功能说明", lookup["https://example.com/features"]["penalty"])
+        self.assertIn("官方调查与治理表达", lookup["https://example.com/official"]["penalty"])
+        self.assertIn("教育方向", lookup["https://example.com/education"]["penalty"])
+        self.assertIn("正文偏短", lookup["https://example.com/education"]["penalty"])
+        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+
+    def test_old_first_person_failure_review_is_evergreen(self) -> None:
+        item = score_item(
+            {
+                "title": "一个 AI 产品从高峰到收缩：内部产品经理复盘",
+                "link": "https://example.com/evergreen-review",
+                "summary": "产品上线后，作者记录数月亲历、真实用户反馈、失败和调整过程",
+                "content": "作者记录真实用户冲突、错误决策和后续调整。" * 300,
+                "published": "2026-06-01",
+                "source_name": "原作者",
+                "source_priority": 5,
+                "source_type": "web",
+                "language": "zh",
+                "maturity": "secondary",
+                "content_form": "article",
+                "content_status": "fulltext",
+            },
+            self.profile,
+            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
+        )
+        self.assertTrue(item["recommended"])
+        self.assertNotIn("超过时效范围", item["penalty"])
+        self.assertNotIn("事件新闻已超过时效窗口", item["penalty"])
+        self.assertIn("长期一手实践复盘", item["reason"])
+
     def test_utf8_page_ignores_misleading_latin1_header(self) -> None:
         raw = "用 AI 让我们变笨了吗？认知债务与长期记忆".encode("utf-8")
         decoded = decode_html(raw, "ISO-8859-1")
@@ -297,7 +383,7 @@ class CuratorTest(unittest.TestCase):
     def test_feedback_patterns_downrank_hype_broad_and_niche_topics(self) -> None:
         common = {
             "summary": "一篇已经完成中文整合的 AI 长文。",
-            "content": "文章包含完整的事件、判断和案例。" * 100,
+            "content": "文章包含完整的事件、判断和案例。" * 250,
             "published": "2026-08-24T08:00:00Z",
             "source_name": "中文媒体",
             "source_priority": 4,
@@ -349,7 +435,7 @@ class CuratorTest(unittest.TestCase):
 
     def test_second_feedback_batch_prefers_authoritative_interview(self) -> None:
         common = {
-            "content": "已完成中文整理的长文材料。" * 120,
+            "content": "已完成中文整理的长文材料。" * 250,
             "published": "2026-08-25T08:00:00Z",
             "source_name": "中文媒体",
             "source_priority": 4,
@@ -478,7 +564,7 @@ class CuratorTest(unittest.TestCase):
 
     def test_event_recency_and_reader_distance_follow_latest_feedback(self) -> None:
         common = {
-            "content": "一篇具有完整中文正文的深度材料。" * 120,
+            "content": "一篇具有完整中文正文的深度材料。" * 250,
             "source_name": "中文深度媒体",
             "source_priority": 5,
             "source_type": "web",
@@ -526,7 +612,7 @@ class CuratorTest(unittest.TestCase):
     def test_source_quality_and_generic_comparison_gate(self) -> None:
         common = {
             "summary": "完整的中文深度文章",
-            "content": "文章有足够长的正文材料。" * 120,
+            "content": "文章有足够长的正文材料。" * 250,
             "published": "2026-08-25T08:00:00Z",
             "source_name": "中文来源",
             "source_priority": 5,
@@ -566,7 +652,7 @@ class CuratorTest(unittest.TestCase):
 
     def test_reader_usability_and_long_term_value_gate(self) -> None:
         common = {
-            "content": "一篇完整的中文深度文章。" * 120,
+            "content": "一篇完整的中文深度文章。" * 250,
             "published": "2026-08-31T08:00:00Z",
             "source_name": "可信中文媒体",
             "source_priority": 5,

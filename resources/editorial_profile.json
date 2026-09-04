@@ -70,6 +70,10 @@
     "formulaic_framework_terms": ["业务门槛", "工程门槛", "五问", "自检清单", "第一道门槛", "第二道门槛", "top 5", "真香场景", "翻车场景", "给新用户的 10 条"],
     "benchmark_article_terms": ["benchmark", "评测集", "基准测试", "排行榜", "跑分"],
     "citation_collage_terms": ["hacker news", "metr", "微软研究院", "卡内基梅隆", "研究显示", "报告显示", "调查了"],
+    "education_topic_terms": ["学生", "学校", "课堂", "高校", "大学生", "教育教学"],
+    "feature_inventory_terms": ["到底是什么", "功能与风险拆解", "功能拆解", "有哪些能力", "怎么选", "一文看懂"],
+    "institutional_tone_terms": ["调查报告", "公众认知", "受访者", "治理重点", "就业治理", "公共政策", "政策支持"],
+    "institutional_sources": ["央视网", "中国日报", "科技日报", "人民网", "新华网"],
     "ai_summary_or_translation_terms": ["ai 总结", "ai摘要", "中英对照 + 朗读 + 问答", "互动全文版", "机器翻译"],
     "locked_content_terms": ["点击解锁完整内容", "关注后自动获取验证码", "登录后查看全文", "登录解锁", "付费阅读"],
     "community_question_terms": ["就想问问", "请问各位", "求助", "到底是我这流程本身有病", "有没有人知道"],
@@ -78,7 +82,7 @@
     "long_horizon_practice_terms": ["两年实践", "持续数周", "长期实践", "运行20天", "入职20天", "入职 20 天"],
     "reusable_framework_terms": ["真实评测体系", "分层评测", "结果、轨迹和组件", "结果、轨迹与组件", "评分体系", "方法框架"],
     "low_reuse_story_terms": ["ai建立了三代", "建立了三代文明", "三代「文明」", "三代文明"],
-    "concrete_practice_terms": ["入职20天", "入职 20 天", "实习小结", "真实复盘", "定时任务", "评分系统"]
+    "concrete_practice_terms": ["入职20天", "入职 20 天", "实习小结", "真实复盘", "亲自实测", "连续使用", "失败后调整", "内部产品经理复盘", "一线失败复盘"]
   },
   "exclude_keywords": ["融资快讯", "估值快讯", "榜单", "周报", "本周汇总", "派早报", "本周看什么", "近期值得关注的 App", "娱乐", "明星", "政治", "选举", "监控", "武器", "升降桌", "Surface Pro", "HomePod"],
   "weak_signals": [

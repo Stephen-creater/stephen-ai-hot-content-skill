@@ -231,6 +231,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
     benchmark_article_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in haystack]
     citation_collage_terms = [word for word in editorial_fit.get("citation_collage_terms", []) if word.lower() in haystack]
+    education_topic_terms = [word for word in editorial_fit.get("education_topic_terms", []) if word.lower() in title_summary]
+    feature_inventory_terms = [word for word in editorial_fit.get("feature_inventory_terms", []) if word.lower() in title_summary]
+    institutional_tone_terms = [word for word in editorial_fit.get("institutional_tone_terms", []) if word.lower() in haystack]
+    institutional_source = any(word.lower() in source_name for word in editorial_fit.get("institutional_sources", []))
     ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in haystack]
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
@@ -243,6 +247,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
     authoritative_interview = bool(interview_terms and major_entities_in_content)
     long_horizon_framework = bool(long_horizon_practice_terms and reusable_framework_terms)
+    evergreen_practice = bool(concrete_practice_terms or long_horizon_framework)
+    if age_days is not None and age_days > profile["max_age_days"] and evergreen_practice:
+        penalties = [
+            penalty
+            for penalty in penalties
+            if penalty not in {"超过时效范围", "事件新闻已超过时效窗口"}
+        ]
+        reasons.insert(0, "长期一手实践复盘，不受事件新闻时效限制")
     if evergreen_terms:
         score += 12
         reasons.append("具备可长期回看的机制切口")
@@ -261,7 +273,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if interview_terms and generic_interview_angle_terms and not long_horizon_framework:
         score -= 45
         penalties.append("访谈角度过宽，缺少可直接展开的具体问题或方法")
-    if release_terms and not major_entities and not any(term in title_summary for term in concept_terms):
+    if release_terms and not major_entities and not any(term in title_summary for term in concept_terms) and not evergreen_practice:
         score -= 35
         penalties.append("主体知名度或事件级别不足")
     if event_terms:
@@ -270,7 +282,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if people_terms and not authoritative_interview:
         score -= 30
         penalties.append("纯人物群像，缺少可复用的核心机制")
-    if age_days is not None and time_sensitive_terms and age_days > int(profile.get("time_sensitive_max_age_days", 14)):
+    if age_days is not None and time_sensitive_terms and age_days > int(profile.get("time_sensitive_max_age_days", 14)) and not evergreen_practice:
         score -= 60
         penalties.append("事件新闻已超过时效窗口")
     if reader_distance_terms:
@@ -315,6 +327,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(citation_collage_terms) >= 3:
         score -= 45
         penalties.append("研究、报告与人物引语堆叠，缺少作者自己的高密度结论")
+    if education_topic_terms:
+        score -= 55
+        penalties.append("学生、学校或课堂教育方向不符合当前选题偏好")
+    if feature_inventory_terms and not long_horizon_framework and not concrete_practice_terms:
+        score -= 45
+        penalties.append("以产品功能说明和名词拆解为主，缺少长期回看内涵")
+    if institutional_source and len(institutional_tone_terms) >= 3 and not concrete_practice_terms:
+        score -= 45
+        penalties.append("官方调查与治理表达过重，缺少个人经验和行动价值")
     if ai_summary_or_translation_terms:
         score -= 55
         penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
@@ -336,6 +357,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if long_horizon_framework:
         score += 18
         reasons.insert(0, "长期实践沉淀出可复用的方法框架")
+    if content_form == "article" and content_status == "fulltext" and len(content) < 2500:
+        score -= 55
+        penalties.append("文章正文偏短，不足以支撑高质量二创")
 
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:

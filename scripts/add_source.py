@@ -23,6 +23,7 @@ def main() -> None:
     parser.add_argument("--notes", default="")
     parser.add_argument("--maturity", choices=["secondary", "primary"], default="secondary")
     parser.add_argument("--transcript", dest="transcript_path", default="")
+    parser.add_argument("--content-url", default="", help="用于抓取正文的公开原始文本链接；展示仍使用位置参数 URL")
     parser.add_argument("--inbox", type=Path, default=DEFAULT_INBOX)
     args = parser.parse_args()
 
@@ -40,6 +41,7 @@ def main() -> None:
             "notes": args.notes,
             "maturity": args.maturity,
             "transcript_path": args.transcript_path,
+            "content_url": args.content_url,
         }
     )
     args.inbox.write_text(json.dumps(rows, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")

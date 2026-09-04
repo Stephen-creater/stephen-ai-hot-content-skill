@@ -277,6 +277,20 @@ def inbox_item(row: dict, settings: dict) -> dict:
             return item
         item["fetch_error"] = f"逐字稿不存在: {path}"
 
+    content_url = row.get("content_url", "").strip()
+    if content_url:
+        try:
+            response = requests.get(content_url, headers=HEADERS, timeout=settings["request_timeout_seconds"])
+            response.raise_for_status()
+            text = decode_html(response.content[: settings["max_article_bytes"]], response.encoding)
+            item["content"] = clean_text(text)[:20000]
+            if len(item["content"]) < 400:
+                raise ValueError("原始正文为空或过短")
+            item["content_status"] = "fulltext"
+            return item
+        except Exception as exc:
+            item["fetch_error"] = f"原始正文读取失败: {exc}"
+
     if platform == "youtube" and item["link"]:
         try:
             item["content"] = fetch_youtube_transcript(item["link"])[:20000]
