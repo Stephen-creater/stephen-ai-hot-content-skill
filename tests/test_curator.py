@@ -240,6 +240,26 @@ Language: zh
         self.assertTrue(result["recommended"])
         self.assertNotIn("以 Benchmark", result["penalty"])
 
+    def test_permission_governance_talk_is_too_distant_for_readers(self) -> None:
+        item = {
+            "title": "Agent 真正需要的是能撤销、限速和追责的行动预算",
+            "summary": "Anthropic CI 团队的权限治理与工作负载事故",
+            "content": "代理层身份、速率限制、撤销测试和聚合监控。" * 220,
+            "published": "2026-08-22",
+            "source_name": "Anthropic CI 团队",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "link": "https://example.com/agent-budget",
+        }
+        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("距离目标读者过远", result["penalty"])
+
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
         with tempfile.TemporaryDirectory() as directory:
@@ -1016,6 +1036,7 @@ Language: zh
             "刚刚，GPT-6正式发布！OpenAI：欢迎来到AGI时代",
             "GPT-6 曝光，OpenAI 总裁说：AGI 来了",
             "AI 下一场竞争：谁能成为 Agent 的「上下文操作系统」",
+            "企业级Agent落地样板间！百融硅基员工批量上岗，按结果领工资",
         ]
         items = [
             {**common, "title": title, "summary": "Agent、模型与产品动态", "link": f"https://example.com/noise-{index}"}

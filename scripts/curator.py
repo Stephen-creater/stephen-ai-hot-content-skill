@@ -117,7 +117,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         if age_days > profile["max_age_days"]:
             penalties.append("超过时效范围")
         elif age_days <= profile["priority_days"]:
-            reasons.append("最近一周发布")
+            reasons.append("最近一周发布" if age_days <= 7 else "最近两周发布")
 
     matched_pillars = []
     pillar_points = 0.0
@@ -237,6 +237,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
     time_sensitive_terms = [word for word in editorial_fit.get("time_sensitive_event_terms", []) if word.lower() in title_summary]
     reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
+    personal_workflow_detail_terms = [word for word in editorial_fit.get("personal_workflow_detail_terms", []) if word.lower() in haystack]
     generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
     hardware_news_terms = [word for word in editorial_fit.get("hardware_news_terms", []) if word.lower() in title_summary]
     too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
@@ -403,6 +404,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     else:
         adaptation_readiness = "低"
         research_cost = "高"
+    if len(personal_workflow_detail_terms) >= 3:
+        adaptation_readiness = "中"
+        research_cost = "中"
     return {
         **item,
         "id": item.get("id") or hashlib.sha1(f"{title}|{item.get('link', '')}".encode()).hexdigest()[:10],
