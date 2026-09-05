@@ -1,6 +1,19 @@
 {
   "sources": [
     {
+      "name": "AI News Radar / LearnPrompt",
+      "category": "AI聚合线索入口",
+      "type": "learnprompt_radar",
+      "url": "https://news.learnprompt.pro/classic/",
+      "data_url": "https://news.learnprompt.pro/data/latest-24h-all.json",
+      "items_limit": 250,
+      "priority": 4,
+      "role": "discovery",
+      "language": "unknown",
+      "maturity": "unknown",
+      "notes": "用户指定的持续扩源入口。读取公开JSON中的原始标题、原文URL、来源和发布时间；聚合评分、中文翻译与摘要不代表原文质量。线索保存于discovery.json，取得完整简体中文材料并人工核验后通过inbox进入候选。"
+    },
+    {
       "name": "觉醒AI",
       "category": "中文AI实战知识库",
       "type": "web",

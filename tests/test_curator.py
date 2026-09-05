@@ -17,15 +17,39 @@ from add_source import append_source
 from curator import canonical_url, deduplicate, rank_candidates, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
+    def test_radar_preserves_original_source_and_stays_discovery(self):
+        source = {"name":"Radar", "category":"aggregate", "priority":4, "type":"learnprompt_radar", "url":"https://news.learnprompt.pro/classic/", "data_url":"https://news.learnprompt.pro/data/latest-24h-all.json"}
+        row = {"url":"https://example.com/original", "title":"中文译题", "title_original":"Original English title", "source":"Original author", "first_seen_at":"2026-09-05", "summary":"AI generated summary", "ai_score":1}
+        with patch('scrape_aihot.requests.get') as get:
+            get.return_value.json.return_value = {"generated_at":"2026-09-05", "items_all":[row, row, {"title":"invalid","url":"javascript:alert(1)"}, None]}
+            items = fetch_learnprompt_radar(source, {"request_timeout_seconds":5})
+        self.assertEqual(len(items),1)
+        self.assertEqual(items[0]['title'],'Original English title')
+        self.assertEqual(items[0]['source_name'],'Original author')
+        self.assertEqual(items[0]['published'],'')
+        self.assertEqual(items[0]['language'],'unknown')
+        self.assertEqual(items[0]['source_role'],'discovery')
+        with patch('scrape_aihot.requests.get') as get:
+            self.assertEqual(hydrate(items[0], {}),items[0])
+            get.assert_not_called()
+        result = score_item({**items[0], "content":"完整中文正文和真实实测方法。"*300,"content_status":"fulltext","language":"zh","maturity":"secondary"}, self.profile, now=self.now)
+        self.assertFalse(result['recommended'])
+        with patch('scrape_aihot.requests.get') as get:
+            get.return_value.json.return_value = {"changed_schema":[]}
+            items, error = fetch_source(source, {"request_timeout_seconds":5})
+            self.assertEqual(items,[])
+            self.assertIn('items_all',error)
+
     def test_latest_editorial_boundaries_are_enforced(self):
         base = {**self.items[0], "content_status": "fulltext", "content": "这里是完整的中文实践材料，讲清真实问题和可复用的方法。" * 150, "summary": "", "published": "2026-08-24"}
         cases = [
             ({**base, "title": "个人知识库的另一种搭法", "summary": "根据 LLM Wiki 方法整理资料"}, "主题已写过"),
             ({**base, "title": "看完 Karpathy 的分享重做知识库"}, "主题已写过"),
+            ({**base, "title": "Ego Lite 浏览器实测：AI 可以不抢窗口了"}, "主题已写过"),
             ({**base, "title": "用WorkBuddy搞定公司日常行政工作"}, "基础应用暂缓"),
             ({**base, "title": "知識管理實作", "content": "這個實作讓讀者學會處理資料，從檔案轉換到實際應用。" * 150}, "繁体中文"),
         ]

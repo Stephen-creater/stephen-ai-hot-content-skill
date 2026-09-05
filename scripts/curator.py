@@ -134,7 +134,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     covered = any(term.lower() in title_summary for term in profile.get("covered_topic_terms", []))
     karpathy_wiki = any(term in title_summary for term in ("karpathy", "卡帕西", "卡帕斯")) and "知识库" in title_summary
     if covered or karpathy_wiki:
-        penalties.append("LLM Wiki／卡帕西知识库主题已写过，不重复推荐")
+        penalties.append("主题已写过，不重复推荐")
     if "workbuddy" in title_summary and any(term in title_summary for term in profile.get("deferred_basic_workbuddy_terms", [])):
         penalties.append("WorkBuddy 常规岗位基础应用暂缓推荐")
 

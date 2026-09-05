@@ -178,12 +178,47 @@ def fetch_aihot(source: dict, settings: dict) -> list[dict]:
     return items
 
 
+def fetch_learnprompt_radar(source: dict, settings: dict) -> list[dict]:
+    response = requests.get(source["data_url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response.raise_for_status()
+    payload = response.json()
+    entries = payload.get("items_all") if isinstance(payload, dict) else None
+    if not isinstance(entries, list):
+        raise ValueError("AI News Radar 数据结构变化：缺少 items_all 列表")
+    rows, seen = [], set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        link = entry.get("url", "")
+        title = clean_text(entry.get("title_original") or entry.get("title"))
+        if not isinstance(link, str) or urlparse(link).scheme not in {"http", "https"} or not urlparse(link).netloc or not title or link in seen:
+            continue
+        seen.add(link)
+        rows.append({
+            "title": title, "link": link,
+            "summary": clean_text(entry.get("summary")),
+            "published": entry.get("published_at") or "",
+            "discovered_at": entry.get("first_seen_at") or "",
+            "source_name": clean_text(entry.get("source") or entry.get("site_name") or source["name"]),
+            "source_category": source["category"], "source_priority": source["priority"],
+            "source_type": "web", "source_role": "discovery",
+            "language": "unknown", "maturity": "unknown",
+            "content_form": "article", "content_status": "summary",
+            "discovery_source": source["url"], "discovery_generated_at": payload.get("generated_at", ""),
+        })
+        if len(rows) >= int(source.get("items_limit", 250)):
+            break
+    return rows
+
+
 def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
     try:
         if source["type"] == "rss":
             rows = fetch_rss(source, settings)
         elif source["type"] == "aihot":
             rows = fetch_aihot(source, settings)
+        elif source["type"] == "learnprompt_radar":
+            rows = fetch_learnprompt_radar(source, settings)
         else:
             rows = fetch_web_index(source, settings)
         return rows, None if rows else f"{source['name']}: 未发现条目"
@@ -192,7 +227,7 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
 
 
 def hydrate(item: dict, settings: dict) -> dict:
-    if not item.get("link"):
+    if not item.get("link") or item.get("source_role") == "discovery":
         return item
     if item.get("content") and (
         item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext"}
@@ -649,12 +684,15 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     output_dir = args.output_root / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
+    discovery_items = [item for item in items if item.get("source_role") == "discovery"]
+    (output_dir / "discovery.json").write_text(json.dumps(discovery_items, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "candidates.json").write_text(json.dumps(candidates, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "run.json").write_text(
         json.dumps(
             {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "input_count": len(items),
+                "discovery_count": len(discovery_items),
                 "skipped_reviewed_count": skipped_reviewed_count,
                 "skipped_content_duplicate_count": skipped_content_duplicate_count,
                 "rejected_by_gate_count": rejected_by_gate_count,
