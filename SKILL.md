@@ -160,17 +160,19 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 
 在 `index.html` 中标记应该入选、不应入选和遗漏选题。页面会将状态与备注实时保存到当前浏览器，但不会直接写入项目文件。完成审核后，点击「导出全部审核结果」。浏览器会先把 JSON 暂存在下载目录，正式反馈库位于 `.local/editorial_feedback.jsonl`。
 
-导入反馈：
+导入反馈（默认完整入库、回读核对后自动删除下载的临时 JSON）：
 
 ```bash
 python3 scripts/import_feedback.py /path/to/selection_feedback.json
 ```
 
-确认导入后同时删除下载的临时 JSON：
+这是必须完成的收尾步骤，不能以“已入库”代替“已清理”。既有遗留导出也用同一命令处理：核对完整内容后跳过重复记录并删除原文件；不得仅凭文件名或导出时间删除。导入后检查源路径已经不存在，并在交付时简要说明清理结果。显式的 `--delete-source` 仍兼容：
 
 ```bash
 python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-source
 ```
+
+只有用户明确要求保留原文件，或测试需要时才使用 `--keep-source`。入库、持久化或回读校验失败时必须保留原文件；完整内容仍保存在私有反馈库中。
 
 反馈写入本地 `.local/editorial_feedback.jsonl`，不会进入公开仓库。后续根据反馈修改编辑画像、来源与评分逻辑。
 

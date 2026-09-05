@@ -1119,7 +1119,7 @@ Language: zh
             feedback = root / "selection_feedback.json"
             feedback.write_text(json.dumps({"exported_at": "2026-08-25T06:20:39Z", "reviews": {"x": {"status": "rejected"}}}))
             with patch.object(feedback_module, "ROOT", root):
-                target, duplicate = feedback_module.import_feedback(feedback)
+                target, duplicate = feedback_module.import_feedback(feedback, delete_source=False)
                 self.assertFalse(duplicate)
                 self.assertTrue(feedback.exists())
                 _, duplicate = feedback_module.import_feedback(feedback, delete_source=True)
@@ -1144,6 +1144,49 @@ Language: zh
             target = root / ".local" / "editorial_feedback.jsonl"
             self.assertEqual(len(target.read_text().splitlines()), 1)
             self.assertEqual(sorted(duplicate for _, duplicate in results), [False, True])
+
+    def test_feedback_cli_deletes_by_default_and_can_keep_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            feedback = root / "selection_feedback.json"
+            payload = {"exported_at": "2026-09-05T04:00:00Z", "reviews": {"x": {"status": "pending", "note": "待定"}}}
+            feedback.write_text(json.dumps(payload))
+            with patch.object(feedback_module, "ROOT", root), patch("builtins.print"):
+                with patch("sys.argv", ["import_feedback.py", str(feedback), "--keep-source"]):
+                    feedback_module.main()
+                self.assertTrue(feedback.exists())
+                with patch("sys.argv", ["import_feedback.py", str(feedback)]):
+                    feedback_module.main()
+                self.assertFalse(feedback.exists())
+                target = root / ".local/editorial_feedback.jsonl"
+                self.assertTrue(feedback_module.already_imported(target, payload["exported_at"], payload))
+                self.assertEqual(len(target.read_text().splitlines()), 1)
+
+    def test_feedback_same_timestamp_changed_content_is_not_discarded(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            feedback = root / "selection_feedback.json"
+            payload = {"exported_at": "2026-09-05T04:00:00Z", "reviews": {"x": {"status": "selected"}}}
+            with patch.object(feedback_module, "ROOT", root):
+                feedback.write_text(json.dumps(payload))
+                target, _ = feedback_module.import_feedback(feedback)
+                payload["reviews"]["x"] = {"status": "rejected", "note": "修改后的完整反馈"}
+                feedback.write_text(json.dumps(payload))
+                _, duplicate = feedback_module.import_feedback(feedback)
+                self.assertFalse(duplicate)
+                self.assertFalse(feedback.exists())
+                self.assertEqual(len(target.read_text().splitlines()), 2)
+                self.assertTrue(feedback_module.already_imported(target, payload["exported_at"], payload))
+
+    def test_feedback_readback_failure_keeps_source(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            feedback = root / "selection_feedback.json"
+            feedback.write_text(json.dumps({"exported_at": "2026-09-05T04:00:00Z", "reviews": {}}))
+            with patch.object(feedback_module, "ROOT", root), patch.object(feedback_module, "already_imported", return_value=False):
+                with self.assertRaises(RuntimeError):
+                    feedback_module.import_feedback(feedback)
+                self.assertTrue(feedback.exists())
 
     def test_pending_feedback_is_deferred_until_reclassified(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
