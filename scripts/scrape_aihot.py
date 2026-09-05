@@ -329,7 +329,8 @@ def inbox_item(row: dict, settings: dict) -> dict:
             content = path.read_text(encoding="utf-8")
             if len(content.strip()) < 400:
                 raise ValueError("本地正文过短")
-            item.update(content=content, content_status="fulltext", content_origin="local_fulltext")
+            status = "transcript" if item["content_form"] in {"video", "podcast"} else "fulltext"
+            item.update(content=content, content_status=status, content_origin="local_fulltext")
             return item
         except (OSError, ValueError) as exc:
             item["fetch_error"] = f"本地正文读取失败: {exc}"

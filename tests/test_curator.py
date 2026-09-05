@@ -14,13 +14,50 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from add_source import append_source
-from curator import deduplicate, rank_candidates, score_item
+from curator import canonical_url, deduplicate, rank_candidates, score_item
 import import_feedback as feedback_module
 from report import generate_report
 from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
+    def test_distinct_youtube_episodes_survive_deduplication(self):
+        first = {"title": "内容工程师如何定义好的模型回复", "link": "https://www.youtube.com/watch?v=first", "content_status": "transcript", "content": "原始字幕"}
+        second = {"title": "开放权重与蒸馏的技术边界", "link": "https://www.youtube.com/watch?v=second", "content_status": "transcript", "content": "另一期字幕"}
+        same_first = {**first, "link": "https://www.youtube.com/watch?v=first&t=60&utm_source=test"}
+        self.assertEqual(len(deduplicate([first, second, same_first])), 2)
+        self.assertNotEqual(canonical_url("https://example.com/article?newId=1"), canonical_url("https://example.com/article?newId=2"))
+
+    def test_deep_interview_uses_general_age_window_not_release_news_window(self):
+        item = {"title": "Anthropic 专家访谈：模型发布后，如何理解蒸馏能力", "summary": "用公共研究解释模型学习的边界", "content": "模型学习的能力需要区分训练方法和实际证据。" * 200, "published": "2026-08-01", "source_name": "中文访谈", "source_priority": 5, "source_type": "web", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext", "link": "https://example.com/interview"}
+        now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+        interview = score_item(item, self.profile, now=now)
+        news = score_item({**item, "title": "Anthropic 发布新模型"}, self.profile, now=now)
+        self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
+        self.assertIn("事件新闻已超过时效窗口", news["penalty"])
+
+    def test_saturated_xiaohongshu_layout_is_rejected_despite_complete_material(self) -> None:
+        item = {"title": "小红书图文自动排版 Skill 实战", "summary": "亲自实测，有完整过程与明确结果", "content": "作者解释了版式选择和调整过程。" * 250, "published": "2026-09-05", "source_name": "中文创作者", "source_priority": 5, "source_type": "web", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext", "link": "https://example.com/layout"}
+        result = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
+        self.assertFalse(result["recommended"])
+        self.assertIn("小红书图文排版 Skill 已饱和", result["penalty"])
+
+    def test_local_podcast_transcript_keeps_ending_and_renders_in_report(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "podcast.txt"
+            body = "主持人：这是一段完整的对话。\n\n" * 1600 + "嘉宾：最后的限制条件也必须保留。"
+            path.write_text(body, encoding="utf-8")
+            item = inbox_item({"url": "https://example.com/podcast", "platform": "podcast", "content_file": str(path)}, {})
+            self.assertEqual(item["content_status"], "transcript")
+            self.assertEqual(item["content"], body)
+            item = rank_candidates([item], self.profile)[0]
+            self.assertEqual(item["content"], body)
+            output = Path(directory) / "index.html"
+            generate_report([item], output, "test")
+            rendered = output.read_text(encoding="utf-8")
+            self.assertIn('class="transcript"', rendered)
+            self.assertIn("最后的限制条件也必须保留", rendered)
+
     def test_browser_article_preserves_full_body_and_paragraphs(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "article.txt"
@@ -673,7 +710,7 @@ Language: zh
             generate_report([candidate], path, "2026-09-04-120000")
             report = path.read_text()
         self.assertIn("查看整理后的完整逐字稿", report)
-        self.assertIn("已自动去除时间码", report)
+        self.assertIn("原音视频核对", report)
         self.assertIn("这是审核时需要直接阅读的完整逐字稿", report)
 
     def test_empty_report_explains_that_nothing_passed(self) -> None:

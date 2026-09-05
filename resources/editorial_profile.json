@@ -1,6 +1,12 @@
 {
   "owner": "Stephen",
   "target_readers": ["中文偏小白 AI 使用者", "产品、运营与管理者", "知识工作者与内容创作者"],
+  "adaptation_review": {
+    "require_independent_text_argument": true,
+    "reject_author_specific_visual_dependency": true,
+    "saturated_topics": ["小红书图文排版 Skill"],
+    "note": "实测真实不等于适合二创；不依赖原作者专属截图、图表、数据和亲历，仍须有完整文字论证与可核验公共事实。"
+  },
   "selection_count": 8,
   "report_candidate_count": 15,
   "minimum_delivery_count": 5,

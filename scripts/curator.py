@@ -6,7 +6,7 @@ import re
 from datetime import datetime, timezone
 from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
-from urllib.parse import urlsplit, urlunsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 TAG_RE = re.compile(r"<[^>]+>")
@@ -35,7 +35,12 @@ def clean_text(value: str | None) -> str:
 
 def canonical_url(url: str) -> str:
     parts = urlsplit(url)
-    return urlunsplit((parts.scheme, parts.netloc.lower(), parts.path.rstrip("/"), "", ""))
+    host = parts.netloc.lower()
+    tracking = {"fbclid", "gclid", "msclkid", "spm", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
+    if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
+        tracking |= {"si", "t", "start", "feature"}
+    query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key.lower() not in tracking and not key.lower().startswith("utm_")]
+    return urlunsplit((parts.scheme, host, parts.path.rstrip("/"), urlencode(sorted(query)), ""))
 
 
 def parse_datetime(value: str | None) -> datetime | None:
@@ -322,7 +327,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if people_terms and not authoritative_interview:
         score -= 30
         penalties.append("纯人物群像，缺少可复用的核心机制")
-    if age_days is not None and time_sensitive_terms and age_days > int(profile.get("time_sensitive_max_age_days", 14)):
+    if age_days is not None and time_sensitive_terms and not authoritative_interview and age_days > int(profile.get("time_sensitive_max_age_days", 14)):
         score -= 60
         penalties.append("事件新闻已超过时效窗口")
     if reader_distance_terms:
@@ -415,6 +420,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if saturated_humanizer_terms:
         score -= 55
         penalties.append("去 AI 味工具赛道高度同质化，缺少可验证的新突破")
+    if ("小红书" in title_summary or "xiaohongshu" in title_summary) and ("排版" in title_summary or "layout" in title_summary) and ("skill" in title_summary or "技能" in title_summary):
+        score -= 80
+        penalties.append("小红书图文排版 Skill 已饱和，用户明确不再需要推荐")
     if len(legal_compliance_topic_terms) >= 3:
         score -= 55
         penalties.append("法律合规、署名责任或社会争议为主，不符合长期干货调性")
@@ -473,7 +481,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "id": item.get("id") or hashlib.sha1(f"{title}|{item.get('link', '')}".encode()).hexdigest()[:10],
         "title": title,
         "summary": summary,
-        "content": content,
+        "content": item.get("content") or "",
         "age_days": age_days,
         "pillars": matched_pillars,
         "score": score,

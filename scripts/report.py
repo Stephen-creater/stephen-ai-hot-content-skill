@@ -38,9 +38,9 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
         aigc_detection = render_aigc_detection(item)
         github_stars = f" · GitHub {int(item['github_stars'])} Star" if item.get("github_stars") is not None else ""
         transcript = ""
-        if item.get("content_form") == "video" and item.get("content_status") == "transcript":
+        if item.get("content_form") in {"video", "podcast"} and item.get("content_status") == "transcript":
             transcript = f"""
-  <details class="transcript"><summary>查看整理后的完整逐字稿</summary><div class="transcript-note">已自动去除时间码、合并重复字幕并补充断句分段；以视频原意为准。</div><pre>{html.escape(item.get('content', ''))}</pre></details>"""
+  <details class="transcript"><summary>查看整理后的完整逐字稿</summary><div class="transcript-note">转写文本供阅读参考；专有名词、数字及正式引用请回到原音视频核对。</div><pre>{html.escape(item.get('content', ''))}</pre></details>"""
         cards.append(
             f"""
 <article class="card" data-id="{html.escape(str(item['id']))}">
