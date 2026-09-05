@@ -125,6 +125,19 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     source_name = clean_text(item.get("source_name")).lower()
     github_stars = item.get("github_stars")
 
+    if profile.get("required_chinese_script") == "simplified":
+        chinese = re.findall(r"[\u4e00-\u9fff]", content or title)
+        traditional_markers = set("體學這為與從讓個裡實過開關點臺檔寫讀據動應處別進還題會時發現種選擇轉換價務圖頁製後設產")
+        traditional_count = sum(char in traditional_markers for char in chinese)
+        if traditional_count >= 12 and traditional_count / max(len(chinese), 1) >= 0.02:
+            penalties.append("原文为繁体中文，要求简体中文材料")
+    covered = any(term.lower() in title_summary for term in profile.get("covered_topic_terms", []))
+    karpathy_wiki = any(term in title_summary for term in ("karpathy", "卡帕西", "卡帕斯")) and "知识库" in title_summary
+    if covered or karpathy_wiki:
+        penalties.append("LLM Wiki／卡帕西知识库主题已写过，不重复推荐")
+    if "workbuddy" in title_summary and any(term in title_summary for term in profile.get("deferred_basic_workbuddy_terms", [])):
+        penalties.append("WorkBuddy 常规岗位基础应用暂缓推荐")
+
     published = parse_datetime(item.get("published") or item.get("article_date"))
     age_days = None
     if published:

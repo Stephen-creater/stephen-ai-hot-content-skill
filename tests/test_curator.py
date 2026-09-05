@@ -21,6 +21,21 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_latest_editorial_boundaries_are_enforced(self):
+        base = {**self.items[0], "content_status": "fulltext", "content": "这里是完整的中文实践材料，讲清真实问题和可复用的方法。" * 150, "summary": "", "published": "2026-08-24"}
+        cases = [
+            ({**base, "title": "个人知识库的另一种搭法", "summary": "根据 LLM Wiki 方法整理资料"}, "主题已写过"),
+            ({**base, "title": "看完 Karpathy 的分享重做知识库"}, "主题已写过"),
+            ({**base, "title": "用WorkBuddy搞定公司日常行政工作"}, "基础应用暂缓"),
+            ({**base, "title": "知識管理實作", "content": "這個實作讓讀者學會處理資料，從檔案轉換到實際應用。" * 150}, "繁体中文"),
+        ]
+        for item, reason in cases:
+            result = score_item(item, self.profile, now=self.now)
+            self.assertFalse(result['recommended'])
+            self.assertIn(reason, result['penalty'])
+        simplified = score_item({**base, "title": "一次具体任务的简体中文实测", "content": base['content'] + "引文：這是參考資料。"}, self.profile, now=self.now)
+        self.assertNotIn("繁体中文", simplified['penalty'])
+
     def test_similar_series_titles_require_matching_full_content(self):
         first = {"title": "教你用WorkBuddy搞定公司日常行政工作", "link": "https://example.com/admin", "content_status": "fulltext", "content": "行政公文会议纪要用品领用登记" * 100}
         second = {"title": "教你用WorkBuddy搞定公司日常财务工作", "link": "https://example.com/finance", "content_status": "fulltext", "content": "银行流水发票金额应收应付对账" * 100}
