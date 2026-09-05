@@ -21,6 +21,23 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_html_and_reply_links_keep_identical_input_order(self):
+        import html
+        import re
+        candidates = [
+            {"id": "z", "title": "后字母但第一张", "link": "https://example.com/watch?v=z", "score": 10},
+            {"id": "a", "title": "高分但第二张", "link": "https://example.com/watch?v=a", "score": 99},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "index.html"
+            generate_report(candidates, output, "test")
+            rendered = output.read_text(encoding="utf-8")
+            links = output.with_name("links.md").read_text(encoding="utf-8").splitlines()
+            headings = re.findall(r'<h2><a href="([^"]+)"[^>]*>(.*?)</a></h2>', rendered)
+        self.assertEqual([html.unescape(url) for url, _ in headings], [x["link"] for x in candidates])
+        self.assertEqual([html.unescape(title) for _, title in headings], [f'{i}. {x["title"]}' for i, x in enumerate(candidates, 1)])
+        self.assertEqual(links, [f'{i}. [{x["title"]}]({x["link"]})' for i, x in enumerate(candidates, 1)])
+
     def test_distinct_youtube_episodes_survive_deduplication(self):
         first = {"title": "内容工程师如何定义好的模型回复", "link": "https://www.youtube.com/watch?v=first", "content_status": "transcript", "content": "原始字幕"}
         second = {"title": "开放权重与蒸馏的技术边界", "link": "https://www.youtube.com/watch?v=second", "content_status": "transcript", "content": "另一期字幕"}

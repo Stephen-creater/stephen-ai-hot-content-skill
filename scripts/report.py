@@ -34,7 +34,7 @@ def render_aigc_detection(item: dict) -> str:
 def generate_report(candidates: list[dict], output_path: Path, generated_at: str) -> None:
     payload = json.dumps(candidates, ensure_ascii=False).replace("</", "<\\/")
     cards = []
-    for item in candidates:
+    for position, item in enumerate(candidates, start=1):
         aigc_detection = render_aigc_detection(item)
         github_stars = f" · GitHub {int(item['github_stars'])} Star" if item.get("github_stars") is not None else ""
         transcript = ""
@@ -45,7 +45,7 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
             f"""
 <article class="card" data-id="{html.escape(str(item['id']))}">
   <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}{github_stars}</span><span>评分 {item['score']}</span></div>
-  <h2><a href="{html.escape(item.get('link', '#'))}" target="_blank" rel="noreferrer">{html.escape(item.get('title_zh') or item['title'])}</a></h2>
+  <h2><a href="{html.escape(item.get('link', '#'))}" target="_blank" rel="noreferrer">{position}. {html.escape(item.get('title_zh') or item['title'])}</a></h2>
   <p>{html.escape(item.get('summary') or item.get('content', '')[:240])}</p>
   <p class="reason">{html.escape(item.get('reason', ''))}</p>
   <p class="penalty">{html.escape(item.get('penalty', ''))}</p>
@@ -177,3 +177,8 @@ renderMissed();
 renderSummary();
 </script></body></html>"""
     output_path.write_text(document, encoding="utf-8")
+    links = []
+    for position, item in enumerate(candidates, start=1):
+        title = (item.get("title_zh") or item["title"]).replace("[", "\\[").replace("]", "\\]")
+        links.append(f"{position}. [{title}]({item.get('link', '#')})")
+    output_path.with_name("links.md").write_text("\n".join(links) + "\n", encoding="utf-8")
