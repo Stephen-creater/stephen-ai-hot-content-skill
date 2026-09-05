@@ -21,6 +21,26 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_similar_series_titles_require_matching_full_content(self):
+        first = {"title": "教你用WorkBuddy搞定公司日常行政工作", "link": "https://example.com/admin", "content_status": "fulltext", "content": "行政公文会议纪要用品领用登记" * 100}
+        second = {"title": "教你用WorkBuddy搞定公司日常财务工作", "link": "https://example.com/finance", "content_status": "fulltext", "content": "银行流水发票金额应收应付对账" * 100}
+        repost = {**first, "link": "https://example.com/repost"}
+        self.assertEqual(len(deduplicate([first, second, repost])), 2)
+
+    def test_document_format_list_is_not_multiple_news_events(self):
+        base = {**self.items[0], "content": "公开完整实测，展示办公资料转成可下载文件的工作方法。" * 150, "summary": "普通办公文件输出实测"}
+        article = score_item({**base, "title": "Notebook Agent 實測：直接產出 Word、Excel、PPT！"}, self.profile, now=self.now)
+        roundup = score_item({**base, "title": "OpenAI发布模型、Google上线产品、腾讯完成融资"}, self.profile, now=self.now)
+        self.assertNotIn("标题包含多个事件", article["penalty"])
+        self.assertIn("标题包含多个事件", roundup["penalty"])
+
+    def test_routine_update_in_summary_is_not_release_news(self):
+        base = {**self.items[0], "published": "2026-08-01", "content": "使用公开表格完成日常办公任务，并核对处理前后的数据。" * 150, "summary": "台账更新、文档整理与年度资料维护"}
+        article = score_item({**base, "title": "教你用WorkBuddy处理日常办公表格"}, self.profile, now=self.now)
+        release = score_item({**base, "title": "腾讯发布办公产品新版"}, self.profile, now=self.now)
+        self.assertNotIn("事件新闻已超过时效窗口", article["penalty"])
+        self.assertIn("事件新闻已超过时效窗口", release["penalty"])
+
     def test_html_and_reply_links_keep_identical_input_order(self):
         import html
         import re

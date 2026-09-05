@@ -71,6 +71,15 @@ def title_similarity(left: str, right: str) -> float:
 def deduplicate(items: list[dict]) -> list[dict]:
     kept: list[dict] = []
 
+    def same_title_content(left: dict, right: dict) -> bool:
+        if title_similarity(left.get("title", ""), right.get("title", "")) < 0.86:
+            return False
+        texts = [re.sub(r"\W+", "", clean_text(row.get("content", "")).lower()) for row in (left, right)]
+        if not all(row.get("content_status") in {"fulltext", "transcript"} for row in (left, right)) or min(map(len, texts)) < 400:
+            return True
+        shingles = [{text[i:i + 16] for i in range(len(text) - 15)} for text in texts]
+        return len(shingles[0] & shingles[1]) / min(map(len, shingles)) >= 0.68
+
     def richness(item: dict) -> tuple[int, int, int]:
         status_rank = {"transcript": 3, "fulltext": 2, "shownotes": 1, "summary": 0}
         return (
@@ -86,7 +95,7 @@ def deduplicate(items: list[dict]) -> list[dict]:
                 index
                 for index, old in enumerate(kept)
                 if (url and url == canonical_url(old.get("link", "")))
-                or title_similarity(item.get("title", ""), old.get("title", "")) >= 0.86
+                or same_title_content(item, old)
             ),
             None,
         )
@@ -242,7 +251,11 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     interview_terms = [word for word in editorial_fit.get("authoritative_interview_terms", []) if word.lower() in title_summary]
     event_terms = [word for word in editorial_fit.get("event_or_ad_terms", []) if word.lower() in title_summary]
     people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
-    time_sensitive_terms = [word for word in editorial_fit.get("time_sensitive_event_terms", []) if word.lower() in title_summary]
+    product_update = bool(re.search(r"(?:版本|模型|产品|功能|软件|系统).{0,8}更新|更新.{0,8}(?:版本|模型|产品|功能|软件|系统)", title_summary))
+    time_sensitive_terms = [
+        word for word in editorial_fit.get("time_sensitive_event_terms", [])
+        if word.lower() in title_summary and (word != "更新" or product_update)
+    ]
     reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
     personal_workflow_detail_terms = [word for word in editorial_fit.get("personal_workflow_detail_terms", []) if word.lower() in haystack]
     generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
@@ -354,7 +367,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if hardware_news_terms:
         score -= 45
         penalties.append("纯芯片、显存或硬件性能新闻")
-    if title.count("、") >= 2:
+    document_format = r"(?:Word|Excel|PowerPoint|PPTX?|PDF|Markdown|CSV|JSON|DOCX|XLSX|SVG|TXT)"
+    event_title = re.sub(rf"\b{document_format}(?:\s*[、,，]\s*{document_format}){{2,}}\b", "文档格式", title, flags=re.I)
+    if event_title.count("、") >= 2:
         score -= 40
         penalties.append("标题包含多个事件")
     if too_technical_terms:
