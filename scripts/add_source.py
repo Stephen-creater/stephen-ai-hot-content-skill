@@ -48,6 +48,7 @@ def main() -> None:
     parser.add_argument("--notes", default="")
     parser.add_argument("--maturity", choices=["secondary", "primary"], default="secondary")
     parser.add_argument("--transcript", dest="transcript_path", default="")
+    parser.add_argument("--content-file", default="", help="通过浏览器读取并保存的完整文章正文文件")
     parser.add_argument("--content-url", default="", help="用于抓取正文的公开原始文本链接；展示仍使用位置参数 URL")
     parser.add_argument("--content-json-key", default="", help="content-url 返回 JS/JSON 映射时选取指定正文键")
     parser.add_argument("--github-stars", type=int, default=None, help="GitHub 仓库当前 Star 数；GitHub 候选必须提供")
@@ -65,6 +66,7 @@ def main() -> None:
             "notes": args.notes,
             "maturity": args.maturity,
             "transcript_path": args.transcript_path,
+            "content_file": args.content_file,
             "content_url": args.content_url,
             "content_json_key": args.content_json_key,
             "github_stars": args.github_stars,

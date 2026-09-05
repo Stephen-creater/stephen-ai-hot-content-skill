@@ -195,7 +195,7 @@ def hydrate(item: dict, settings: dict) -> dict:
     if not item.get("link"):
         return item
     if item.get("content") and (
-        item.get("content_status") == "transcript" or item.get("content_origin") == "explicit_content_url"
+        item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext"}
     ):
         return item
     try:
@@ -320,6 +320,20 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "content_status": "summary",
         "github_stars": row.get("github_stars"),
     }
+    content_file = row.get("content_file")
+    if content_file:
+        path = Path(content_file).expanduser()
+        if not path.is_absolute():
+            path = ROOT / path
+        try:
+            content = path.read_text(encoding="utf-8")
+            if len(content.strip()) < 400:
+                raise ValueError("本地正文过短")
+            item.update(content=content, content_status="fulltext", content_origin="local_fulltext")
+            return item
+        except (OSError, ValueError) as exc:
+            item["fetch_error"] = f"本地正文读取失败: {exc}"
+            return item
     transcript_path = row.get("transcript_path")
     if transcript_path:
         path = Path(transcript_path).expanduser()

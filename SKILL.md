@@ -9,6 +9,12 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 
 ## 选题标准
 
+先判断切口对读者的帮助，再判断来源、篇幅和分数。每条候选必须能用一句具体的普通话说明：读者看完能做成什么，或能纠正哪一个重要判断；“理解趋势”“获得启发”不能代替这个答案。
+
+人工终审检查能否脱离作者的私人经历成立。单个客户的特殊问题、业务口径与解决过程，即使真实且有框架，也不自动适合二创；跨场景访谈与可复用产品实测仍可保留。不要将一次拒绝扩大为排除所有企业实践或所有访谈。
+
+评估 AI 味时检查表达是否准确、精炼、具体，而不只统计标点。抽象层级命名、对仗金句和“这些证据各自到哪儿为止”式小标题，只能作为人工复核信号；不能据此断言作者身份。平台调性比较、读后即忘的效率实验解读、产品护城河评论，若缺少明确读者收益与长期价值，不进入报告。篇幅长本身不是拒绝理由，但反复解释同一判断应降权。
+
 优先选择已经完成中文整合、可以低成本二创的内容：
 
 - 国内高质量公众号文章、中文播客、B站小众深度视频和中文长文。
@@ -121,6 +127,7 @@ python3 scripts/scrape_aihot.py
 
 ```bash
 python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
+python3 scripts/add_source.py "文章链接" --platform web --content-file ".local/materials/完整正文.txt"
 python3 scripts/add_source.py "B站链接" --platform bilibili --creator "UP主" --transcript "/path/to/transcript.txt"
 python3 scripts/add_source.py "YouTube 链接" --platform youtube --creator "频道名"
 python3 scripts/add_source.py "播客链接" --platform xiaoyuzhou --creator "节目" --transcript "/path/to/transcript.txt"
@@ -166,6 +173,8 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-sou
 ## 交付要求
 
 - 默认展示候选报告，不擅自替用户确定最终选题。
+- 最终回复同时提供本地 HTML 审核页和每条候选的可点击原文链接，不能让用户只能从 HTML 内打开原文。链接展示不代表已更改用户默认浏览器设置。
+- 人工终审不能只复述自动评分理由；分别记录具体读者收益、可抽离的方法或判断、主要缺陷。只有通过终审的候选才计入至少 5 条的交付门槛。已有历史反馈优先于搜索代理或自动评分的推荐。
 - 抓取失败的来源写入 `run.json`，其余来源继续运行。
 - 同一事件只保留信息最完整的一篇。
 - 硬门槛未通过的内容禁止进入正常审核页。没有足够强的候选时允许少选或 0 条，不得用弱题凑数量。

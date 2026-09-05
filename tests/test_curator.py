@@ -21,6 +21,18 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_browser_article_preserves_full_body_and_paragraphs(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "article.txt"
+            body = "真实文章段落。\n\n" * 1000 + "文末限制条件必须保留。"
+            path.write_text(body, encoding="utf-8")
+            with patch("scrape_aihot.requests.get", side_effect=AssertionError("must not refetch")):
+                item = inbox_item({"url": "https://example.com/article", "content_file": str(path)}, {})
+                result = hydrate(item, {})
+            self.assertEqual(result["content"], body)
+            self.assertEqual(result["content_status"], "fulltext")
+            self.assertEqual(result["content_form"], "article")
+
     def setUp(self) -> None:
         self.profile = json.loads((ROOT / "resources" / "editorial_profile.json").read_text())
         self.items = json.loads((ROOT / "tests" / "fixtures" / "sample_items.json").read_text())
