@@ -382,6 +382,11 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         penalties.append("纯芯片、显存或硬件性能新闻")
     document_format = r"(?:Word|Excel|PowerPoint|PPTX?|PDF|Markdown|CSV|JSON|DOCX|XLSX|SVG|TXT)"
     event_title = re.sub(rf"\b{document_format}(?:\s*[、,，]\s*{document_format}){{2,}}\b", "文档格式", title, flags=re.I)
+    comparison_metric = r"(?:最|更)?(?:快|准|便宜|省钱|省时|稳定|准确|好用)"
+    event_title = re.sub(
+        rf"(?:谁|哪个|哪款|哪家){comparison_metric}(?:\s*、\s*{comparison_metric}){{2,}}(?=[？?！!：:，,。]|$)",
+        "同一任务的比较维度", event_title,
+    )
     if event_title.count("、") >= 2:
         score -= 40
         penalties.append("标题包含多个事件")

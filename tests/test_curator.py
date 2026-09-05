@@ -66,6 +66,19 @@ class CuratorTest(unittest.TestCase):
         repost = {**first, "link": "https://example.com/repost"}
         self.assertEqual(len(deduplicate([first, second, repost])), 2)
 
+    def test_comparison_dimensions_do_not_hide_real_news_roundups(self):
+        base = {**self.items[0], "content": "公开完整实测，展示办公资料转成可下载文件的工作方法。" * 150, "summary": "AI 真实办公任务实测"}
+        for title in ("18个模型统计108次财报，谁最快、最准、最便宜？", "AI文件处理实测：哪款更省时、更稳定、更好用"):
+            result = score_item({**base, "title": title}, self.profile, now=self.now)
+            self.assertNotIn("标题包含多个事件", result["penalty"])
+        for title in ("OpenAI发布模型、Google上线产品、腾讯完成融资", "谁最快、最准、最便宜？OpenAI发布模型、Google上线产品、腾讯完成融资"):
+            result = score_item({**base, "title": title}, self.profile, now=self.now)
+            self.assertFalse(result["recommended"])
+            self.assertIn("标题包含多个事件", result["penalty"])
+        short = score_item({**base, "title": "AI实测，谁最快、最准、最便宜？", "content": "只有简短介绍。"}, self.profile, now=self.now)
+        self.assertFalse(short["recommended"])
+        self.assertIn("文章正文偏短", short["penalty"])
+
     def test_document_format_list_is_not_multiple_news_events(self):
         base = {**self.items[0], "content": "公开完整实测，展示办公资料转成可下载文件的工作方法。" * 150, "summary": "普通办公文件输出实测"}
         article = score_item({**base, "title": "Notebook Agent 實測：直接產出 Word、Excel、PPT！"}, self.profile, now=self.now)
