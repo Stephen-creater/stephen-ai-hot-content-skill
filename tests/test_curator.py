@@ -1868,6 +1868,60 @@ Language: zh
         self.assertIn("Benchmark", lookup["https://example.com/benchmark"]["penalty"])
         self.assertTrue(all(not item["recommended"] for item in lookup.values()))
 
+    def test_latest_feedback_prefers_focused_product_owner_speech_over_chatty_interview_and_cli(self) -> None:
+        common = {
+            "published": "2026-09-03T08:00:00Z",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_status": "fulltext",
+            "content_form": "article",
+        }
+        items = [
+            {
+                **common,
+                "title": "OpenAI CEO 长访谈：AI 的下一个时代",
+                "summary": "从人生经历聊到工业革命与人类自主权",
+                "content": ("高中时他开始尝试编程，大学时经历了辍学和创业历程。"
+                            "话题又转向工业革命、推向世界和人类自主权。") * 80,
+                "source_name": "中文访谈",
+                "link": "https://example.com/chatty-interview",
+            },
+            {
+                **common,
+                "title": "同时开多个 Agent：herdr 终端复用器实践",
+                "summary": "用分屏和快捷键查看 Agent 状态",
+                "content": ("这是 Rust 编写的终端复用器，支持 tmux、Zellij、Shell 和 SSH。"
+                            "使用 Ctrl+b 快捷键分屏，再在命令行中切换窗格。") * 80,
+                "source_name": "少数派",
+                "link": "https://example.com/terminal-agent",
+            },
+            {
+                **common,
+                "title": "百度网盘产品负责人：老产品如何做 AI 重构",
+                "summary": "现场演讲材料整理，围绕一个产品的取舍",
+                "content": ("我们当时先问用户真正要什么，没有停在搜索升级。"
+                            "团队开始做编辑与存储的交付链路，之后做了一次完整调整。") * 80,
+                "source_name": "大会演讲整理",
+                "link": "https://example.com/product-owner-speech",
+            },
+            {
+                **common,
+                "title": "AI Agent 的护城河与终局",
+                "summary": "跨多个公司讨论产品骨架",
+                "content": ("话题从 Instagram 转到平台战略，再用护城河、骨架、终局和三国战局解释大时代。") * 100,
+                "source_name": "行业媒体",
+                "link": "https://example.com/macro-collage",
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))}
+        self.assertIn("人生经历或宏观闲聊", lookup["https://example.com/chatty-interview"]["penalty"])
+        self.assertIn("终端、CLI、Shell", lookup["https://example.com/terminal-agent"]["penalty"])
+        self.assertIn("缺少单一连续的决策链", lookup["https://example.com/macro-collage"]["penalty"])
+        self.assertTrue(lookup["https://example.com/product-owner-speech"]["recommended"])
+        self.assertIn("单一产品复盘", lookup["https://example.com/product-owner-speech"]["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

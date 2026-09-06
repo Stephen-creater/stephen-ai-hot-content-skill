@@ -344,6 +344,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
     thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
     generic_interview_angle_terms = [word for word in editorial_fit.get("generic_interview_angle_terms", []) if word.lower() in title_summary]
+    interview_biography_terms = [word for word in editorial_fit.get("interview_biography_terms", []) if word.lower() in haystack]
+    cross_topic_macro_terms = [word for word in editorial_fit.get("cross_topic_macro_terms", []) if word.lower() in haystack]
+    terminal_cli_terms = [word for word in editorial_fit.get("terminal_cli_terms", []) if word.lower() in haystack]
+    product_owner_speech_terms = [word for word in editorial_fit.get("product_owner_speech_terms", []) if word.lower() in haystack]
     long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
     reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
     low_reuse_story_terms = [word for word in editorial_fit.get("low_reuse_story_terms", []) if word.lower() in title_summary]
@@ -369,9 +373,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if authoritative_interview:
         score += 24
         reasons.insert(0, "核心 AI 团队权威人物访谈，材料完整")
-    if interview_terms and generic_interview_angle_terms and not long_horizon_framework:
+    if interview_terms and (generic_interview_angle_terms or len(interview_biography_terms) >= 2) and not long_horizon_framework:
         score -= 45
-        penalties.append("访谈角度过宽，缺少可直接展开的具体问题或方法")
+        penalties.append("访谈角度过宽：人生经历或宏观闲聊占比过高，缺少持续的具体问题")
     if release_terms and not major_entities and not any(term in title_summary for term in concept_terms):
         score -= 35
         penalties.append("主体知名度或事件级别不足")
@@ -433,6 +437,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     elif len(content) < 2500 and len(code_barrier_terms) >= 2:
         score -= 45
         penalties.append("文章偏短且技术术语密集，普通读者难以获得可复用价值")
+    if len(terminal_cli_terms) >= 3:
+        score -= 70
+        penalties.append("以终端、CLI、Shell 或快捷键为主体，技术门槛超出目标读者")
+    if len(cross_topic_macro_terms) >= 3 and not product_owner_speech_terms:
+        score -= 55
+        penalties.append("多个抽象大词和跨产品话题来回跳转，缺少单一连续的决策链")
     if len(abstract_business_terms) >= 3:
         score -= 45
         penalties.append("理论或商业评论过多，缺少对普通读者的实际价值")
@@ -541,6 +551,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if concrete_practice_terms:
         score += 18
         reasons.insert(0, "持续实践复盘，有流程、结果和调整过程")
+    if len(product_owner_speech_terms) >= 3:
+        score += 20
+        reasons.insert(0, "产品负责人围绕单一产品复盘用户目标与历史取舍")
     if long_horizon_framework:
         score += 18
         reasons.insert(0, "长期实践沉淀出可复用的方法框架")
