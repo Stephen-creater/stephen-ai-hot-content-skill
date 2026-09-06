@@ -21,6 +21,20 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_main_141814_feedback_topic_and_freshness_boundaries(self):
+        now = datetime(2026, 9, 6, tzinfo=timezone.utc)
+        base = {**self.items[0], "summary": "", "content": "公开来源的完整中文材料。" * 400, "published": "2026-09-01"}
+        def check(title, published="2026-09-01", content=None):
+            return score_item({**base, "title": title, "published": published, **({"content": content} if content else {})}, self.profile, now=now)
+        self.assertIn("主题已写过", check("Anthropic 文本水印机制")['penalty'])
+        self.assertIn("主题已写过", check("DHH 复盘 Basecamp 架构")['penalty'])
+        self.assertNotIn("主题已写过", check("DHH 谈 AI 搜索架构的新实践")['penalty'])
+        self.assertIn("用户当前不认可", check("WorkBuddy 与 Z-Code 协作")['penalty'])
+        self.assertNotIn("用户当前不认可", check("Claude 文档阅读实践", content="偶尔提到 Z-Code。" + base['content'])['penalty'])
+        self.assertNotIn("事件新闻已超过", check("Claude 新功能上线")['penalty'])
+        self.assertIn("事件新闻已超过", check("Claude 新功能上线", "2026-08-31")['penalty'])
+        self.assertNotIn("事件新闻已超过", check("访谈：Anthropic 产品负责人谈发布取舍", "2026-08-15")['penalty'])
+
     def test_disfavored_product_subject_not_incidental_mention(self):
         base = {**self.items[0], "summary": "完整中文实测", "content": "公开工作流程和使用边界。" * 300}
         for title in ("实测扣子桌面端", "Coze Desktop 文件同步实测", "扣子客户端使用介绍"):

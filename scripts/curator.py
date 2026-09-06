@@ -133,7 +133,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
             penalties.append("原文为繁体中文，要求简体中文材料")
     covered = any(term.lower() in title_summary for term in profile.get("covered_topic_terms", []))
     karpathy_wiki = any(term in title_summary for term in ("karpathy", "卡帕西", "卡帕斯")) and "知识库" in title_summary
-    if covered or karpathy_wiki:
+    covered_pattern = any(re.search(pattern, title_summary, re.I) for pattern in profile.get("covered_topic_patterns", []))
+    if covered or karpathy_wiki or covered_pattern:
         penalties.append("主题已写过，不重复推荐")
     broad_model_comparison = bool(re.search(r"(?:\d+|多|多款|各|各家|主流|全部).{0,5}模型", title_summary)) and any(
         term in title_summary for term in ("横评", "对比", "比较", "最快", "最便宜", "谁更", "性价比")
@@ -385,7 +386,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if people_terms and not authoritative_interview:
         score -= 30
         penalties.append("纯人物群像，缺少可复用的核心机制")
-    if age_days is not None and time_sensitive_terms and not authoritative_interview and age_days > int(profile.get("time_sensitive_max_age_days", 14)):
+    if age_days is not None and time_sensitive_terms and not authoritative_interview and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
         score -= 60
         penalties.append("事件新闻已超过时效窗口")
     if reader_distance_terms:
