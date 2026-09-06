@@ -17,6 +17,8 @@ description: 按 Stephen 既有文章与人工反馈，抓取、筛选并排序�
 
 ## 选题标准
 
+已写过的主题族不再推送：热点选题系统、文案与脚本创作、小红书图文创作、视频剪辑、HyperFrame/HyperFrames。不能换一个仓库或作者重新包装。大而全的模型横评，尤其以 Token 成本、价格或性价比排序为主的材料也排除。保留高质量、具有具体方法和完整自然对话的权威访谈；Dianne Penn 评测访谈已入选，不再重复。
+
 Ego 浏览器主题已做过，按主题族去重。怎么写具体提示词、目标/背景/约束/验收模板这类旧提示词教程不再推荐。不能靠为原文补一句“读者收益”放行宏观观点文（如 AI 越强人越忙），也不能把一个窄小功能用历史、实验和个性化体验撑成长文。四五十张案例图主导阅读的材料，即使质量高、公开可用，仍因阅读负担与二创成本排除；这不等于排除所有配图文章。
 
 先判断切口对读者的帮助，再判断来源、篇幅和分数。每条候选必须能用一句具体的普通话说明：读者看完能做成什么，或能纠正哪一个重要判断；“理解趋势”“获得启发”不能代替这个答案。
@@ -182,14 +184,16 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 
 导入反馈（默认完整入库、回读核对后自动删除下载的临时 JSON）：
 
+主力与主力2并发时，先从本任务上次交付确定批次 ID，再核对 JSON 内 `generated_at`、候选 ID/标题/链接及顺序。不得拿下载时间最新的文件代替归属判断，不得批量导入或删除另一任务的导出。新导出同时携带 `batch_owner`，文件名含任务名；旧导出无归属字段时，必须以本任务交付批次与完整候选清单核对。
+
 ```bash
-python3 scripts/import_feedback.py /path/to/selection_feedback.json
+python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <本任务交付批次ID> --owner 主力
 ```
 
 这是必须完成的收尾步骤，不能以“已入库”代替“已清理”。既有遗留导出也用同一命令处理：核对完整内容后跳过重复记录并删除原文件；不得仅凭文件名或导出时间删除。导入后检查源路径已经不存在，并在交付时简要说明清理结果。显式的 `--delete-source` 仍兼容：
 
 ```bash
-python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-source
+python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <本任务交付批次ID> --owner 主力 --delete-source
 ```
 
 只有用户明确要求保留原文件，或测试需要时才使用 `--keep-source`。入库、持久化或回读校验失败时必须保留原文件；完整内容仍保存在私有反馈库中。
@@ -199,6 +203,8 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-sou
 已明确标记为入选、不入选或待定的同一条内容，后续运行都会自动跳过。待定表示暂缓，不算最终正负判断；用户以后重新改判时，以最新状态为准。
 
 ## 交付要求
+
+- 并发防撞题：开始筛选及交付前都检查共享反馈和 `topics/*/run.json` 中 `delivery_ready=true` 的已推送材料，包含另一个任务尚未审核的批次；按 URL、ID 和正文去重。草稿先保持 `delivery_ready=false`。最终交付必须执行 `python3 scripts/publish_batch.py topics/<批次ID> --owner 主力`（另一任务使用 `主力2`），在共享文件锁下复查并登记、生成带任务名的审核页与导出。失败则继续换题，禁止直接绕过脚本交付。任务工作文件使用各自前缀，不能共用 `goal-candidate-pool.json` 等可变文件。
 
 - **高优先级：回复中的 1、2、3……原文链接，必须逐项对应 HTML 从上到下的 1、2、3……卡片。** 最终定稿后调用报告生成器，直接读取同目录 `links.md` 用于回复；禁止重新按主题、个人偏好或分数排列。交付前核对数量、顺序、标题和 URL 四项。HTML、`candidates.json`、`links.md` 共用同一份有序候选。
 - “作者很厉害”“自己听完有收获”不等于适合本项目。不能给目标读者带来具体生活、学习、工作方法的可解释性、RSI、模型蒸馏、Token行业演进或内容工程师群像，当前不作为推荐方向；优先寻找可通用的完整工作方法，不靠另拟一个漂亮切口替原材料补实用性。

@@ -135,6 +135,11 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     karpathy_wiki = any(term in title_summary for term in ("karpathy", "卡帕西", "卡帕斯")) and "知识库" in title_summary
     if covered or karpathy_wiki:
         penalties.append("主题已写过，不重复推荐")
+    broad_model_comparison = bool(re.search(r"(?:\d+|多|多款|各|各家|主流|全部).{0,5}模型", title_summary)) and any(
+        term in title_summary for term in ("横评", "对比", "比较", "最快", "最便宜", "谁更", "性价比")
+    )
+    if broad_model_comparison and any(term in title_summary for term in ("token", "成本", "价格", "便宜", "性价比")):
+        penalties.append("大而全的模型与 Token 成本对比，缺少新的可写价值")
     if "workbuddy" in title_summary and any(term in title_summary for term in profile.get("deferred_basic_workbuddy_terms", [])):
         penalties.append("WorkBuddy 常规岗位基础应用暂缓推荐")
 

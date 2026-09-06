@@ -50,7 +50,7 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 导入人工审核：
 
 ```bash
-python3 scripts/import_feedback.py /path/to/selection_feedback.json --delete-source
+python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <本任务交付批次ID> --owner 主力 --delete-source
 ```
 
 ## 配置

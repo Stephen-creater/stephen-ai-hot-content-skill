@@ -1276,13 +1276,17 @@ Language: zh
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             feedback = root / "selection_feedback.json"
-            payload = {"exported_at": "2026-09-05T04:00:00Z", "reviews": {"x": {"status": "pending", "note": "待定"}}}
+            candidates = [{"id":"x", "title":"AI材料", "link":"https://example.com/source"}]
+            batch = root / "topics" / "batch1"
+            batch.mkdir(parents=True)
+            (batch / "candidates.json").write_text(json.dumps(candidates))
+            payload = {"generated_at":"batch1", "candidates":candidates, "exported_at": "2026-09-05T04:00:00Z", "reviews": {"x": {"status": "pending", "note": "待定"}}}
             feedback.write_text(json.dumps(payload))
             with patch.object(feedback_module, "ROOT", root), patch("builtins.print"):
-                with patch("sys.argv", ["import_feedback.py", str(feedback), "--keep-source"]):
+                with patch("sys.argv", ["import_feedback.py", str(feedback), "--expected-batch", "batch1", "--owner", "主力", "--keep-source"]):
                     feedback_module.main()
                 self.assertTrue(feedback.exists())
-                with patch("sys.argv", ["import_feedback.py", str(feedback)]):
+                with patch("sys.argv", ["import_feedback.py", str(feedback), "--expected-batch", "batch1", "--owner", "主力"]):
                     feedback_module.main()
                 self.assertFalse(feedback.exists())
                 target = root / ".local/editorial_feedback.jsonl"

@@ -31,7 +31,11 @@ def render_aigc_detection(item: dict) -> str:
   </details>"""
 
 
-def generate_report(candidates: list[dict], output_path: Path, generated_at: str) -> None:
+def generate_report(candidates: list[dict], output_path: Path, generated_at: str, batch_owner: str = "") -> None:
+    if batch_owner not in {"", "主力", "主力2"}:
+        raise ValueError("未知批次归属")
+    owner_json = json.dumps(batch_owner, ensure_ascii=False)
+    export_name = f"selection_feedback-{batch_owner + '-' if batch_owner else ''}{generated_at}.json"
     payload = json.dumps(candidates, ensure_ascii=False).replace("</", "<\\/")
     cards = []
     for position, item in enumerate(candidates, start=1):
@@ -162,11 +166,11 @@ document.querySelector('#add-missed').onclick=()=>{{
 
 function exportFeedback(){{
   const exportedAt=new Date().toISOString();
-  const output={{generated_at:'{html.escape(generated_at)}',exported_at:exportedAt,reviews:state.reviews,missed:state.missed,candidates}};
+  const output={{generated_at:'{html.escape(generated_at)}',batch_owner:{owner_json},exported_at:exportedAt,reviews:state.reviews,missed:state.missed,candidates}};
   const blob=new Blob([JSON.stringify(output,null,2)],{{type:'application/json'}});
   const url=URL.createObjectURL(blob);
   const link=document.createElement('a');
-  link.href=url;link.download='selection_feedback-{html.escape(generated_at)}.json';link.click();
+  link.href=url;link.download={json.dumps(export_name, ensure_ascii=False)};link.click();
   setTimeout(()=>URL.revokeObjectURL(url),0);
   state.dirty=false;state.last_exported_at=exportedAt;save(false);
 }}
@@ -176,6 +180,8 @@ window.addEventListener('beforeunload',event=>{{if(!state.dirty)return;event.pre
 renderMissed();
 renderSummary();
 </script></body></html>"""
+    if batch_owner:
+        document = document.replace('<h1>Stephen AI 热点候选</h1>', f'<h1>Stephen AI 热点候选 · {html.escape(batch_owner)}</h1>')
     output_path.write_text(document, encoding="utf-8")
     links = []
     for position, item in enumerate(candidates, start=1):
