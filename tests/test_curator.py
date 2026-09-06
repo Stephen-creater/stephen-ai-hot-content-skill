@@ -272,9 +272,9 @@ Language: zh
             "content_status": "fulltext",
             "link": "https://example.com/kimi-work-month-review",
         }
-        result = rank_candidates([item], self.profile, now=datetime(2026, 9, 2, tzinfo=timezone.utc))[0]
-        self.assertTrue(result["recommended"])
-        self.assertNotIn("缺少明确 AI 对象", result["penalty"])
+        for title in (item["title"], "ChatGPT 对话导出实测", "Chatbox 工作模式复盘"):
+            result = rank_candidates([{**item, "title": title, "link": f"https://example.com/{title}"}], self.profile, now=datetime(2026, 9, 2, tzinfo=timezone.utc))[0]
+            self.assertNotIn("缺少明确 AI 对象", result["penalty"])
 
     def test_latest_feedback_rejects_questions_locks_and_thin_diaries(self) -> None:
         common = {
@@ -725,6 +725,20 @@ Language: zh
             now=datetime(2026, 9, 6, tzinfo=timezone.utc),
         )
         self.assertNotIn("深论文解读", practical["penalty"])
+
+        incidental = score_item(
+            {
+                **common,
+                "title": "AI 双语网页阅读工具",
+                "summary": "可翻译网页、技术文档和字幕",
+                "content": "用户也可以阅读一篇 arXiv 论文。" + ("支持 PDF、API、TTS、OCR、BYOK 和 URL，但正文主要讲双语对照、划词与保存。" * 180),
+                "source_name": "软件体验站",
+                "link": "https://example.com/reader-tool",
+            },
+            self.profile,
+            now=datetime(2026, 9, 6, tzinfo=timezone.utc),
+        )
+        self.assertNotIn("深论文解读", incidental["penalty"])
 
     def test_vendor_supplied_robotics_article_is_rejected(self) -> None:
         item = {

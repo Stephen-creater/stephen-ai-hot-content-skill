@@ -16,7 +16,7 @@ PACKAGE_VERSION_RE = re.compile(r"^[a-z0-9_.-]+\s+v?\d+\.\d+(?:\.\d+)?(?:[-.][a-
 CORE_AI_TERMS = (
     "ai", "agent", "llm", "model", "codex", "claude", "openai", "anthropic",
     "gemini", "deepmind", "skill", "mcp", "prompt", "inference", "training",
-    "reasoning", "kimi", "workbuddy", "qoder", "cursor", "copilot", "openclaw",
+    "reasoning", "kimi", "workbuddy", "qoder", "cursor", "copilot", "openclaw", "chatgpt", "chatbox",
     "人工智能", "模型", "智能体", "推理", "训练", "上下文", "缓存", "豆包",
 )
 
@@ -296,7 +296,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
     synthetic_structure_terms = [word for word in editorial_fit.get("synthetic_structure_terms", []) if word.lower() in haystack]
     nested_outline_count = len(re.findall(r"(?<!\d)(?:1[0-9]|2[0-9])\.(?:[1-9]\d?)(?:[.、\s]|$)", content))
-    paper_explainer = any(term in haystack for term in ("论文", "arxiv", "paperbench", "学术论文"))
+    paper_surface = f"{title_summary} {source_name}"
+    paper_signal_count = sum(haystack.count(term) for term in ("论文", "arxiv", "paperbench", "学术论文"))
+    paper_surface_match = any(term in paper_surface for term in ("论文", "arxiv", "paperbench", "学术论文"))
+    paper_explainer = paper_surface_match or (paper_signal_count >= 4 and len(deep_paper_metric_terms) >= 2)
     technical_acronyms = {
         token for token in re.findall(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9-]{1,9}(?![A-Za-z0-9])", content)
         if token not in {"AI", "API", "URL", "PDF", "LLM", "GPT"}
