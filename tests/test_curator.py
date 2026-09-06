@@ -1989,6 +1989,41 @@ Language: zh
         self.assertIn("专业 AI 产品治理", lookup["https://example.com/pro-governance"]["penalty"])
         self.assertIn("事件新闻已超过时效窗口", lookup["https://example.com/old-closure"]["penalty"])
 
+    def test_latest_feedback_separates_article_quality_from_topic_appeal_and_prefers_direct_use_tools(self) -> None:
+        common = {
+            "published": "2026-09-04T08:00:00Z", "source_priority": 5, "source_type": "web",
+            "language": "zh", "maturity": "secondary", "content_status": "fulltext", "content_form": "article",
+        }
+        items = [
+            {
+                **common, "title": "Anthropic电商Agent：购物Agent该用单Agent加Skills",
+                "summary": "商家Agent与购物车状态", "content": "Skills, not subagents，购物 Agent 与商家 Agent 共享电商上下文。" * 140,
+                "source_name": "中文深度文章", "link": "https://example.com/commerce-agent",
+            },
+            {
+                **common, "title": "实测飞猪AI：旅行Agent替你申请升房",
+                "summary": "飞猪帮帮产品解读", "content": "飞猪帮帮发现免费升房机会，授权后给酒店前台打电话申请升房。" * 120,
+                "source_name": "科技媒体", "link": "https://example.com/travel-ad",
+            },
+            {
+                **common, "title": "吴恩达的桌面 Agent OpenWorker 为什么不Work",
+                "summary": "为什么不能替普通人工作", "content": "OpenWorker 连续重试失败，用户需要自己排查。" * 160,
+                "source_name": "科技媒体", "link": "https://example.com/weak-product",
+            },
+            {
+                **common, "title": "AI阅读器：读书提问后把回答保存成笔记",
+                "summary": "安装与快速开始，可精确返回原文", "content": ("下载最新版后即可使用。阅读完全离线，AI 默认关闭。"
+                          "选文提问后可保存完整 AI 回答，笔记支持精确返回原文；PDF 保留原页且不伪造 OCR。") * 80,
+                "source_name": "开源产品作者", "link": "https://example.com/direct-tool",
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))}
+        self.assertIn("不具备当前选题吸引力", lookup["https://example.com/commerce-agent"]["penalty"])
+        self.assertIn("案例宣传属性过强", lookup["https://example.com/travel-ad"]["penalty"])
+        self.assertIn("产品本身缺少可写价值", lookup["https://example.com/weak-product"]["penalty"])
+        self.assertTrue(lookup["https://example.com/direct-tool"]["recommended"])
+        self.assertIn("可直接试用", lookup["https://example.com/direct-tool"]["reason"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -364,6 +364,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     professional_product_governance_terms = [word for word in editorial_fit.get("professional_product_governance_terms", []) if word.lower() in haystack]
     generic_product_framework_terms = [word for word in editorial_fit.get("generic_product_framework_terms", []) if word.lower() in haystack]
     concrete_end_user_task_terms = [word for word in editorial_fit.get("concrete_end_user_task_terms", []) if word.lower() in haystack]
+    unappealing_architecture_topic_terms = [word for word in editorial_fit.get("unappealing_architecture_topic_terms", []) if word.lower() in title_summary]
+    brand_promotion_topic_terms = [word for word in editorial_fit.get("brand_promotion_topic_terms", []) if word.lower() in haystack]
+    low_value_product_critique_terms = [word for word in editorial_fit.get("low_value_product_critique_terms", []) if word.lower() in title_summary]
+    direct_use_artifact_terms = [word for word in editorial_fit.get("direct_use_artifact_terms", []) if word.lower() in haystack]
     long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
     reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
     low_reuse_story_terms = [word for word in editorial_fit.get("low_reuse_story_terms", []) if word.lower() in title_summary]
@@ -434,6 +438,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if hardware_subject_terms:
         score -= 60
         penalties.append("AI 硬件与设备产品成立条件不符合当前内容偏好")
+    if unappealing_architecture_topic_terms:
+        score -= 65
+        penalties.append("购物或商家 Agent 的单多智能体架构选择不具备当前选题吸引力")
+    if len(brand_promotion_topic_terms) >= 2:
+        score -= 70
+        penalties.append("单一旅行或电商平台的 Agent 案例宣传属性过强")
+    if low_value_product_critique_terms:
+        score -= 65
+        penalties.append("产品本身缺少可写价值，负面体验或失败点不能单独支撑选题")
     document_format = r"(?:Word|Excel|PowerPoint|PPTX?|PDF|Markdown|CSV|JSON|DOCX|XLSX|SVG|TXT)"
     event_title = re.sub(rf"\b{document_format}(?:\s*[、,，]\s*{document_format}){{2,}}\b", "文档格式", title, flags=re.I)
     comparison_metric = r"(?:最|更)?(?:快|准|便宜|省钱|省时|稳定|准确|好用)"
@@ -582,6 +595,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(concrete_end_user_task_terms) >= 2:
         score += 22
         reasons.insert(0, "围绕普通读者可直接理解的终端任务展开")
+    if len(direct_use_artifact_terms) >= 3:
+        score += 22
+        reasons.insert(0, "提供可直接试用、可保存且能回查原文的完整产物")
     if long_horizon_framework:
         score += 18
         reasons.insert(0, "长期实践沉淀出可复用的方法框架")
