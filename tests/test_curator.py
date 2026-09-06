@@ -1936,6 +1936,48 @@ Language: zh
         self.assertTrue(lookup["https://example.com/product-owner-speech"]["recommended"])
         self.assertIn("单一产品复盘", lookup["https://example.com/product-owner-speech"]["reason"])
 
+    def test_latest_feedback_prefers_concrete_user_task_and_rejects_hardware_old_closure_and_product_governance(self) -> None:
+        common = {
+            "published": "2026-09-03T08:00:00Z", "source_priority": 5, "source_type": "web",
+            "language": "zh", "maturity": "secondary", "content_status": "fulltext", "content_form": "article",
+        }
+        items = [
+            {
+                **common,
+                "title": "千问办公产品负责人：Agent 如何把客户拜访 PPT 真正交出去",
+                "summary": "现场演讲材料整理",
+                "content": ("我们当时从明天下午拜访客户的真实任务出发，先找齐资料、历史沟通和最新进展。"
+                            "生成客户拜访 PPT 后要核对事实，只需要改某一页时就局部修改，直到可以进入会议。") * 70,
+                "source_name": "大会演讲整理", "link": "https://example.com/end-user-task",
+            },
+            {
+                **common,
+                "title": "小度 AI 硬件负责人复盘录音卡、儿童手表与摄像机",
+                "summary": "智能硬件的成本与场景", "content": "录音卡、儿童手表、摄像机和智能音箱的产品取舍。" * 120,
+                "source_name": "演讲整理", "link": "https://example.com/hardware-product",
+            },
+            {
+                **common,
+                "title": "AI 产品的边界、上限、退路",
+                "summary": "专业产品治理检查", "content": ("用 WAF、权限层、状态机、熔断、风险分级、审批节点和服务端校验建立治理基线。"
+                          "全文按边界、上限、退路的三层设计组织。") * 90,
+                "source_name": "产品社区", "link": "https://example.com/pro-governance",
+            },
+            {
+                **common,
+                "published": "2026-08-13T08:00:00Z",
+                "title": "Atlas 运行 292 天后停止服务",
+                "summary": "AI 浏览器回收与落幕", "content": "OpenAI 关停 Atlas，回收早期产品投入。" * 130,
+                "source_name": "中文媒体", "link": "https://example.com/old-closure",
+            },
+        ]
+        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))}
+        self.assertTrue(lookup["https://example.com/end-user-task"]["recommended"])
+        self.assertIn("终端任务", lookup["https://example.com/end-user-task"]["reason"])
+        self.assertIn("AI 硬件", lookup["https://example.com/hardware-product"]["penalty"])
+        self.assertIn("专业 AI 产品治理", lookup["https://example.com/pro-governance"]["penalty"])
+        self.assertIn("事件新闻已超过时效窗口", lookup["https://example.com/old-closure"]["penalty"])
+
 
 if __name__ == "__main__":
     unittest.main()

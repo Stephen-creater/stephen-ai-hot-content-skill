@@ -349,6 +349,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     cross_topic_macro_terms = [word for word in editorial_fit.get("cross_topic_macro_terms", []) if word.lower() in haystack]
     terminal_cli_terms = [word for word in editorial_fit.get("terminal_cli_terms", []) if word.lower() in haystack]
     product_owner_speech_terms = [word for word in editorial_fit.get("product_owner_speech_terms", []) if word.lower() in haystack]
+    hardware_subject_terms = [word for word in editorial_fit.get("hardware_subject_terms", []) if word.lower() in title_summary]
+    professional_product_governance_terms = [word for word in editorial_fit.get("professional_product_governance_terms", []) if word.lower() in haystack]
+    generic_product_framework_terms = [word for word in editorial_fit.get("generic_product_framework_terms", []) if word.lower() in haystack]
+    concrete_end_user_task_terms = [word for word in editorial_fit.get("concrete_end_user_task_terms", []) if word.lower() in haystack]
     long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
     reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
     low_reuse_story_terms = [word for word in editorial_fit.get("low_reuse_story_terms", []) if word.lower() in title_summary]
@@ -416,6 +420,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if hardware_news_terms:
         score -= 45
         penalties.append("纯芯片、显存或硬件性能新闻")
+    if hardware_subject_terms:
+        score -= 60
+        penalties.append("AI 硬件与设备产品成立条件不符合当前内容偏好")
     document_format = r"(?:Word|Excel|PowerPoint|PPTX?|PDF|Markdown|CSV|JSON|DOCX|XLSX|SVG|TXT)"
     event_title = re.sub(rf"\b{document_format}(?:\s*[、,，]\s*{document_format}){{2,}}\b", "文档格式", title, flags=re.I)
     comparison_metric = r"(?:最|更)?(?:快|准|便宜|省钱|省时|稳定|准确|好用)"
@@ -444,6 +451,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(cross_topic_macro_terms) >= 3 and not product_owner_speech_terms:
         score -= 55
         penalties.append("多个抽象大词和跨产品话题来回跳转，缺少单一连续的决策链")
+    if len(professional_product_governance_terms) >= 3 and len(concrete_end_user_task_terms) < 2:
+        score -= 65
+        penalties.append("专业 AI 产品治理细节过多，普通读者难以学会或获得收益")
+    if generic_product_framework_terms and len(concrete_end_user_task_terms) < 2:
+        score -= 55
+        penalties.append("整齐的产品分层框架多于新事实与可写切口")
     if len(abstract_business_terms) >= 3:
         score -= 45
         penalties.append("理论或商业评论过多，缺少对普通读者的实际价值")
@@ -555,6 +568,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(product_owner_speech_terms) >= 3:
         score += 20
         reasons.insert(0, "产品负责人围绕单一产品复盘用户目标与历史取舍")
+    if len(concrete_end_user_task_terms) >= 2:
+        score += 22
+        reasons.insert(0, "围绕普通读者可直接理解的终端任务展开")
     if long_horizon_framework:
         score += 18
         reasons.insert(0, "长期实践沉淀出可复用的方法框架")
