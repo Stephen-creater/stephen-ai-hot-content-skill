@@ -142,6 +142,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         penalties.append("大而全的模型与 Token 成本对比，缺少新的可写价值")
     if "workbuddy" in title_summary and any(term in title_summary for term in profile.get("deferred_basic_workbuddy_terms", [])):
         penalties.append("WorkBuddy 常规岗位基础应用暂缓推荐")
+    if any(term.lower() in title_summary for term in profile.get("disfavored_product_subject_terms", [])):
+        penalties.append("用户当前不认可该产品，不推荐其主体实测或介绍")
 
     published = parse_datetime(item.get("published") or item.get("article_date"))
     age_days = None

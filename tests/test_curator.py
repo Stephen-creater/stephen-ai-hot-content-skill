@@ -21,6 +21,15 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_disfavored_product_subject_not_incidental_mention(self):
+        base = {**self.items[0], "summary": "完整中文实测", "content": "公开工作流程和使用边界。" * 300}
+        for title in ("实测扣子桌面端", "Coze Desktop 文件同步实测", "扣子客户端使用介绍"):
+            result = score_item({**base, "title": title}, self.profile, now=self.now)
+            self.assertFalse(result["recommended"])
+            self.assertIn("用户当前不认可该产品", result["penalty"])
+        result = score_item({**base, "title": "跨设备文件校对的实践", "content": base["content"] + "之前试过扣子桌面端。"}, self.profile, now=self.now)
+        self.assertNotIn("用户当前不认可该产品", result["penalty"])
+
     def test_radar_preserves_original_source_and_stays_discovery(self):
         source = {"name":"Radar", "category":"aggregate", "priority":4, "type":"learnprompt_radar", "url":"https://news.learnprompt.pro/classic/", "data_url":"https://news.learnprompt.pro/data/latest-24h-all.json"}
         row = {"url":"https://example.com/original", "title":"中文译题", "title_original":"Original English title", "source":"Original author", "first_seen_at":"2026-09-05", "summary":"AI generated summary", "ai_score":1}
