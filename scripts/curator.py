@@ -298,6 +298,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
     implementation_heavy_terms = [word for word in editorial_fit.get("implementation_heavy_terms", []) if word.lower() in title_summary]
     code_barrier_terms = [word for word in editorial_fit.get("code_barrier_terms", []) if word.lower() in haystack]
+    developer_maintenance_terms = [word for word in editorial_fit.get("developer_maintenance_terms", []) if word.lower() in haystack]
     abstract_business_terms = [word for word in editorial_fit.get("abstract_business_terms", []) if word.lower() in haystack]
     formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
     benchmark_article_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in haystack]
@@ -460,6 +461,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if too_technical_terms:
         score -= 45
         penalties.append("技术细节过深，目标读者难以理解或使用")
+    if len(developer_maintenance_terms) >= 3 and any(word in title_summary for word in ("清理", "维护", "缓存", "磁盘", "mole")):
+        score -= 70
+        penalties.append("开发者维护教程依赖多种缓存与包管理术语，超出目标读者门槛")
     if len(implementation_heavy_terms) >= 2:
         score -= 45
         penalties.append("系统实现概念过密，普通读者难以理解或复用")

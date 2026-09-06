@@ -21,6 +21,17 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_main_160836_reader_barrier_and_covered_topic(self):
+        base = {**self.items[0], "published": "2026-09-03", "summary": "",
+                "content": "HTTP、GPU 缓存、node_modules、pnpm、包管理缓存与依赖路径。" * 120}
+        maintenance = score_item({**base, "title": "AI 时代的 Mac 磁盘清理实践"}, self.profile)
+        self.assertIn("开发者维护教程", maintenance["penalty"])
+        incidental = score_item({**base, "title": "AI 产品如何解决找对象的难题",
+                                 "content": "网站使用 HTTP。" + "围绕真实生活问题的完整自然对话。" * 200}, self.profile)
+        self.assertNotIn("开发者维护教程", incidental["penalty"])
+        covered = score_item({**base, "title": "Computer History 使用体验"}, self.profile)
+        self.assertIn("主题已写过", covered["penalty"])
+
     def test_personal_activity_recall_is_not_third_party_surveillance(self):
         base = {**self.items[0], "summary": "", "published": "2026-09-01",
                 "content": "Computer History 默认是关闭的，本人主动开启，可以暂停。找回工作状态。" + "完整中文实践与限制说明。" * 300}

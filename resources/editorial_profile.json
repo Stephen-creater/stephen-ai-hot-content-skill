@@ -5,7 +5,7 @@
     "require_independent_text_argument": true,
     "reject_author_specific_visual_dependency": true,
     "saturated_topics": ["小红书图文排版 Skill"],
-    "note": "实测真实不等于适合二创；不依赖原作者专属截图、图表、数据和亲历，仍须有完整文字论证与可核验公共事实。"
+    "note": "实测真实不等于适合二创；文字论证不能依赖专属截图、图表和私有数据。围绕普遍生活痛点与有吸引力产品的真实经历可明确归因转述，不能因第一人称一概排除。"
   },
   "selection_count": 8,
   "report_candidate_count": 15,
@@ -21,7 +21,7 @@
   "covered_topic_terms": ["llm wiki", "llmwiki", "卡帕西知识库", "卡帕西的知识库", "ego lite", "ego-lite", "ego browser", "ego-browser", "热点选题", "选题工作流", "内容选题", "文案脚本", "脚本创作", "小红书图文", "视频剪辑", "hyperframe", "hyperframes", "contentos", "content-os"],
   "deferred_basic_workbuddy_terms": ["日常行政", "日常财务", "新媒体运营", "日常人事", "搞定客服", "市场营销", "电商运营"],
   "disfavored_product_subject_terms": ["扣子桌面", "扣子 桌面", "coze desktop", "coze 桌面", "扣子客户端", "zcode", "z-code", "z code"],
-  "covered_topic_patterns": ["(?:claude|anthropic).{0,12}(?:文字|文本)?水印", "(?:dhh|rails之父|rails 之父|ruby on rails).{0,60}(?:两个月|basecamp)", "basecamp.{0,45}(?:dhh|rails之父|rails 之父)"],
+  "covered_topic_patterns": ["computer\\s*history", "chatgpt.{0,15}(?:监控电脑|监控.{0,4}电脑|电脑活动回忆)", "(?:claude|anthropic).{0,12}(?:文字|文本)?水印", "(?:dhh|rails之父|rails 之父|ruby on rails).{0,60}(?:两个月|basecamp)", "basecamp.{0,45}(?:dhh|rails之父|rails 之父)"],
   "preferred_maturity": "secondary",
   "minimum_github_stars": 100,
   "blocked_domains": ["kylinlabai.github.io", "claudemax.shop", "aipodcast.jasonlin.tech", "onepod.site"],
@@ -109,7 +109,8 @@
     "saturated_humanizer_terms": ["去 ai 味", "去ai味", "去 ai 痕迹", "去ai痕迹", "humanizer", "de-ai writing", "去痕迹工具", "ai味检测"],
     "legal_compliance_topic_terms": ["法律合规", "版权归属", "作者身份", "署名", "ai参与声明", "人工智能生成合成内容标识办法", "版权局", "法院", "社会争议", "责任归属", "标识办法"],
     "coding_agent_only_terms": ["agents.md", "claude.md", "skill 规则审计", "常驻说明", "instruction file"],
-    "low_audience_vertical_terms": ["数字人视频", "数字人", "ai 短剧", "ai短剧", "短剧制作", "角色设定集", "口型同步"],
+    "low_audience_vertical_terms": ["数字人视频", "数字人", "ai 短剧", "ai短剧", "短剧制作", "角色设定集", "口型同步", "ai游戏", "ai 游戏", "影游", "funloom"],
+    "developer_maintenance_terms": ["http", "gpu 缓存", "gpu缓存", "node_modules", "pnpm", "包管理缓存", "依赖路径"],
     "obsolete_workaround_terms": ["纯文本模型", "给纯文本 agent 装上眼睛", "外挂视觉", "vision toolkit"],
     "unstable_preview_product_terms": ["deepseek harness", "技术预览版", "破坏性更新"],
     "locked_content_terms": ["点击解锁完整内容", "关注后自动获取验证码", "登录后查看全文", "登录解锁", "付费阅读"],
