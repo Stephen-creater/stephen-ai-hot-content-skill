@@ -686,6 +686,46 @@ Language: zh
             self.assertFalse(result["recommended"])
             self.assertIn(expected, result["penalty"])
 
+    def test_latest_feedback_rejects_deep_paper_explainers_but_keeps_direct_tools(self) -> None:
+        common = {
+            "published": "2026-09-05",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        papers = [
+            ("视觉工具的幻觉", "论文用 TOY、LWP、CWL、VEG 和消融实验解释视觉工具。"),
+            ("Knowing When to Quit", "arXiv 论文比较 AUROC、Hit@1、rollout 与强化学习后训练。"),
+            ("Repo-To-Skill", "论文讨论 PaperBench、latent、rollout、消融实验和 Hit@1。"),
+            ("AI 接管实验室之前", "学术论文包含门控交叉注意力、激活空间、对数概率和雅可比矩阵。"),
+        ]
+        for index, (title, body) in enumerate(papers):
+            result = score_item(
+                {**common, "title": f"AI {title}", "summary": "深度机制解读", "content": body * 180, "source_name": "论文解读", "link": f"https://example.com/paper-{index}"},
+                self.profile,
+                now=datetime(2026, 9, 6, tzinfo=timezone.utc),
+            )
+            self.assertFalse(result["recommended"])
+            self.assertIn("深论文解读", result["penalty"])
+
+        practical = score_item(
+            {
+                **common,
+                "title": "AI 会不会推荐你的产品？输入域名直接查",
+                "summary": "查看竞品、原始回答和引用来源",
+                "content": "输入自己的产品域名和客户问题，系统展示模型是否提及品牌、推荐哪些竞品，并让每条结论回到原始回答和引用来源。" * 160,
+                "source_name": "开源产品作者",
+                "link": "https://example.com/direct-tool",
+            },
+            self.profile,
+            now=datetime(2026, 9, 6, tzinfo=timezone.utc),
+        )
+        self.assertNotIn("深论文解读", practical["penalty"])
+
     def test_vendor_supplied_robotics_article_is_rejected(self) -> None:
         item = {
             "title": "机器人不能停下来等模型：在线强化学习进入真实部署",

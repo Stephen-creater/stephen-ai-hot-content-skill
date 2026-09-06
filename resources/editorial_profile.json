@@ -86,6 +86,7 @@
     "abstract_business_terms": ["创新流程", "创新管理者", "消费者洞察", "市场学习", "组织偏见", "创意筛选", "商业评论"],
     "formulaic_framework_terms": ["业务门槛", "工程门槛", "五问", "自检清单", "第一道门槛", "第二道门槛", "top 5", "真香场景", "翻车场景", "给新用户的 10 条"],
     "benchmark_article_terms": ["benchmark", "评测集", "基准测试", "排行榜", "跑分"],
+    "deep_paper_metric_terms": ["toy", "lwp", "cwl", "veg", "hit@1", "auroc", "latent", "rollout", "消融实验", "对数概率", "激活空间", "雅可比矩阵", "强化学习后训练", "门控交叉注意力"],
     "citation_collage_terms": ["hacker news", "metr", "微软研究院", "卡内基梅隆", "研究显示", "报告显示", "调查了"],
     "education_topic_terms": ["学生", "学校", "课堂", "高校", "大学生", "教育教学"],
     "feature_inventory_terms": ["到底是什么", "功能与风险拆解", "功能拆解", "有哪些能力", "怎么选", "一文看懂"],

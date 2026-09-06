@@ -288,6 +288,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
     benchmark_article_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in haystack]
     benchmark_title_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in title_summary]
+    deep_paper_metric_terms = [word for word in editorial_fit.get("deep_paper_metric_terms", []) if word.lower() in haystack]
     citation_collage_terms = [word for word in editorial_fit.get("citation_collage_terms", []) if word.lower() in haystack]
     education_topic_terms = [word for word in editorial_fit.get("education_topic_terms", []) if word.lower() in title_summary]
     feature_inventory_terms = [word for word in editorial_fit.get("feature_inventory_terms", []) if word.lower() in title_summary]
@@ -295,6 +296,11 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
     synthetic_structure_terms = [word for word in editorial_fit.get("synthetic_structure_terms", []) if word.lower() in haystack]
     nested_outline_count = len(re.findall(r"(?<!\d)(?:1[0-9]|2[0-9])\.(?:[1-9]\d?)(?:[.、\s]|$)", content))
+    paper_explainer = any(term in haystack for term in ("论文", "arxiv", "paperbench", "学术论文"))
+    technical_acronyms = {
+        token for token in re.findall(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9-]{1,9}(?![A-Za-z0-9])", content)
+        if token not in {"AI", "API", "URL", "PDF", "LLM", "GPT"}
+    }
     oversized_checklist = bool(re.search(r"(?:1[2-9]|2\d)(?:条|个)(?:实战经验|经验|方法|原则|技巧)", title_summary))
     self_disclosed_ai_authorship = bool(
         re.search(
@@ -420,6 +426,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if benchmark_title_terms or (len(benchmark_article_terms) >= 2 and not authoritative_interview and not concrete_practice_terms):
         score -= 55
         penalties.append("以 Benchmark、评测集或跑分为主体，缺少实际使用价值")
+    if paper_explainer and (len(deep_paper_metric_terms) >= 2 or len(technical_acronyms) >= 6):
+        score -= 75
+        penalties.append("深论文解读依赖大量专有名词、缩写或实验指标，不适合普通读者")
     if len(citation_collage_terms) >= 3:
         score -= 45
         penalties.append("研究、报告与人物引语堆叠，缺少作者自己的高密度结论")
