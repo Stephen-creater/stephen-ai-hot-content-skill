@@ -165,7 +165,18 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if matched_pillars:
         reasons.append("符合" + "、".join(matched_pillars[:2]))
 
-    excluded = [word for word in profile["exclude_keywords"] if word.lower() in title_summary]
+    # Self-controlled activity recall is not surveillance of other people.
+    # Require the subject, useful task and opt-in controls together; an incidental
+    # product mention must never exempt employee/partner monitoring articles.
+    personal_activity_recall = (
+        any(term in haystack for term in ("computer history", "个人电脑活动回忆", "个人工作记忆"))
+        and any(term in haystack for term in ("找回工作", "恢复工作", "工作上下文", "工作状态"))
+        and any(term in haystack for term in ("默认关闭", "默认是关闭", "主动开启"))
+        and "暂停" in haystack
+        and not any(term in title_summary for term in ("员工", "监视", "偷窥", "伴侣", "孩子", "他人", "考勤"))
+    )
+    excluded = [word for word in profile["exclude_keywords"] if word.lower() in title_summary
+                and not (word == "监控" and personal_activity_recall)]
     if excluded:
         penalties.append("命中排除词" + "、".join(excluded[:2]))
 

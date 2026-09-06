@@ -21,6 +21,17 @@ from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embe
 
 
 class CuratorTest(unittest.TestCase):
+    def test_personal_activity_recall_is_not_third_party_surveillance(self):
+        base = {**self.items[0], "summary": "", "published": "2026-09-01",
+                "content": "Computer History 默认是关闭的，本人主动开启，可以暂停。找回工作状态。" + "完整中文实践与限制说明。" * 300}
+        own = score_item({**base, "title": "ChatGPT 能监控电脑了：一次个人工作回忆实测"}, self.profile)
+        self.assertNotIn("命中排除词监控", own["penalty"])
+        for title in ("AI 监控员工的工作状态", "AI 监控伴侣电脑", "AI 监视他人：监控电脑教程"):
+            result = score_item({**base, "title": title}, self.profile)
+            self.assertIn("命中排除词监控", result["penalty"])
+        no_controls = score_item({**base, "title": "AI 监控电脑工作状态", "content": "Computer History 找回工作状态。" * 300}, self.profile)
+        self.assertIn("命中排除词监控", no_controls["penalty"])
+
     def test_main_141814_feedback_topic_and_freshness_boundaries(self):
         now = datetime(2026, 9, 6, tzinfo=timezone.utc)
         base = {**self.items[0], "summary": "", "content": "公开来源的完整中文材料。" * 400, "published": "2026-09-01"}
