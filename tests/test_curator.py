@@ -769,6 +769,13 @@ Language: zh
         self.assertIn("外围算法", peripheral["penalty"])
         self.assertIn("超过 7 天", stale_repo["penalty"])
 
+    def test_release_copy_requires_release_subject_or_layout(self) -> None:
+        base = {**self.items[0], "published": "2026-09-05", "source_name": "中文访谈", "summary": "完整对话"}
+        interview = score_item({**base, "title": "对谈产品负责人：设计中的取舍", "content": "主持人：如何优化产品？\n嘉宾：新增能力之前要先修复老问题。\n" * 100}, self.profile)
+        self.assertNotIn("产品官方更新稿", interview["penalty"])
+        release = score_item({**base, "title": "产品进展", "content": ("## 新增记忆\n功能说明\n## 优化界面\n功能说明\n## 修复问题\n功能说明\n" * 60)}, self.profile)
+        self.assertIn("产品官方更新稿", release["penalty"])
+
     def test_vendor_supplied_robotics_article_is_rejected(self) -> None:
         item = {
             "title": "机器人不能停下来等模型：在线强化学习进入真实部署",

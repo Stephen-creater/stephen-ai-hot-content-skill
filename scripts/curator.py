@@ -321,6 +321,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     advertorial_source_terms = [word for word in editorial_fit.get("advertorial_source_terms", []) if word.lower() in source_name]
     advertorial_copy_terms = [word for word in editorial_fit.get("advertorial_copy_terms", []) if word.lower() in haystack]
     official_release_copy_terms = [word for word in editorial_fit.get("official_release_copy_terms", []) if word.lower() in haystack]
+    release_subject = bool(
+        re.search(r"版本发布|更新日志|更新内容|新版本|全新版本|release notes|changelog|(?<!\w)v?\d+\.\d+(?:\.\d+)?", title_summary)
+        or len(re.findall(r"(?m)^#{1,6}\s+[^\n]*(?:新增|优化|修复|更新内容)", item.get("content") or "")) >= 3
+    )
     peripheral_ai_topic_terms = [word for word in editorial_fit.get("peripheral_ai_topic_terms", []) if word.lower() in title_summary]
     personal_project_story_terms = [word for word in editorial_fit.get("personal_project_story_terms", []) if word.lower() in title.lower()]
     transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
@@ -474,7 +478,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if advertorial_source_terms or len(advertorial_copy_terms) >= 2:
         score -= 75
         penalties.append("软件下载推荐站或导购式体验文，广告属性过重")
-    if len(official_release_copy_terms) >= 3 and not concrete_practice_terms:
+    if release_subject and len(official_release_copy_terms) >= 3 and not concrete_practice_terms:
         score -= 65
         penalties.append("产品官方更新稿小标题和功能说明密集，缺少独立实测与信息密度")
     if peripheral_ai_topic_terms:
