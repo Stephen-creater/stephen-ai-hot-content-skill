@@ -318,6 +318,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     news_reporting_terms = [word for word in editorial_fit.get("news_reporting_terms", []) if word.lower() in haystack]
     news_source = any(word.lower() in source_name for word in editorial_fit.get("news_sources", []))
     promotional_disclosure_terms = [word for word in editorial_fit.get("promotional_disclosure_terms", []) if word.lower() in haystack]
+    advertorial_source_terms = [word for word in editorial_fit.get("advertorial_source_terms", []) if word.lower() in source_name]
+    advertorial_copy_terms = [word for word in editorial_fit.get("advertorial_copy_terms", []) if word.lower() in haystack]
+    official_release_copy_terms = [word for word in editorial_fit.get("official_release_copy_terms", []) if word.lower() in haystack]
+    peripheral_ai_topic_terms = [word for word in editorial_fit.get("peripheral_ai_topic_terms", []) if word.lower() in title_summary]
     personal_project_story_terms = [word for word in editorial_fit.get("personal_project_story_terms", []) if word.lower() in title.lower()]
     transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
     ai_summary_surface = f"{title_summary} {source_name}"
@@ -391,6 +395,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
             penalties.append("GitHub Star 低于 100，不进入候选")
         else:
             reasons.insert(0, f"GitHub {int(github_stars)} Star，达到入场门槛")
+        if age_days is None or age_days > 7:
+            score -= 70
+            penalties.append("GitHub 最近有效发布或更新超过 7 天，不再算当前热点")
     if any(term.lower() in f"{source_name} {title.lower()}" for term in profile.get("blocked_creators", [])):
         score -= 100
         penalties.append("作者或个人 IP 已被明确排除")
@@ -464,6 +471,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if promotional_disclosure_terms:
         score -= 70
         penalties.append("正文由厂商供稿或授权转载，推广属性过重")
+    if advertorial_source_terms or len(advertorial_copy_terms) >= 2:
+        score -= 75
+        penalties.append("软件下载推荐站或导购式体验文，广告属性过重")
+    if len(official_release_copy_terms) >= 3 and not concrete_practice_terms:
+        score -= 65
+        penalties.append("产品官方更新稿小标题和功能说明密集，缺少独立实测与信息密度")
+    if peripheral_ai_topic_terms:
+        score -= 60
+        penalties.append("主题只是外围算法或信息流机制，与 Stephen 的主流 AI 文章谱系不符")
     if personal_project_story_terms and not transferable_artifact_terms:
         score -= 55
         penalties.append("价值依赖作者本人项目经历与体感，难以转换成 Stephen 的写作视角")

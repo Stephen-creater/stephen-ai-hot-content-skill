@@ -749,6 +749,26 @@ Language: zh
         )
         self.assertNotIn("深论文解读", incidental["penalty"])
 
+    def test_latest_feedback_rejects_ads_official_copy_peripheral_ai_and_stale_github(self) -> None:
+        common = {
+            "published": "2026-09-05",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        advertorial = score_item({**common, "title": "AI 双语阅读插件", "summary": "功能体验", "content": ("值得推荐，试错成本为零，点击下载。" * 200), "source_name": "异次元软件世界", "link": "https://example.com/ad"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
+        official = score_item({**common, "title": "Chatbox AI 1.23", "summary": "版本发布", "content": ("这次新增记忆，优化工作模式，修复长任务问题，设置里可以开启。" * 180), "source_name": "Chatbox AI 官方", "link": "https://example.com/release"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
+        peripheral = score_item({**common, "title": "X 的 AI 推荐算法与猜你喜欢", "summary": "信息流排序机制", "content": ("推荐系统预测用户下一步互动并调整信息流排序。" * 220), "source_name": "中文作者", "link": "https://example.com/feed"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
+        stale_repo = score_item({**common, "title": "ChatGPT 长对话导出工具", "summary": "开源插件", "content": ("完整消息树与分页导出。" * 300), "source_name": "GitHub 作者", "published": "2026-08-25", "github_stars": 941, "link": "https://github.com/example/exporter"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
+        self.assertIn("广告属性过重", advertorial["penalty"])
+        self.assertIn("产品官方更新稿", official["penalty"])
+        self.assertIn("外围算法", peripheral["penalty"])
+        self.assertIn("超过 7 天", stale_repo["penalty"])
+
     def test_vendor_supplied_robotics_article_is_rejected(self) -> None:
         item = {
             "title": "机器人不能停下来等模型：在线强化学习进入真实部署",
