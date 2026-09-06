@@ -21,7 +21,9 @@ def delivered_candidates(topics: Path, exclude: Path | None = None) -> list[dict
         if exclude is not None and path.parent.resolve() == exclude.resolve():
             continue
         run = json.loads(path.read_text(encoding="utf-8"))
-        if run.get("delivery_ready") is True:
+        # Older scrapers used delivery_ready for quantity alone, including drafts.
+        # Only explicit reservations or legacy manually finalized reports count.
+        if run.get("delivery_registered") is True or (run.get("delivery_ready") is True and run.get("manual_editorial_review") is True):
             rows.extend(json.loads(path.with_name("candidates.json").read_text(encoding="utf-8")))
     return rows
 
@@ -54,7 +56,7 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
             if row.get("id") in old_ids or canonical_url(row.get("link", "")) in old_urls or is_historical_content_duplicate(row, history):
                 raise ValueError(f"另一任务或历史批次已推送/审核：{row.get('title')}")
         generate_report(rows, folder / "index.html", folder.name, batch_owner=owner)
-        run.update(batch_owner=owner, delivery_ready=True, cross_task_dedup_verified=True)
+        run.update(batch_owner=owner, delivery_ready=True, delivery_registered=True, cross_task_dedup_verified=True)
         temp = run_path.with_suffix(".json.tmp")
         with temp.open("w", encoding="utf-8") as out:
             json.dump(run, out, ensure_ascii=False, indent=2)

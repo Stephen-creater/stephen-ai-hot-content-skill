@@ -14,6 +14,15 @@ from curator import score_item
 
 
 class BatchOwnershipTest(unittest.TestCase):
+    def test_quantity_ready_draft_is_not_a_delivery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self.setup_root(root)
+            a,_=self.batch(root,'draft')
+            (a/'run.json').write_text(json.dumps({'delivery_ready':True,'input_count':200}))
+            self.assertEqual(delivered_candidates(root/'topics'),[])
+            (a/'run.json').write_text(json.dumps({'delivery_ready':True,'manual_editorial_review':True}))
+            self.assertEqual(len(delivered_candidates(root/'topics')),5)
+
     def test_concurrent_batches_cannot_both_publish_same_sources(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); self.setup_root(root)
