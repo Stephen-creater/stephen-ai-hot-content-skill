@@ -631,6 +631,61 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("难以脱离作者经历", result["penalty"])
 
+    def test_latest_feedback_rejects_brand_dependent_builder_and_company_cases(self) -> None:
+        common = {
+            "published": "2026-09-05",
+            "source_priority": 5,
+            "source_type": "web",
+            "source_role": "candidate",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        cases = [
+            {
+                **common,
+                "title": "刀法工作流：怎么用 AI 做行内内容",
+                "summary": "内容团队的完整方法",
+                "content": ("我们公司依靠我们的内容团队、私有方法论和水下信息。我每天会见行业专家，左右滑动查看更多个人品牌图片。" * 80),
+                "source_name": "个人品牌创始人",
+                "link": "https://example.com/brand-workflow",
+                "penalty": "个人品牌、私有素材或团队资源",
+            },
+            {
+                **common,
+                "title": "Builder 用 AI 一周完成 MVP",
+                "summary": "从 Demo 到一人公司",
+                "content": ("我先做 MVP 和 Demo，再做原型，随后讨论获客、一人公司、人人都是开发者以及 AI 不会消失。" * 90),
+                "source_name": "个人 Builder",
+                "link": "https://example.com/builder-mvp",
+                "penalty": "Builder 主题已经写滥",
+            },
+            {
+                **common,
+                "title": "中国式 FDE 如何部署企业 AI Agent",
+                "summary": "岗位标杆与业务结果",
+                "content": ("我们用企业数据建立岗位标杆，让客服Agent和销售Agent服务单个客户。我负责内部复盘并解释业务流程。" * 90),
+                "source_name": "企业访谈",
+                "link": "https://example.com/fde-case",
+                "penalty": "单一公司或岗位案例",
+            },
+            {
+                **common,
+                "title": "AI+HR 的招聘工作流",
+                "summary": "个人招聘实践",
+                "content": ("我搭建 AI+HR 招聘工作流，我们围绕岗位标杆和企业数据反复调整。我再把结果交给业务。" * 100),
+                "source_name": "个人作者",
+                "link": "https://example.com/hr-workflow",
+                "penalty": "单一公司或岗位案例",
+            },
+        ]
+        for case in cases:
+            expected = case.pop("penalty")
+            result = score_item(case, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
+            self.assertFalse(result["recommended"])
+            self.assertIn(expected, result["penalty"])
+
     def test_vendor_supplied_robotics_article_is_rejected(self) -> None:
         item = {
             "title": "机器人不能停下来等模型：在线强化学习进入真实部署",

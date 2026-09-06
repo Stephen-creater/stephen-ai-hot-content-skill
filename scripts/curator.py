@@ -271,6 +271,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     ]
     reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
     personal_workflow_detail_terms = [word for word in editorial_fit.get("personal_workflow_detail_terms", []) if word.lower() in haystack]
+    creator_brand_dependency_terms = [word for word in editorial_fit.get("creator_brand_dependency_terms", []) if word.lower() in haystack]
+    saturated_builder_mvp_terms = [word for word in editorial_fit.get("saturated_builder_mvp_terms", []) if word.lower() in haystack]
+    company_coupled_case_terms = [word for word in editorial_fit.get("company_coupled_case_terms", []) if word.lower() in haystack]
     generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
     hardware_news_terms = [word for word in editorial_fit.get("hardware_news_terms", []) if word.lower() in title_summary]
     too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
@@ -312,6 +315,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     punctuation_length = max(len(content), 1)
     em_dash_density = content.count("—") * 1000 / punctuation_length
     quote_density = sum(content.count(mark) for mark in "“”‘’") * 1000 / punctuation_length
+    first_person_density = (content.count("我") + content.count("我们")) * 1000 / punctuation_length
     locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
     community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
     thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
@@ -447,6 +451,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(personal_workflow_detail_terms) >= 3:
         score -= 55
         penalties.append("项目路径与个人操作过程占比过高，难以脱离作者经历进行二创")
+    if len(creator_brand_dependency_terms) >= 3:
+        score -= 70
+        penalties.append("内容依赖作者个人品牌、私有素材或团队资源，无法低成本独立二创")
+    if len(saturated_builder_mvp_terms) >= 4:
+        score -= 65
+        penalties.append("MVP、原型、获客和一人公司等 Builder 主题已经写滥，缺少新的可写切口")
+    if len(company_coupled_case_terms) >= 2 and first_person_density >= 3:
+        score -= 65
+        penalties.append("单一公司或岗位案例与原业务耦合过紧，难以抽离为 Stephen 的通用文章")
     if ai_summary_or_translation_terms:
         score -= 55
         penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
