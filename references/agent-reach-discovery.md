@@ -80,4 +80,4 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -
 - 不得因为 `doctor` 显示 OpenCLI 已连接而使用它；本项目明确禁用该后端。
 - 普通 HTTP 抓取遇到 403 或动态渲染页时，使用 Ego Browser 隔离空间人工获取正文，再作为本地材料加入；不得回退用户 Chrome。
 - Exa 不可用时继续使用公众号、知乎、B站和现有网页检索，不降低质量标准。
-- 任何渠道失败都不能用低质量候选补足 3 条；继续切换其他渠道。
+- 任何渠道失败都不能用低质量候选补足 5 条；继续切换其他渠道，直到满足 `SKILL.md` 的数量、质量与来源构成要求。
