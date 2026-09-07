@@ -14,6 +14,30 @@ from feedback_audit import audit_feedback
 
 
 class FeedbackAuditTest(unittest.TestCase):
+    def test_audit_accepts_single_exported_feedback_object(self):
+        payload = {
+            "generated_at": "batch-export",
+            "batch_owner": "主力2",
+            "reviews": {"a": {"status": "selected", "note": "还不错"}},
+            "candidates": [{"id": "a", "title": "A"}, {"id": "b", "title": "B"}],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "selection_feedback.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+            report = audit_feedback(path)
+        self.assertEqual(report["batch_count"], 1)
+        self.assertEqual(report["review_count"], 1)
+        self.assertEqual(report["status_counts"], {"selected": 1})
+        self.assertEqual(report["invalid_records"], [])
+
+    def test_non_object_export_is_reported_instead_of_crashing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "selection_feedback.json"
+            path.write_text(json.dumps("not a feedback object"), encoding="utf-8")
+            report = audit_feedback(path)
+        self.assertEqual(report["batch_count"], 0)
+        self.assertIn("must be an object", report["invalid_records"][0]["error"])
+
     def test_audit_counts_every_decision_without_exporting_notes(self):
         rows = [
             {

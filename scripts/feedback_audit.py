@@ -16,6 +16,25 @@ TOPIC_STATE_PHRASES = ("写过", "已经写", "之前写", "已经做过", "之�
 NEGATIVE_PHRASES = ("不适合", "不应该", "不能入选", "淘汰", "不考虑", "不推荐")
 
 
+def load_records(path: Path) -> tuple[list[tuple[int, object]], list[dict]]:
+    """Load either one exported feedback object or the persistent JSONL store."""
+    text = path.read_text(encoding="utf-8")
+    try:
+        payload = json.loads(text)
+    except json.JSONDecodeError:
+        records = []
+        invalid = []
+        for line_number, raw in enumerate(text.splitlines(), 1):
+            try:
+                records.append((line_number, json.loads(raw)))
+            except json.JSONDecodeError as exc:
+                invalid.append({"line": line_number, "error": str(exc)})
+        return records, invalid
+    if isinstance(payload, list):
+        return list(enumerate(payload, 1)), []
+    return [(1, payload)], []
+
+
 def audit_feedback(path: Path) -> dict:
     batches = []
     status_counts: Counter[str] = Counter()
@@ -23,13 +42,11 @@ def audit_feedback(path: Path) -> dict:
     seen_decisions: dict[str, list[tuple[str, str, str]]] = {}
     unexplained = []
     interpretation_queue = []
-    invalid_records = []
+    records, invalid_records = load_records(path)
 
-    for line_number, raw in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        try:
-            record = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            invalid_records.append({"line": line_number, "error": str(exc)})
+    for line_number, record in records:
+        if not isinstance(record, dict):
+            invalid_records.append({"line": line_number, "error": "feedback record must be an object"})
             continue
         batch = str(record.get("generated_at", ""))
         owner = str(record.get("batch_owner", "unassigned") or "unassigned")
