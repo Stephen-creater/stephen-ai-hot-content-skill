@@ -449,24 +449,19 @@ def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
         for item in candidates
     ]
     prompt = {
-        "task": "按 Stephen 的文章选题偏好重新排序候选选题",
+        "task": "只按正文证据辅助排序 Stephen 的候选材料；不得用关键词、名气或自动分数代替编辑判断",
         "target_readers": profile["target_readers"],
-        "positive_signals": profile["positive_signals"],
-        "weak_signals": profile["weak_signals"],
+        "decision_model": profile["decision_model"],
         "requirements": [
             "只返回 JSON 对象，顶层字段为 items",
             "items 是数组",
             "每项包含 id、title_zh、reason",
-            "优先单一事件、有具体切入点、机制清楚、普通读者有收获的选题",
-            "优先能够解释机制、架构、工作流或重大产品变化，且具有长期回看价值的题",
-            "OpenAI、Anthropic、Google DeepMind 等核心团队人物的深度访谈，若有完整对话或逐字稿，应优先考虑",
-            "降低纯炒作、模型身份八卦、宏大行业叙事、商业通稿和缺少大众切口的科研医疗题",
-            "排除无名小模型、活动招募、采购对接、合作签约、纯融资、纯硬件新闻和没有解读的新闻复述",
-            "宕机、故障、发布等事件新闻超过两周后不再当作热点；权威访谈和深度实测可保留更长时间",
-            "排除只讨论企业维护成本、供应商锁定、准入基线或治理架构，却难以转化成普通读者价值的内容",
-            "排除 SEO 站、AI 批量内容站、商业导流站和只列工具清单的泛化横评；保留有统一任务、真实数字与明确结论的对比实测",
-            "技术深度不能替代用户价值；排除深入到 CUDA 核函数、logit、依赖包或缓存量化，但目标读者用不到也看不懂的题",
-            "排除只有故事性的一次性 AI 奇闻；优先有数周持续实践、明确评分规则、真实结果和调整过程的复盘",
+            "依次评估选题吸引力、读者改变、材料增量、二创独立性和长期价值",
+            "reason 必须指出正文中的决定性事实和最强反对理由，不能只写深度、权威、热门或有启发",
+            "访谈、第一人称、技术词、新闻来源、清单结构和图片数量都只是风险信号，不是类别禁令",
+            "去掉作者身份、私人截图、企业数据和品牌素材后论证仍成立，才算可独立二创",
+            "高质量文章如果题目无吸引力、读者无具体改变或需要大量专业背景，仍应降级",
+            "长逐字稿、数字和案例数量不等于信息密度；必须存在新的事实、因果链或有条件取舍",
             "不得为了多样性保留弱选题",
         ],
         "candidates": compact,
@@ -509,7 +504,11 @@ def select_report_candidates(
     include_rejected: bool = False,
     maximum_github: int | None = None,
 ) -> list[dict]:
-    eligible = ranked if include_rejected else [item for item in ranked if item.get("recommended")]
+    eligible = ranked if include_rejected else [
+        item for item in ranked
+        if item.get("editorial_decision", {}).get("machine_disposition") in {"shortlist", "review"}
+        or ("editorial_decision" not in item and item.get("recommended"))
+    ]
     if include_rejected or maximum_github is None:
         return eligible[:limit]
     selected = []
@@ -614,7 +613,7 @@ def main() -> None:
                 eligible_items = [
                     item for item in ranked
                     if (
-                        item.get("recommended")
+                        item.get("editorial_decision", {}).get("eligibility", {}).get("status") == "passed"
                         and item.get("content_status") in {"fulltext", "transcript"}
                         and len(item.get("content", "")) >= 1000
                     )
@@ -650,12 +649,27 @@ def main() -> None:
                         except Exception as exc:
                             errors.append(f"朱雀检测失败 {item.get('title', '未知标题')}: {exc}")
                             updated_ranked.append({**item, "aigc_policy": "unknown"})
-                    ranked = sorted(updated_ranked, key=lambda item: (item.get("recommended", False), item.get("score", 0)), reverse=True)
+                    ranked = sorted(
+                        updated_ranked,
+                        key=lambda item: (
+                            item.get("machine_shortlisted", item.get("recommended", False)),
+                            item.get("recommended", False),
+                            item.get("score", 0),
+                        ),
+                        reverse=True,
+                    )
         except Exception as exc:
             aigc_status = "configuration_error"
             errors.append(f"朱雀配置无效，未执行 AIGC 检测: {exc}")
 
-    rejected_by_gate_count = sum(1 for item in ranked if not item.get("recommended"))
+    rejected_by_gate_count = sum(
+        1 for item in ranked
+        if item.get("editorial_decision", {}).get("eligibility", {}).get("status") == "failed"
+    )
+    held_for_editorial_review_count = sum(
+        1 for item in ranked
+        if item.get("editorial_decision", {}).get("machine_disposition") == "review"
+    )
     candidates = select_report_candidates(
         ranked,
         report_count,
@@ -670,7 +684,7 @@ def main() -> None:
 
     selection_count = profile["selection_count"]
     for index, item in enumerate(candidates):
-        item["selected_by_default"] = index < selection_count and item["recommended"]
+        item["selected_by_default"] = index < selection_count and item.get("machine_shortlisted", item["recommended"])
 
     non_github_candidate_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() != "github.com")
     github_candidate_count = len(candidates) - non_github_candidate_count
@@ -696,6 +710,7 @@ def main() -> None:
                 "skipped_reviewed_count": skipped_reviewed_count,
                 "skipped_content_duplicate_count": skipped_content_duplicate_count,
                 "rejected_by_gate_count": rejected_by_gate_count,
+                "held_for_editorial_review_count": held_for_editorial_review_count,
                 "aigc_status": aigc_status,
                 "aigc_checked_count": aigc_checked_count,
                 "aigc_rejected_count": aigc_rejected_count,

@@ -46,6 +46,8 @@ class ZhuqueAigcTest(unittest.TestCase):
         result = apply_policy({"score": 120, "recommended": True, "penalty": ""}, detection, self.config)
         self.assertFalse(result["recommended"])
         self.assertEqual(result["aigc_policy"], "rejected")
+        self.assertEqual(result["editorial_decision"]["eligibility"]["status"], "failed")
+        self.assertEqual(result["editorial_decision"]["machine_disposition"], "blocked")
 
     def test_majority_suspected_ai_is_downranked(self) -> None:
         detection = normalize_result({**DOCUMENTED_RESPONSE, "labels_ratio": {"0": 0.2, "1": 0.1, "2": 0.7}})
@@ -53,6 +55,7 @@ class ZhuqueAigcTest(unittest.TestCase):
         self.assertTrue(result["recommended"])
         self.assertEqual(result["score"], 85)
         self.assertEqual(result["aigc_policy"], "downranked")
+        self.assertEqual(result["editorial_decision"]["risk_signals"][0]["code"], "aigc_uncertainty")
 
     def test_report_exposes_ratios_and_segment_labels(self) -> None:
         detection = normalize_result(DOCUMENTED_RESPONSE)

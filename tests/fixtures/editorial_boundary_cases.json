@@ -1,0 +1,72 @@
+[
+  {
+    "pair": "personal_experience",
+    "surface_feature": "第一人称产品经历",
+    "expected": "consider",
+    "case": "创始人从普遍生活痛点出发，连续解释产品定义、失败、用户反对和调整；移除私人照片后论证仍成立。",
+    "decision_driver": "普遍需求、连续决策链、去身份后仍成立"
+  },
+  {
+    "pair": "personal_experience",
+    "surface_feature": "第一人称产品经历",
+    "expected": "reject",
+    "case": "全文价值来自作者自己的客户、收入、项目截图和个人品牌素材，换成公共材料后论证无法成立。",
+    "decision_driver": "价值依赖作者专属资产"
+  },
+  {
+    "pair": "technical_depth",
+    "surface_feature": "包含专业概念",
+    "expected": "consider",
+    "case": "两年实践形成结果、过程和组件三层评估框架，概念可以低成本解释，并能迁移到普通 AI 工作验收。",
+    "decision_driver": "稀缺、可解释、可迁移的长期框架"
+  },
+  {
+    "pair": "technical_depth",
+    "surface_feature": "包含专业概念",
+    "expected": "reject",
+    "case": "正文主线要求读者掌握包管理、缓存路径、容器、命令行和基础设施实现才能理解。",
+    "decision_driver": "专业背景是理解主线的前置条件"
+  },
+  {
+    "pair": "interview",
+    "surface_feature": "完整人物访谈",
+    "expected": "consider",
+    "case": "对话持续围绕一个具体产品任务，包含失败、反对意见、版本取舍和实际用户反馈。",
+    "decision_driver": "单一问题上的高密度决策链"
+  },
+  {
+    "pair": "interview",
+    "surface_feature": "完整人物访谈",
+    "expected": "reject",
+    "case": "对话主要是成长经历、时代机会、工业革命和未来畅想，缺少一个可以持续推进的具体问题。",
+    "decision_driver": "名人身份和篇幅无法弥补材料增量不足"
+  },
+  {
+    "pair": "structured_writing",
+    "surface_feature": "清单和分级结构",
+    "expected": "consider",
+    "case": "每一层都由真实失败、调整动作、结果和适用条件支撑，结构只是帮助读者读取证据。",
+    "decision_driver": "结构背后存在可核验增量"
+  },
+  {
+    "pair": "structured_writing",
+    "surface_feature": "清单和分级结构",
+    "expected": "reject",
+    "case": "多级编号和口号式小标题反复解释常识，没有新事实、因果链、反例或作者判断。",
+    "decision_driver": "结构取代内容，信息密度低"
+  },
+  {
+    "pair": "secondary_material",
+    "surface_feature": "中文二手整理",
+    "expected": "consider",
+    "case": "整理者核对原始来源，并加入亲自实测、限制条件和自己的因果解释。",
+    "decision_driver": "二手材料提供独立理解"
+  },
+  {
+    "pair": "secondary_material",
+    "surface_feature": "中文二手整理",
+    "expected": "reject",
+    "case": "内容只是机器翻译、AI 摘要和公开资料重排，整理者没有自己的体验、判断或新增证据。",
+    "decision_driver": "没有独立材料增量"
+  }
+]

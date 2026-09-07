@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Stephen-creater/stephen-ai-hot-content-skill/editorial_profile.schema.json",
+  "title": "Stephen AI hot-topic editorial profile",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "owner",
+    "target_readers",
+    "decision_model",
+    "feedback_learning",
+    "minimum_delivery_count",
+    "minimum_non_github_candidates",
+    "maximum_github_candidates",
+    "minimum_score",
+    "risk_signal_lexicon"
+  ],
+  "properties": {
+    "schema_version": {"const": 2},
+    "owner": {"type": "string", "minLength": 1},
+    "target_readers": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+    "decision_model": {
+      "type": "object",
+      "required": ["dimensions_in_order", "manual_review_required", "keyword_matches_are_risk_signals_not_verdicts"],
+      "properties": {
+        "dimensions_in_order": {
+          "const": ["topic_appeal", "reader_change", "material_increment", "re_authorability", "durability"]
+        },
+        "manual_review_required": {"const": true},
+        "keyword_matches_are_risk_signals_not_verdicts": {"const": true}
+      },
+      "additionalProperties": true
+    },
+    "feedback_learning": {
+      "type": "object",
+      "required": ["types", "require_counterexample_before_generalizing", "blank_note_creates_rule"],
+      "properties": {
+        "types": {"type": "array", "minItems": 7, "uniqueItems": true, "items": {"type": "string"}},
+        "require_counterexample_before_generalizing": {"const": true},
+        "blank_note_creates_rule": {"const": false}
+      },
+      "additionalProperties": true
+    },
+    "minimum_delivery_count": {"type": "integer", "minimum": 5},
+    "minimum_non_github_candidates": {"type": "integer", "minimum": 4},
+    "maximum_github_candidates": {"type": "integer", "maximum": 1},
+    "minimum_score": {"type": "number"},
+    "risk_signal_lexicon": {
+      "type": "object",
+      "description": "Discovery and review prompts only. Exact matches do not constitute a final editorial verdict.",
+      "additionalProperties": {"type": "array", "items": {"type": "string"}}
+    }
+  },
+  "additionalProperties": true
+}

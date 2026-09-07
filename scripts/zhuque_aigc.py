@@ -168,15 +168,28 @@ def apply_policy(item: dict[str, Any], detection: dict[str, Any], config: Zhuque
 
     if ai_ratio >= config.hard_reject_ai_ratio:
         updated["recommended"] = False
+        updated["machine_shortlisted"] = False
         updated["score"] = round(float(updated.get("score", 0)) - 100, 1)
         penalties.append(f"朱雀判定 AI 内容占比 {ai_ratio:.0%}，达到硬淘汰线")
         updated["aigc_policy"] = "rejected"
+        decision = dict(updated.get("editorial_decision", {}))
+        eligibility = dict(decision.get("eligibility", {}))
+        failures = list(eligibility.get("failures", []))
+        failures.append({"code": "aigc_hard_reject", "evidence": penalties[-1]})
+        eligibility.update(status="failed", failures=failures)
+        decision.update(eligibility=eligibility, machine_disposition="blocked")
+        updated["editorial_decision"] = decision
     elif ai_ratio > config.downrank_ratio or suspected_ratio > config.downrank_ratio:
         updated["score"] = round(float(updated.get("score", 0)) - config.downrank_points, 1)
         dominant = "AI" if ai_ratio > config.downrank_ratio else "疑似 AI"
         ratio = ai_ratio if dominant == "AI" else suspected_ratio
         penalties.append(f"朱雀判定{dominant}内容占比 {ratio:.0%}，候选优先级降低")
         updated["aigc_policy"] = "downranked"
+        decision = dict(updated.get("editorial_decision", {}))
+        risks = list(decision.get("risk_signals", []))
+        risks.append({"code": "aigc_uncertainty", "evidence": penalties[-1]})
+        decision["risk_signals"] = risks
+        updated["editorial_decision"] = decision
     else:
         updated["aigc_policy"] = "passed"
 

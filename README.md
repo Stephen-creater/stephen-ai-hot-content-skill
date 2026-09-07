@@ -1,21 +1,28 @@
 # Stephen AI Hot Content Skill
 
-Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研究、解释和整理过的中文内容，包括公众号文章、中文播客、B站视频逐字稿和中文长文，再筛出适合日课二创的候选题。
+这是 Stephen 的个人 AI 选题系统。它持续发现简体中文材料，检查全文、时效、历史与并发状态，再通过证据化编辑终审生成可审核批次。文章写作不在本项目范围内。
 
-## 核心能力
+## 判断系统
 
-- 中文二手内容优先，英文官方来源只负责事实核验。
-- 支持公众号、B站、播客链接和本地逐字稿 inbox。
-- 按个人文章谱系做确定性评分和去重。
-- 标记文字材料状态、二创成熟度和预计研究成本。
-- API Key 可选，无 Key 也能运行。
-- 生成可审核的静态 HTML。
-- 正常报告只包含通过硬门槛的内容；单轮内部筛选可以少于 5 条或为 0 条，但正式批次必须持续扩源至至少 5 条。
-- 支持标记入选、淘汰和遗漏，并导入本地反馈。
-- 已入选或已淘汰的同一条内容不会在后续报告中重复出现。
-- 区分权威人物深度访谈与普通人物稿，并过滤活动广告、合作通稿和无名小发布。
-- 内置经过 SHA-256 校验的 Agent Reach 运行时，用户无需单独安装另一个 Skill 即可启用多平台检索。
-- 原生支持朱雀 AIGC 文本检测，显示人工、AI、疑似 AI 三类占比与逐段判定。
+系统明确区分三类职责：
+
+- **确定性程序**：抓取、语言、完整性、时效、GitHub 状态、去重、批次归属和交付顺序。
+- **风险发现**：提示技术门槛、新闻腔、宣传、AI 加工、私人素材依赖等需要核实的问题。
+- **人工终审**：依据完整正文判断选题吸引力、读者改变、材料增量、二创独立性和长期价值。
+
+关键词和自动分数只用于发现排序，不能替代最终编辑判断。正式发布的每条候选必须记录五维证据、最强反对理由和决定性证据。
+
+## 反馈如何进入系统
+
+原始反馈保存在本地 `.local/editorial_feedback.jsonl`。新反馈会被区分为稳定原则、有条件偏好、执行规范、精确主题状态、单案例判断、无解释结果或待验证假设。
+
+单一标题、产品名、作者名或技术词不会直接升级为普遍禁令。任何新原则都要先检查历史反例，并通过正反成对测试。
+
+详细规则：
+
+- [编辑判断模型](references/editorial-judgment.md)
+- [正反校准案例](references/editorial-calibration-cases.md)
+- [反馈学习协议](references/feedback-learning-protocol.md)
 
 ## 快速开始
 
@@ -23,23 +30,52 @@ Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研�
 python3 -m pip install -r scripts/requirements.txt
 python3 scripts/agent_reach_runtime.py install
 python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
-python3 scripts/add_source.py "YouTube 链接" --platform youtube --creator "频道名"
 python3 scripts/scrape_aihot.py
 ```
 
-需要一次性补齐 Exa、B站等系统渠道时，在明确允许用户级和全局工具安装后运行：
+需要一次性补齐 Exa、B站等系统渠道时，只有在明确允许用户级和全局安装后运行：
 
 ```bash
 python3 scripts/agent_reach_runtime.py install --system --channels all
 ```
 
-运行状态保存在用户自己的 `~/.agent-reach/`，Cookie、Token 和浏览器登录态不会进入本仓库。
+输出位于 `topics/<时间戳>/`。内部草稿允许暂时不足 5 条，但正式交付必须至少 5 条，其中至少 4 条文章型材料、GitHub 最多 1 条。
 
-本项目不使用 OpenCLI，以免 Browser Bridge 调试或抢占用户的 Google Chrome。动态网页和登录态页面统一由 Ego Browser 的隔离任务空间处理。
+人工终审完成后发布：
 
-输出位于 `topics/<时间戳>/index.html`。
+```bash
+python3 scripts/publish_batch.py topics/<批次ID> --owner 主力
+```
 
-审核页中的入选状态和备注会实时保存到当前浏览器，顶部工具栏会显示审核统计和是否存在未导出改动。由于浏览器不允许本地页面直接修改项目文件，JSON 会先进入下载目录。导入后的正式反馈保存在 `.local/editorial_feedback.jsonl`，使用 `--delete-source` 可在验证导入后自动清理下载文件。
+用户在审核页导出反馈后导入：
+
+```bash
+python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <批次ID> --owner 主力
+```
+
+导入会核验批次、任务归属、候选顺序和持久化结果；成功后默认删除下载目录中的临时 JSON，失败则保留。
+
+## 目录职责
+
+- `SKILL.md`：Agent 执行契约与门槛。
+- `references/`：稳定判断、校准案例和外部能力说明。
+- `resources/editorial_profile.json`：可执行配置与风险信号词典。
+- `resources/editorial_profile.schema.json`：配置结构契约。
+- `scripts/editorial_judgment.py`：资格、风险与人工证据契约。
+- `scripts/feedback_audit.py`：反馈覆盖、空备注、重复判断和冲突候选审计，不导出备注原文。
+- `scripts/quality_audit.py`：按公开的 100 分结构质量标准检查反馈保真、泛化、可靠性、可维护性、安全与测试。
+- `scripts/curator.py`：确定性发现排序。
+- `scripts/publish_batch.py`：终审证据、归属、去重和发布门禁。
+- `tests/fixtures/editorial_boundary_cases.json`：可供不同模型回放的匿名正反边界集。
+- `.local/`、`.config/`、`topics/`：私有状态与运行产物，不提交。
+
+## 浏览器与隐私
+
+本项目不使用 OpenCLI，避免 Browser Bridge 调试或抢占用户的 Google Chrome。动态网页和登录态页面使用 Ego Browser 隔离任务空间。
+
+API Key、Cookie、登录态、审核反馈和完整候选正文都不得进入公开仓库。Agent Reach 与朱雀均为可选辅助能力；工具不可用或检测失败时不得伪造结论。
+
+可选模型复排读取 `OPENROUTER_API_KEY` 或忽略目录中的 `.config/openrouter_api_key.txt`。朱雀读取 `ZHUQUE_GATEWAY`、`ZHUQUE_API_KEY` 或 `.config/zhuque.json`，具体协议见 [朱雀说明](references/zhuque-aigc.md)。
 
 离线演示：
 
@@ -47,19 +83,11 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-ai
 ```
 
-导入人工审核：
+## 验证
 
 ```bash
-python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <本任务交付批次ID> --owner 主力 --delete-source
+.venv/bin/python3 -m unittest discover -s tests -v
+uv run --with pyyaml python /Users/a1-6/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
+git diff --check
+python3 scripts/quality_audit.py
 ```
-
-## 配置
-
-- `resources/content_curator_sources.json` 管理信息源。
-- `resources/editorial_profile.json` 管理读者、选题方向、排除项和权重。
-- `references/editorial-judgment.md` 保存历次人工反馈萃取出的完整判断与历史校准，`SKILL.md` 只保留执行顺序和核心门槛。
-- `.local/source_inbox.json` 保存人工投喂的公众号、视频、播客和逐字稿，仅本地使用。
-- `OPENROUTER_API_KEY` 或 `.config/openrouter_api_key.txt` 用于可选模型复排。
-- `ZHUQUE_GATEWAY` 与 `ZHUQUE_API_KEY`，或 `.config/zhuque.json`，用于可选的朱雀 AIGC 检测。配置与真实调用见 [朱雀接入说明](references/zhuque-aigc.md)。
-
-API Key、本地反馈、缓存和运行结果均不会提交到公开仓库。

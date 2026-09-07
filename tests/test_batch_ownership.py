@@ -13,6 +13,19 @@ from publish_batch import publish_batch, delivered_candidates
 from curator import score_item
 
 
+def complete_review():
+    return {
+        'status': 'passed',
+        'topic_appeal': '目标读者每天都会遇到这个具体 AI 工作问题。',
+        'reader_change': '读者会从直接相信结果改为先核对事实和来源。',
+        'material_increment': '正文提供失败案例、调整过程和可核验结果。',
+        're_authorability': '移除作者身份和截图后，公共事实与方法链仍成立。',
+        'durability': '方法不依赖短期版本，热点消失后仍可以复用。',
+        'counterargument': '材料来自单一作者，存在经验外推过度的风险。',
+        'decision_driver': '决定放行的是完整失败链与可复用的核验动作。',
+    }
+
+
 class BatchOwnershipTest(unittest.TestCase):
     def test_quantity_ready_draft_is_not_a_delivery(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -37,6 +50,28 @@ class BatchOwnershipTest(unittest.TestCase):
                 outcomes=list(pool.map(attempt,[(a,'主力'),(b,'主力2')]))
             self.assertEqual(sorted(outcomes),[False,True])
 
+    def test_complete_human_evidence_can_override_editorial_risk_but_not_eligibility(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self.setup_root(root)
+            folder,rows=self.batch(root,'reviewed-risk')
+            rows[0]['recommended']=False
+            rows[0]['editorial_decision']={'eligibility':{'status':'passed','failures':[]},'risk_signals':[{'code':'editorial_risk','evidence':'技术门槛需人工核实'}]}
+            (folder/'candidates.json').write_text(json.dumps(rows))
+            publish_batch(folder,'主力',root)
+            saved=json.loads((folder/'candidates.json').read_text())
+            self.assertEqual(saved[0]['editorial_decision']['final']['status'],'passed')
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self.setup_root(root)
+            folder,rows=self.batch(root,'hard-failure','x')
+            distinct=('阅读核验','办公交付','产品访谈','知识管理','模型解释')
+            for index,row in enumerate(rows):
+                row['title']=f'AI{distinct[index]}完整材料'
+            rows[0]['editorial_decision']={'eligibility':{'status':'failed','failures':[{'code':'locked_content'}]}}
+            (folder/'candidates.json').write_text(json.dumps(rows))
+            with self.assertRaisesRegex(ValueError,'客观资格门槛'):
+                publish_batch(folder,'主力',root)
+
     def setup_root(self, root):
         (root / 'resources').mkdir()
         (root / 'resources/editorial_profile.json').write_text(json.dumps({'minimum_delivery_count':5,'minimum_non_github_candidates':4,'maximum_github_candidates':1}))
@@ -46,7 +81,7 @@ class BatchOwnershipTest(unittest.TestCase):
         folder.mkdir(parents=True)
         rows = [{'id':str(i)+suffix, 'title':f'AI公开案例{i}{suffix}', 'link':f'https://example.org/{i}{suffix}',
                  'content':f'资料{i}{suffix}', 'score':100, 'recommended':True,
-                 'manual_editorial_review':{'status':'passed'}} for i in range(5)]
+                 'manual_editorial_review':complete_review()} for i in range(5)]
         (folder / 'candidates.json').write_text(json.dumps(rows))
         (folder / 'run.json').write_text(json.dumps({'delivery_ready':False}))
         return folder, rows
@@ -98,15 +133,20 @@ class BatchOwnershipTest(unittest.TestCase):
     def test_skill_routes_to_complete_editorial_judgment_library(self):
         skill = (ROOT / 'SKILL.md').read_text(encoding='utf-8')
         judgments = (ROOT / 'references/editorial-judgment.md').read_text(encoding='utf-8')
-        self.assertIn('完整读取 [编辑判断与历史校准库]', skill)
-        self.assertIn('不能用本节摘要替代', skill)
+        calibration = (ROOT / 'references/editorial-calibration-cases.md').read_text(encoding='utf-8')
+        protocol = (ROOT / 'references/feedback-learning-protocol.md').read_text(encoding='utf-8')
+        self.assertIn('[编辑判断模型]', skill)
+        self.assertIn('[反馈学习协议]', skill)
         for preserved_rule in (
-            '最新反馈明确肯定“良配”这类材料',
-            '二创独立性优先于实测真实性',
-            'GitHub 候选不仅要实时核验至少 100 Star',
-            '历史去重必须比较正文',
+            '选题吸引力',
+            '读者改变',
+            '材料增量',
+            '二创独立性',
+            '长期价值',
         ):
             self.assertIn(preserved_rule, judgments)
+        self.assertIn('“良配”访谈', calibration)
+        self.assertIn('换掉产品名、作者名和标题措辞', protocol)
 
 
 if __name__=='__main__':

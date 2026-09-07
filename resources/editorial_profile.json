@@ -1,11 +1,21 @@
 {
+  "schema_version": 2,
   "owner": "Stephen",
   "target_readers": ["中文偏小白 AI 使用者", "产品、运营与管理者", "知识工作者与内容创作者"],
-  "adaptation_review": {
-    "require_independent_text_argument": true,
-    "reject_author_specific_visual_dependency": true,
-    "saturated_topics": ["小红书图文排版 Skill"],
-    "note": "实测真实不等于适合二创；文字论证不能依赖专属截图、图表和私有数据。围绕普遍生活痛点与有吸引力产品的真实经历可明确归因转述，不能因第一人称一概排除。"
+  "decision_model": {
+    "purpose": "选择能让目标读者产生具体行动或认知改变、且 Stephen 可以独立二创的高增量 AI 材料",
+    "dimensions_in_order": ["topic_appeal", "reader_change", "material_increment", "re_authorability", "durability"],
+    "manual_review_required": true,
+    "require_counterargument": true,
+    "require_decision_driver": true,
+    "keyword_matches_are_risk_signals_not_verdicts": true,
+    "marginal_passes_are_rejected": true
+  },
+  "feedback_learning": {
+    "types": ["invariant", "conditional_preference", "operational_rule", "topic_state", "case_only", "unexplained_decision", "hypothesis"],
+    "require_counterexample_before_generalizing": true,
+    "blank_note_creates_rule": false,
+    "pending_changes_preference": false
   },
   "selection_count": 8,
   "report_candidate_count": 15,
@@ -53,17 +63,7 @@
       "keywords": ["实践", "指南", "避坑", "案例", "教程", "方法", "复盘"]
     }
   ],
-  "positive_signals": [
-    "已有完整中文正文、字幕、逐字稿或详细Show Notes",
-    "国内作者已经完成资料整合和中文解释",
-    "有明确判断、案例和因果链",
-    "能找到一个具体切入点，而不是复述行业大词",
-    "具有长期回看价值，不只是当日热点",
-    "普通读者能直接看懂",
-    "适合删减、重组和保留高质量原文",
-    "二创所需额外研究较少"
-  ],
-  "editorial_fit": {
+  "risk_signal_lexicon": {
     "evergreen_angle_terms": ["harness", "skill", "mcp", "开源", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理", "agent runtime"],
     "hype_or_gossip_terms": ["被扒出", "匿名模型", "匿名公测", "怀疑cursor", "神秘模型", "爆火", "杀进", "拿走", "干翻", "老黄", "股价不跌反涨", "野心已经藏不住", "全数sota", "模型团战", "第一枪", "巨头战役", "gpt3时刻", "gpt3 时刻", "买几万台mac", "英伟达的活被苹果抢了", "交出了什么答卷", "vc疯了", "创业乌托邦", "突破三大瓶颈", "这ai比赛办得有点绝", "我用它做了", "github最热", "看哭了", "屠榜", "全球第一", "a割", "明升暗降", "理直气壮", "场景通吃", "有点狠", "欢迎来到agi时代", "agi来了", "agi 来了", "刚刚，gpt-6正式发布", "gpt-6 曝光"],
     "broad_or_pr_terms": ["重塑商业", "决定未来", "未来商业", "最大误判", "发展路线", "研究成果", "从模拟世界到交互世界", "中国大模型为啥选最难的路", "人开始成为最大的瓶颈", "两种生意", "商业化路径", "谁能成为 agent 的「上下文操作系统」", "落地样板间", "硅基员工批量上岗", "按结果领工资", "人力资源巨头", "百万次候选人对话", "交付周期缩短一半"],
@@ -134,50 +134,5 @@
     "low_reuse_story_terms": ["ai建立了三代", "建立了三代文明", "三代「文明」", "三代文明"],
     "concrete_practice_terms": ["入职20天", "入职 20 天", "实习小结", "真实复盘", "亲自实测", "连续使用", "失败后调整", "内部产品经理复盘", "一线失败复盘"]
   },
-  "exclude_keywords": ["融资快讯", "估值快讯", "榜单", "周报", "本周汇总", "派早报", "本周看什么", "近期值得关注的 App", "娱乐", "明星", "政治", "选举", "监控", "武器", "升降桌", "Surface Pro", "HomePod"],
-  "weak_signals": [
-    "只有一手发布，没有中文解释",
-    "只有融资、参数或跑分",
-    "没有正文、字幕或逐字稿",
-    "多事件合集",
-    "纯炒作、猎奇或模型身份八卦",
-    "只讲重塑行业、未来趋势等宏大判断",
-    "科研或医疗垂直题，但找不到普通读者切口",
-    "无名小模型、小公司合作或事件级别过小",
-    "活动招募、采购对接、合作签约或新品首发仪式",
-    "纯新闻复述，没有作者解读与可复用的机制",
-    "只讲人物经历或群像，没有权威访谈和完整对话材料",
-    "宕机、故障、发布等事件新闻已超过两周时效窗口",
-    "只讨论企业维护、供应商锁定或治理架构，难以转化成普通读者的价值",
-    "随机SEO站、AI批量内容站或商业导流站",
-    "只做主流工具清单与泛化对比，缺少统一任务和真实结果",
-    "技术细节深入到依赖包、CUDA核函数、logit或缓存量化，读者用不到也看不懂",
-    "标题与摘要同时堆叠多个系统实现概念，普通读者难以找到可复用入口",
-    "正文需要读者理解大量代码、框架和基础设施细节，无法低成本改写给普通读者",
-    "理论或商业评论看似信息完整，但不能改变普通读者的行动或认知",
-    "用工整编号和抽象框架代替事实、证据与真实经验，信息密度低",
-    "播客只有概览或 Show Notes，没有逐字稿，不能作为低成本二创材料",
-    "通篇围绕 Benchmark、评测集、跑分或榜单解释模型表现",
-    "文章主要拼接研究、报告、人物经历和他人引语，缺少作者自己的高密度结论",
-    "AI总结页、机器翻译或中英混杂材料不适合直接进行中文二创",
-    "来自已明确排除的作者或个人IP",
-    "论坛或社区中的提问求助帖，没有形成可直接改写的完整结论",
-    "正文被登录、关注、验证码或付费墙截断，无法获取完整材料",
-    "只有主观感受与个人情绪，没有事实、机制或足够厚的经验支撑",
-    "权威人物访谈只有宽泛机会判断，没有可落成一篇文章的具体问题或方法",
-    "一次性AI奇闻或异常故事，即使可读性高也缺少长期回看价值",
-    "没有适合写成一篇文章的具体切入点",
-    "只有时效性，缺少长期回看价值",
-    "二创前仍需大量补充研究",
-    "需要大量专业背景才能理解"
-  ],
-  "reference_articles": [
-    "Codex Harness开源，把Codex级智能装进自己的产品",
-    "DeepSeek Harness开源，Agent自进化的前夕",
-    "小红书开源dots3-note，API限时免费",
-    "RAG就是一坨，知识库的版本答案叫Skill的references",
-    "一文讲透KV Cache和Prompt Caching",
-    "一文讲透AI的智能涌现，以及为什么需要世界模型",
-    "AI普及是个神话"
-  ]
+  "exclude_keywords": ["融资快讯", "估值快讯", "榜单", "周报", "本周汇总", "派早报", "本周看什么", "近期值得关注的 App", "娱乐", "明星", "政治", "选举", "监控", "武器", "升降桌", "Surface Pro", "HomePod"]
 }

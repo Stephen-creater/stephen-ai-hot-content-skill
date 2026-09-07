@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 
 from curator import canonical_url, deduplicate
+from editorial_judgment import final_decision_record, validate_manual_review
 from import_feedback import final_reviewed_candidates
 from report import generate_report
 from scrape_aihot import delivery_mix_ready, is_historical_content_duplicate
@@ -47,23 +48,44 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
         if len(deduplicate(rows)) != len(rows):
             raise ValueError("批内重复")
         for row in rows:
-            if not row.get("recommended") or row.get("manual_editorial_review", {}).get("status") != "passed":
-                raise ValueError("存在未通过自动筛选或人工终审的候选")
+            eligibility = row.get("editorial_decision", {}).get("eligibility", {})
+            if eligibility.get("status") == "failed":
+                raise ValueError(f"存在未通过客观资格门槛的候选：{row.get('title')}")
+            if not eligibility and not row.get("recommended"):
+                raise ValueError("旧版候选缺少机器资格记录且未通过筛选")
+            validation = validate_manual_review(row.get("manual_editorial_review", {}))
+            if not validation.ok:
+                raise ValueError(f"人工终审证据不完整：{row.get('title')}：{'；'.join(validation.errors)}")
+            row["editorial_decision"] = {
+                **row.get("editorial_decision", {}),
+                "final": final_decision_record(row),
+                "human_review_required": False,
+            }
         history = final_reviewed_candidates(root / ".local/editorial_feedback.jsonl") + delivered_candidates(root / "topics", folder)
         old_ids = {r.get("id") for r in history}
         old_urls = {canonical_url(r.get("link", "")) for r in history}
         for row in rows:
             if row.get("id") in old_ids or canonical_url(row.get("link", "")) in old_urls or is_historical_content_duplicate(row, history):
                 raise ValueError(f"另一任务或历史批次已推送/审核：{row.get('title')}")
-        generate_report(rows, folder / "index.html", folder.name, batch_owner=owner)
+        candidates_path = folder / "candidates.json"
+        candidates_temp = candidates_path.with_suffix(".json.tmp")
+        with candidates_temp.open("w", encoding="utf-8") as out:
+            json.dump(rows, out, ensure_ascii=False, indent=2)
+            out.flush()
+            os.fsync(out.fileno())
+        html_path = folder / "index.html"
+        html_temp = folder / "index.html.tmp"
+        generate_report(rows, html_temp, folder.name, batch_owner=owner)
         run.update(batch_owner=owner, delivery_ready=True, delivery_registered=True, cross_task_dedup_verified=True)
         temp = run_path.with_suffix(".json.tmp")
         with temp.open("w", encoding="utf-8") as out:
             json.dump(run, out, ensure_ascii=False, indent=2)
             out.flush()
             os.fsync(out.fileno())
+        os.replace(candidates_temp, candidates_path)
+        os.replace(html_temp, html_path)
         os.replace(temp, run_path)
-    return folder / "index.html"
+    return html_path
 
 
 if __name__ == "__main__":

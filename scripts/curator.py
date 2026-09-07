@@ -8,6 +8,8 @@ from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from editorial_judgment import build_decision_contract
+
 
 TAG_RE = re.compile(r"<[^>]+>")
 NUMBER_RE = re.compile(r"\b\d+(?:[.,]\d+)?%?|\$\d+", re.I)
@@ -271,7 +273,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score -= 25
         penalties.append("比赛新闻偏离既有文章谱系")
 
-    editorial_fit = profile.get("editorial_fit", {})
+    # These terms surface questions for review. They remain conservative
+    # machine filters for backward compatibility, but the final publication
+    # decision is made from the evidence contract, never from a term alone.
+    editorial_fit = profile.get("risk_signal_lexicon", profile.get("editorial_fit", {}))
     evergreen_terms = [word for word in editorial_fit.get("evergreen_angle_terms", []) if word.lower() in haystack]
     hype_terms = [word for word in editorial_fit.get("hype_or_gossip_terms", []) if word.lower() in title_summary]
     broad_terms = [word for word in editorial_fit.get("broad_or_pr_terms", []) if word.lower() in title_summary]
@@ -622,6 +627,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if len(personal_workflow_detail_terms) >= 3:
         adaptation_readiness = "中"
         research_cost = "中"
+    decision_contract = build_decision_contract(
+        item,
+        penalties=penalties,
+        score=score,
+        minimum_score=float(profile["minimum_score"]),
+    )
     return {
         **item,
         "id": item.get("id") or hashlib.sha1(f"{title}|{item.get('link', '')}".encode()).hexdigest()[:10],
@@ -631,7 +642,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "age_days": age_days,
         "pillars": matched_pillars,
         "score": score,
+        "discovery_score": score,
+        # Compatibility field: legacy callers use this conservative machine
+        # gate. Final publication may override editorial risks only with a full
+        # v2 human evidence record; objective eligibility failures never can.
         "recommended": score >= profile["minimum_score"] and not excluded and not penalties and source_role == "candidate",
+        "machine_shortlisted": decision_contract["machine_disposition"] == "shortlist" and source_role == "candidate",
         "reason": "；".join(reasons[:6]) or "信息不足，等待人工判断",
         "penalty": "；".join(penalties),
         "language": language,
@@ -640,10 +656,11 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "adaptation_readiness": adaptation_readiness,
         "research_cost": research_cost,
         "source_role": source_role,
+        "editorial_decision": decision_contract,
     }
 
 
 def rank_candidates(items: list[dict], profile: dict, now: datetime | None = None) -> list[dict]:
     scored = [score_item(item, profile, now=now) for item in deduplicate(items)]
-    scored.sort(key=lambda item: (item["recommended"], item["score"]), reverse=True)
+    scored.sort(key=lambda item: (item["machine_shortlisted"], item["recommended"], item["score"]), reverse=True)
     return scored
