@@ -95,6 +95,19 @@ class BatchOwnershipTest(unittest.TestCase):
         self.assertNotIn('Token 成本对比',result['penalty'])
         self.assertNotIn('主题已写过',result['penalty'])
 
+    def test_skill_routes_to_complete_editorial_judgment_library(self):
+        skill = (ROOT / 'SKILL.md').read_text(encoding='utf-8')
+        judgments = (ROOT / 'references/editorial-judgment.md').read_text(encoding='utf-8')
+        self.assertIn('完整读取 [编辑判断与历史校准库]', skill)
+        self.assertIn('不能用本节摘要替代', skill)
+        for preserved_rule in (
+            '最新反馈明确肯定“良配”这类材料',
+            '二创独立性优先于实测真实性',
+            'GitHub 候选不仅要实时核验至少 100 Star',
+            '历史去重必须比较正文',
+        ):
+            self.assertIn(preserved_rule, judgments)
+
 
 if __name__=='__main__':
     unittest.main()

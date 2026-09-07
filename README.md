@@ -10,7 +10,7 @@ Stephen 的个人 AI 热点选题 Skill。它优先寻找国内作者已经研�
 - 标记文字材料状态、二创成熟度和预计研究成本。
 - API Key 可选，无 Key 也能运行。
 - 生成可审核的静态 HTML。
-- 正常报告只包含通过硬门槛的内容，允许少于配置数量或 0 条。
+- 正常报告只包含通过硬门槛的内容；单轮内部筛选可以少于 5 条或为 0 条，但正式批次必须持续扩源至至少 5 条。
 - 支持标记入选、淘汰和遗漏，并导入本地反馈。
 - 已入选或已淘汰的同一条内容不会在后续报告中重复出现。
 - 区分权威人物深度访谈与普通人物稿，并过滤活动广告、合作通稿和无名小发布。
@@ -57,6 +57,7 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-b
 
 - `resources/content_curator_sources.json` 管理信息源。
 - `resources/editorial_profile.json` 管理读者、选题方向、排除项和权重。
+- `references/editorial-judgment.md` 保存历次人工反馈萃取出的完整判断与历史校准，`SKILL.md` 只保留执行顺序和核心门槛。
 - `.local/source_inbox.json` 保存人工投喂的公众号、视频、播客和逐字稿，仅本地使用。
 - `OPENROUTER_API_KEY` 或 `.config/openrouter_api_key.txt` 用于可选模型复排。
 - `ZHUQUE_GATEWAY` 与 `ZHUQUE_API_KEY`，或 `.config/zhuque.json`，用于可选的朱雀 AIGC 检测。配置与真实调用见 [朱雀接入说明](references/zhuque-aigc.md)。
