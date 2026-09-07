@@ -289,9 +289,18 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     event_terms = [word for word in editorial_fit.get("event_or_ad_terms", []) if word.lower() in title_summary]
     people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
     product_update = bool(re.search(r"(?:版本|模型|产品|功能|软件|系统).{0,8}更新|更新.{0,8}(?:版本|模型|产品|功能|软件|系统)", title_summary))
+    product_withdrawal = bool(
+        re.search(
+            r"(?:版本|模型|产品|功能|软件|系统|服务|发布|上线|公告).{0,8}撤回|"
+            r"撤回.{0,8}(?:版本|模型|产品|功能|软件|系统|服务|发布|上线|公告)",
+            title_summary,
+        )
+    )
     time_sensitive_terms = [
         word for word in editorial_fit.get("time_sensitive_event_terms", [])
-        if word.lower() in title_summary and (word != "更新" or product_update)
+        if word.lower() in title_summary
+        and (word != "更新" or product_update)
+        and (word != "撤回" or product_withdrawal)
     ]
     reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
     personal_workflow_detail_terms = [word for word in editorial_fit.get("personal_workflow_detail_terms", []) if word.lower() in haystack]

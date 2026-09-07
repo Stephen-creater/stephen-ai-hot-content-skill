@@ -138,6 +138,20 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("事件新闻已超过时效窗口", article["penalty"])
         self.assertIn("事件新闻已超过时效窗口", release["penalty"])
 
+    def test_editor_undo_is_not_a_stale_product_withdrawal(self):
+        base = {
+            **self.items[0],
+            "published": "2026-08-01",
+            "content": "记录智能体与人类的编辑边界，检查差异并保护其他协作者的内容。" * 150,
+            "summary": "让用户可以撤回 Agent 的当轮编辑，不误伤人类新写的段落",
+        }
+        article = score_item({**base, "title": "协同文档 Agent 的可对比与可撤回编辑"}, self.profile, now=self.now)
+        renamed = score_item({**base, "title": "智能体修改后如何一键回滚"}, self.profile, now=self.now)
+        withdrawal = score_item({**base, "title": "OpenAI 撤回旧模型版本发布"}, self.profile, now=self.now)
+        self.assertNotIn("事件新闻已超过时效窗口", article["penalty"])
+        self.assertNotIn("事件新闻已超过时效窗口", renamed["penalty"])
+        self.assertIn("事件新闻已超过时效窗口", withdrawal["penalty"])
+
     def test_html_and_reply_links_keep_identical_input_order(self):
         import html
         import re
