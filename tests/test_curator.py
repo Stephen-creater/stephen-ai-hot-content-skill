@@ -2035,6 +2035,19 @@ Language: zh
         self.assertTrue(lookup["https://example.com/direct-tool"]["recommended"])
         self.assertIn("可直接试用", lookup["https://example.com/direct-tool"]["reason"])
 
+    def test_main2_150320_feedback_blocks_partial_login_and_written_astra_prompt_topic(self) -> None:
+        base = {
+            "published": "2026-09-07T08:00:00Z", "source_priority": 5, "source_type": "web",
+            "language": "zh", "maturity": "secondary", "content_status": "fulltext", "content_form": "article",
+            "summary": "AI 的完整方法和案例", "source_name": "中文作者",
+        }
+        locked = score_item({**base, "title": "AI研究实习生完整报告", "link": "https://example.com/partial",
+                             "content": ("公开正文提供研究方法和数据。" * 150) + "登录后查看剩余内容"}, self.profile)
+        covered = score_item({**base, "title": "GPT-6 Astra 的隐形规则审计", "link": "https://example.com/astra-prompt",
+                              "content": "让模型指出导致停顿的 Skill 与提示规则。" * 180}, self.profile)
+        self.assertIn("材料不完整", locked["penalty"])
+        self.assertIn("主题已写过", covered["penalty"])
+
 
 if __name__ == "__main__":
     unittest.main()
