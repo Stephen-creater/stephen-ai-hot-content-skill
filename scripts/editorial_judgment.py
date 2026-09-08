@@ -33,6 +33,7 @@ HARD_FAILURE_MARKERS = {
     "主题已写过": "covered_topic",
     "常规岗位基础应用暂缓": "deferred_topic",
     "用户当前不认可该产品": "disfavored_subject",
+    "传统节点式 Workflow 平台已被用户明确淘汰": "retired_workflow_platform",
     "超过时效范围": "stale_material",
     "事件新闻已超过时效窗口": "stale_event",
     "英文一手信息": "verification_only_language",

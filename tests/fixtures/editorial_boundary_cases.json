@@ -68,5 +68,33 @@
     "expected": "reject",
     "case": "内容只是机器翻译、AI 摘要和公开资料重排，整理者没有自己的体验、判断或新增证据。",
     "decision_driver": "没有独立材料增量"
+  },
+  {
+    "pair": "historical_background",
+    "surface_feature": "包含较多历史背景",
+    "expected": "consider",
+    "case": "历史只用于解释今天仍在发生的产品机制，正文很快落到当前用户任务、失败和可核验变化。",
+    "decision_driver": "历史服务于当前机制与读者改变"
+  },
+  {
+    "pair": "historical_background",
+    "surface_feature": "包含较多历史背景",
+    "expected": "reject",
+    "case": "公司、人物与技术沿革占据正文主体，当前产品价值和用户可执行判断只在结尾简短出现。",
+    "decision_driver": "历史挤占当前材料增量"
+  },
+  {
+    "pair": "workflow_platform",
+    "surface_feature": "讨论 AI 工作流",
+    "expected": "consider",
+    "case": "正文讨论现代 Agent 的任务验收、失败隔离、状态回读和权限边界，不依赖节点式平台搭建。",
+    "decision_driver": "当前 Agent 方法可迁移且有真实证据"
+  },
+  {
+    "pair": "workflow_platform",
+    "surface_feature": "讨论 AI 工作流",
+    "expected": "reject",
+    "case": "正文主体是使用 Coze、Dify、n8n 等传统节点式平台搭建流程、插件与模板的教程。",
+    "decision_driver": "已淘汰平台本身是选题主体"
   }
 ]

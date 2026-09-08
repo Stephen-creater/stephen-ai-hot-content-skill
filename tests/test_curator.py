@@ -66,6 +66,29 @@ class CuratorTest(unittest.TestCase):
         result = score_item({**base, "title": "跨设备文件校对的实践", "content": base["content"] + "之前试过扣子桌面端。"}, self.profile, now=self.now)
         self.assertNotIn("用户当前不认可该产品", result["penalty"])
 
+    def test_main2_184610_retires_node_workflow_platforms_without_blocking_agent_methods(self):
+        base = {**self.items[0], "summary": "完整中文实测", "content": "公开任务、失败、回读和验收证据。" * 300}
+        for title in (
+            "Dify + 飞书搭建 AI 视频审核工作流",
+            "n8n 自动化节点实战",
+            "Coze Workflow 插件搭建指南",
+            "用可视化节点工作流搭建 AI 助手",
+        ):
+            result = score_item({**base, "title": title}, self.profile, now=self.now)
+            self.assertFalse(result["recommended"])
+            self.assertIn("传统节点式 Workflow 平台已被用户明确淘汰", result["penalty"])
+            self.assertEqual(result["editorial_decision"]["eligibility"]["status"], "failed")
+        modern = score_item(
+            {
+                **base,
+                "title": "AI Agent 长任务怎样隔离失败并回读真实结果",
+                "content": base["content"] + "团队过去试过 Dify，如今主线是 Agent 的验收与状态回读。",
+            },
+            self.profile,
+            now=self.now,
+        )
+        self.assertNotIn("传统节点式 Workflow 平台已被用户明确淘汰", modern["penalty"])
+
     def test_radar_preserves_original_source_and_stays_discovery(self):
         source = {"name":"Radar", "category":"aggregate", "priority":4, "type":"learnprompt_radar", "url":"https://news.learnprompt.pro/classic/", "data_url":"https://news.learnprompt.pro/data/latest-24h-all.json"}
         row = {"url":"https://example.com/original", "title":"中文译题", "title_original":"Original English title", "source":"Original author", "first_seen_at":"2026-09-05", "summary":"AI generated summary", "ai_score":1}
