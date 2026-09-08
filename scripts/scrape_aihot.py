@@ -18,6 +18,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 from curator import canonical_url, clean_text, rank_candidates
+from discovery_history import delivered_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
 from zhuque_aigc import ZhuqueClient, apply_policy, estimate_text_cost_yuan, load_config
@@ -595,6 +596,8 @@ def main() -> None:
     source_attempts = []
     feedback_store = ROOT / ".local" / "editorial_feedback.jsonl"
     reviewed_candidates = [] if args.fixture else final_reviewed_candidates(feedback_store)
+    if not args.fixture:
+        reviewed_candidates += delivered_candidates(ROOT / "topics")
     reviewed_urls = {canonical_url(row.get("link", "")) for row in reviewed_candidates if row.get("link")}
 
     if args.fixture:

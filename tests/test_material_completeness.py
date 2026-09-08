@@ -10,9 +10,23 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from scrape_aihot import hydrate, inbox_item, load_inbox, fetch_youtube_transcript
 from curator import score_item
 from report import generate_report
+from discovery_history import delivered_candidates
 
 
 class MaterialCompletenessTest(unittest.TestCase):
+    def test_delivered_unreviewed_items_are_not_fetched_again(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            batch = root / 'topics' / 'one'
+            batch.mkdir(parents=True)
+            (batch / 'run.json').write_text(json.dumps({'delivery_registered': True}))
+            (batch / 'candidates.json').write_text(json.dumps([{'id': 'x', 'link': 'https://example.org/pending'}]))
+            inbox = root / 'inbox.json'
+            inbox.write_text(json.dumps([{'url': 'https://example.org/pending'}]))
+            known = {r['link'] for r in delivered_candidates(root / 'topics')}
+            with patch('scrape_aihot.inbox_item') as read:
+                self.assertEqual(load_inbox(inbox, {}, known), [])
+                read.assert_not_called()
     def test_original_title_survives_editorial_reframing(self):
         row = {'id': 'x', 'title': '编辑重写', 'source_title': '原文其实谈某公司的融资',
                'title_zh': '普通人立刻能用的方法', 'link': 'https://example.org/x', 'score': 10}

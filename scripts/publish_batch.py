@@ -8,25 +8,13 @@ import os
 from pathlib import Path
 
 from curator import canonical_url, deduplicate
+from discovery_history import delivered_candidates
 from editorial_judgment import classify_penalties, final_decision_record, validate_manual_review, validate_source_anchors
 from import_feedback import final_reviewed_candidates
 from report import generate_report
 from scrape_aihot import delivery_mix_ready, is_historical_content_duplicate
 
 ROOT = Path(__file__).resolve().parents[1]
-
-
-def delivered_candidates(topics: Path, exclude: Path | None = None) -> list[dict]:
-    rows = []
-    for path in sorted(topics.glob("*/run.json")):
-        if exclude is not None and path.parent.resolve() == exclude.resolve():
-            continue
-        run = json.loads(path.read_text(encoding="utf-8"))
-        # Older scrapers used delivery_ready for quantity alone, including drafts.
-        # Only explicit reservations or legacy manually finalized reports count.
-        if run.get("delivery_registered") is True or (run.get("delivery_ready") is True and run.get("manual_editorial_review") is True):
-            rows.extend(json.loads(path.with_name("candidates.json").read_text(encoding="utf-8")))
-    return rows
 
 
 def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
