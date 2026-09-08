@@ -10,6 +10,8 @@
 
 覆盖报告必须注明已测试的后端与操作。Doctor 不能检测 Ego Browser 登录态；由 Doctor 推算的分数不能称为全渠道真实覆盖率。
 
+若已登录但搜索列表为空，先检查 `pageInfo()` 的视口。宽高为 0 时，用 `cdp('Emulation.setDeviceMetricsOverride', {width:1280,height:900,deviceScaleFactor:1,mobile:false})` 设置正常视口，重新加载并等待列表出现；空视口不属于凭据问题。
+
 先执行只读检查：
 
 ```bash
