@@ -88,6 +88,10 @@ python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-
 
 ## 验证
 
+`quality_audit.py` 只检查文件和结构，满分不代表选题达到用户标准。实际效果须用保留的人工反馈、未参与改规则的材料、误放/误杀记录和新批次用户采纳结果评估。`source_coverage.py` 只报告已声明来源组合的操作验证覆盖；不能推断全网份额。
+
+运行 `python3 scripts/editorial_outcomes.py` 查看真实审核结果。该报告单列入选但已写的记录，未知召回率保持为空；不能凭持续出现少量入选推断市场供给充足或已经枯竭。
+
 ```bash
 .venv/bin/python3 -m unittest discover -s tests -v
 uv run --with pyyaml python /Users/a1-6/.codex/skills/.system/skill-creator/scripts/quick_validate.py .

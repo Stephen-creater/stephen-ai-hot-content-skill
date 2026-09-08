@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Iterable
+import hashlib
+import re
 
 
 DIMENSIONS = (
@@ -132,6 +134,37 @@ def validate_manual_review(review: dict, *, require_v2: bool = True) -> ReviewVa
         value = review.get(field)
         if not isinstance(value, str) or len(value.strip()) < 12:
             errors.append(f"{label}缺少具体正文证据")
+    return ReviewValidation(not errors, tuple(errors))
+
+
+def validate_source_anchors(item: dict) -> ReviewValidation:
+    """Verify quotes against the exact source reviewed; no quality score implied."""
+    content = item.get("content", "")
+    review = item.get("manual_editorial_review", {})
+    anchors = review.get("source_anchors", [])
+    errors = []
+    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
+    if review.get("source_sha256") != digest:
+        errors.append("终审正文指纹缺失或正文已变化")
+    normalize = lambda value: re.sub(r"\s+", "", value)
+    matched = set()
+    if not isinstance(anchors, list):
+        return ReviewValidation(False, ("source_anchors 必须为数组",))
+    for anchor in anchors:
+        if not isinstance(anchor, dict):
+            errors.append("无效原文依据")
+            continue
+        quote = anchor.get("quote", "")
+        if not isinstance(quote, str) or len(normalize(quote)) < 12 or normalize(quote) not in normalize(content):
+            errors.append("引用无法在当前正文中定位")
+            continue
+        dimension = anchor.get("dimension")
+        if dimension not in DIMENSIONS:
+            errors.append("引用维度无效")
+        else:
+            matched.add(dimension)
+    if not {"material_increment", "re_authorability"}.issubset(matched):
+        errors.append("材料增量和二创独立性必须各有原文依据")
     return ReviewValidation(not errors, tuple(errors))
 
 

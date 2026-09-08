@@ -37,11 +37,27 @@ class SourceCoverageTest(unittest.TestCase):
         entries = [{"recorded_at": now.isoformat(), "family": "twitter_builder_graph", "status": "blocked"}]
         report = audit_coverage(self.portfolio, doctor, self.sources, entries, {"exa_search", "github"}, now)
         self.assertLess(report["access_coverage"], report["access_target"])
-        self.assertGreater(report["access_coverage"], report["configured_automation_coverage"])
+        self.assertEqual(report["access_coverage"], 0)
+        self.assertEqual(report["rolling_attempt_coverage"], 0)
         twitter = next(row for row in report["families"] if row["id"] == "twitter_builder_graph")
         self.assertEqual(twitter["access_fraction"], 0)
         self.assertTrue(twitter["attempted_in_window"])
         self.assertFalse(twitter["successful_in_window"])
+
+    def test_only_fresh_nonempty_operation_evidence_counts(self):
+        now = datetime(2026, 9, 8, tzinfo=timezone.utc)
+        base = {"recorded_at": now.isoformat(), "family": "twitter_builder_graph",
+                "status": "success", "result_count": 2, "channel": "ego-browser",
+                "purpose": "smoke", "evidence_url": "https://x.com/search?q=AI"}
+        entries = [{**base, "operation": op} for op in ("search", "read", "author")]
+        report = audit_coverage(self.portfolio, {}, self.sources, entries, now=now)
+        self.assertEqual(report["access_coverage"], 10)
+        self.assertEqual(report["rolling_attempt_coverage"], 0)
+        entries.append({**base, "purpose": "discovery", "operation": "search"})
+        report = audit_coverage(self.portfolio, {}, self.sources, entries, now=now)
+        self.assertEqual(report["rolling_attempt_coverage"], 10)
+        empty = [{**base, "operation": "search", "result_count": 0}]
+        self.assertEqual(audit_coverage(self.portfolio, {}, self.sources, empty, now=now)["access_coverage"], 0)
 
     def test_ledger_is_locked_validated_and_reports_yield(self):
         with tempfile.TemporaryDirectory() as tmp:

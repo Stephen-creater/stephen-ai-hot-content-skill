@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from curator import canonical_url, deduplicate
-from editorial_judgment import classify_penalties, final_decision_record, validate_manual_review
+from editorial_judgment import classify_penalties, final_decision_record, validate_manual_review, validate_source_anchors
 from import_feedback import final_reviewed_candidates
 from report import generate_report
 from scrape_aihot import delivery_mix_ready, is_historical_content_duplicate
@@ -65,6 +65,9 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
             validation = validate_manual_review(row.get("manual_editorial_review", {}))
             if not validation.ok:
                 raise ValueError(f"人工终审证据不完整：{row.get('title')}：{'；'.join(validation.errors)}")
+            source_validation = validate_source_anchors(row)
+            if not source_validation.ok:
+                raise ValueError(f"原文依据不完整：{row.get('title')}：{'；'.join(source_validation.errors)}")
             row["editorial_decision"] = {
                 **row.get("editorial_decision", {}),
                 "final": final_decision_record(row),

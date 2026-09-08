@@ -31,6 +31,8 @@ def audit_coverage(portfolio: dict, doctor: dict, sources: dict, entries: list[d
     successful_families = {
         row.get("family") for row in entries
         if row.get("status") == "success"
+        and row.get("purpose") == "discovery"
+        and row.get("result_count", 0) > 0
         and datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00")) >= cutoff
     }
     automated_types = {row.get("type") for row in sources.get("sources", [])}
@@ -38,11 +40,17 @@ def audit_coverage(portfolio: dict, doctor: dict, sources: dict, entries: list[d
     access_total = configured_total = attempted_total = 0.0
     for family in portfolio["families"]:
         channels = family.get("doctor_channels", [])
-        active = [name for name in channels if name in verified or doctor.get(name, {}).get("active_backend")]
-        fraction = len(active) / len(channels) if channels else 0
-        fraction = max(float(family.get("minimum_access_fraction", 0)), fraction)
-        fraction = min(float(family.get("maximum_access_fraction", 1)), fraction)
-        configured = bool(set(family.get("automation_types", [])) & automated_types)
+        active = [name for name in channels if name in verified]
+        required_operations = ("search", "read", "author")
+        evidence = [row for row in entries
+                    if row.get("family") == family["id"]
+                    and row.get("status") == "success"
+                    and row.get("result_count", 0) > 0
+                    and row.get("evidence_url")
+                    and cutoff <= datetime.fromisoformat(row["recorded_at"].replace("Z", "+00:00")) <= now]
+        operations = sorted({row.get("operation") for row in evidence} & set(required_operations))
+        fraction = len(operations) / len(required_operations)
+        configured = any(row.get("family") == family["id"] for row in sources.get("sources", []))
         attempted = family["id"] in attempted_families
         successful = family["id"] in successful_families
         access_points = family["weight"] * fraction
@@ -54,11 +62,15 @@ def audit_coverage(portfolio: dict, doctor: dict, sources: dict, entries: list[d
         rows.append({
             "id": family["id"], "label": family["label"], "weight": family["weight"], "role": family["role"],
             "access_fraction": round(fraction, 2), "active_channels": active, "configured_automation": configured,
+            "verified_operations": operations,
+            "backends": sorted({row.get("channel", "unknown") for row in evidence}),
             "attempted_in_window": attempted, "successful_in_window": successful,
             "user_action": family.get("user_action", ""),
         })
     return {
         "generated_at": now.isoformat(),
+        "measurement": "Verified search/read/author operations in the declared portfolio; not percentage of the Internet",
+        "weights_are_planning_assumptions": True,
         "access_coverage": round(access_total, 1),
         "configured_automation_coverage": round(configured_total, 1),
         "rolling_attempt_coverage": round(attempted_total, 1),

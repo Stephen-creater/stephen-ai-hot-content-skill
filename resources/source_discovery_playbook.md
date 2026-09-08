@@ -18,10 +18,13 @@ python3 scripts/discovery_ledger.py report
 ```bash
 python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
   --family chinese_longform_web --channel exa --query "作者或主题查询" --status success \
+  --operation search --purpose discovery --evidence-url "已读取的搜索结果页URL" \
   --result-count 10 --fulltext-count 4 --eligible-count 2 --selected-count 1
 ```
 
 一周滚动窗口内应覆盖至少 80 分来源族；真实连通能力应达到至少 85 分。覆盖不足时从最高权重缺口开始补，不能用低权重 GitHub 搜索代替公众号、X、播客或中文长文。
+
+权重是待校准的规划假设，不代表互联网内容份额。每个来源族分别验证 search、read、author；只计有时间、非空结果和证据 URL 的操作。Doctor 和命令安装不加分，连通测试使用 purpose=smoke，不计实际选题探索覆盖。最终入选数只能在用户审核后填写，不能由 Agent 代填。
 
 ## 第一层：中文深度成品
 

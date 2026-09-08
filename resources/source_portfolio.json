@@ -77,7 +77,7 @@
       "automation_types": [],
       "minimum_access_fraction": 0,
       "strategy": "按作者时间线、列表和长文追踪产品负责人、研究者与一线Builder；推文只做线索，继续寻找中文成熟材料。",
-      "user_action": "使用专门的只读 X 账号，通过 Cookie-Editor 手工导出 auth_token 与 ct0；不读取浏览器 Cookie。"
+      "user_action": "优先复用 Ego Browser 现成登录态；仅在页面明确要求登录或验证时请用户处理。"
     },
     {
       "id": "youtube_global",
@@ -98,7 +98,7 @@
       "automation_types": [],
       "minimum_access_fraction": 0.2,
       "strategy": "用于发现失败案例、真实争议和原作者；原始社区热帖默认不直接交付。",
-      "user_action": "Reddit 需要现成登录态或旧官方 API 凭证；Hacker News 与 V2EX 可走公开接口。"
+      "user_action": "Reddit 优先复用 Ego Browser 现成登录态；Hacker News 与 V2EX 可走公开接口。"
     },
     {
       "id": "global_newsletters",
@@ -129,7 +129,7 @@
       "automation_types": [],
       "minimum_access_fraction": 0,
       "strategy": "发现普通用户痛点和产品使用语言，短笔记与图片笔记默认只作线索。",
-      "user_action": "通过 Cookie-Editor 手工导出小红书同域 Cookie，接入只读 xiaohongshu-mcp；不使用用户Chrome的OpenCLI。"
+      "user_action": "优先在 Ego Browser 搜索、读取笔记和作者主页，只有页面要求用户验证时才请求介入。"
     }
   ]
 }

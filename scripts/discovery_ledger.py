@@ -84,6 +84,9 @@ def main() -> None:
     for key in ("result-count", "fulltext-count", "eligible-count", "selected-count"):
         record.add_argument(f"--{key}", type=int, default=0)
     record.add_argument("--failure-type", default="")
+    record.add_argument("--purpose", choices=["discovery", "smoke"], default="discovery")
+    record.add_argument("--operation", choices=["search", "read", "author"], required=True)
+    record.add_argument("--evidence-url", default="")
     report = sub.add_parser("report")
     report.add_argument("--batch")
     args = parser.parse_args()
@@ -93,6 +96,7 @@ def main() -> None:
             "query": args.query, "status": args.status, "result_count": args.result_count,
             "fulltext_count": args.fulltext_count, "eligible_count": args.eligible_count,
             "selected_count": args.selected_count, "failure_type": args.failure_type,
+            "purpose": args.purpose, "operation": args.operation, "evidence_url": args.evidence_url,
         })
         print(args.ledger)
     else:

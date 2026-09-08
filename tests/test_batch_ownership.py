@@ -1,4 +1,5 @@
 import json
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -97,6 +98,12 @@ class BatchOwnershipTest(unittest.TestCase):
         rows = [{'id':str(i)+suffix, 'title':f'AI公开案例{i}{suffix}', 'link':f'https://example.org/{i}{suffix}',
                  'content':f'资料{i}{suffix}', 'score':100, 'recommended':True,
                  'manual_editorial_review':complete_review()} for i in range(5)]
+        for row in rows:
+            row['content'] = row['content'] + '作者核对了错误原文，修正后读者能独立验证结果。'
+            row['manual_editorial_review']['source_sha256'] = hashlib.sha256(row['content'].encode()).hexdigest()
+            row['manual_editorial_review']['source_anchors'] = [
+                {'dimension': dimension, 'quote': '作者核对了错误原文，修正后读者能独立验证结果。'}
+                for dimension in ('material_increment', 're_authorability')]
         (folder / 'candidates.json').write_text(json.dumps(rows))
         (folder / 'run.json').write_text(json.dumps({'delivery_ready':False}))
         return folder, rows

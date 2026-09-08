@@ -139,6 +139,9 @@ def audit() -> dict:
     score = sum(check.weight for check in checks if check.passed)
     possible = sum(check.weight for check in checks)
     return {
+        "scope": "structural_checks_only",
+        "editorial_quality_verified": False,
+        "note": "This score does not measure preference alignment, selection precision, recall or source coverage.",
         "score": score,
         "possible": possible,
         "passed": score >= 95,

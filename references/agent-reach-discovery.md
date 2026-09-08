@@ -40,6 +40,15 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 
 ## 热点选题检索组合
 
+### Ego Browser 已验证的操作路径
+
+- X：正常视口打开 `/search?q=查询词`，等 `article` 出现；逐条取正文和 `/status/` 链接，再打开详情。作者主页可用于连续追踪。检查是否自动翻译；原始材料语言以“显示原文”后的内容为准。
+- 小红书：打开 `/search_result?keyword=查询词`，读取结果中的完整链接，进入详情核对正文、图片依赖、评论，再打开作者主页。详情链接里的 xsec_token 是页面链接参数，保留在私有材料内；不要把评论中的 AI 总结当作作者正文。
+- Reddit：先打开目标社区 `/r/ChatGPT/`，用社区搜索 `/r/ChatGPT/search/?q=workflow&restrict_sr=1`；打开搜索结果中的帖子，读取正文和回复，再由页面作者链接追踪公开主页。
+- 每个新标签页检查视口并等待内容实际出现，不能只在 load 事件后立刻把空列表判为失败。
+
+首次检索记录 purpose=smoke；真正围绕选题进行搜索时记录 purpose=discovery。连通、材料质量、用户采纳分别验收，任何一步成功都不能替代下一步。
+
 不要只跑一个搜索引擎。每轮至少组合三个互补渠道：
 
 1. Exa 找跨站深度文章与独立博客：

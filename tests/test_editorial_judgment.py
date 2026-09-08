@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import sys
 import unittest
 from pathlib import Path
@@ -15,6 +16,7 @@ from editorial_judgment import (
     classify_penalties,
     final_decision_record,
     validate_manual_review,
+    validate_source_anchors,
 )
 
 
@@ -34,6 +36,15 @@ def evidence_review(**overrides):
 
 
 class EditorialJudgmentTest(unittest.TestCase):
+    def test_fabricated_quotes_and_changed_body_fail(self):
+        body = '团队原先只检查结果，后来发现过程错误会累积。'
+        review = {'source_sha256': hashlib.sha256(body.encode()).hexdigest(),
+                  'source_anchors': [{'dimension': d, 'quote': body}
+                                     for d in ('material_increment', 're_authorability')]}
+        self.assertTrue(validate_source_anchors({'content': body, 'manual_editorial_review': review}).ok)
+        self.assertFalse(validate_source_anchors({'content': body + '变化', 'manual_editorial_review': review}).ok)
+        review['source_anchors'][0]['quote'] = '这段听起来很好的具体结果从未出现在正文里面。'
+        self.assertFalse(validate_source_anchors({'content': body, 'manual_editorial_review': review}).ok)
     def test_profile_declares_generalizable_decision_contract(self):
         profile = json.loads((ROOT / "resources/editorial_profile.json").read_text(encoding="utf-8"))
         self.assertEqual(profile["schema_version"], 2)
