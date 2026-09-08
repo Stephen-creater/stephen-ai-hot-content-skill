@@ -49,6 +49,8 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 
 首次检索记录 purpose=smoke；真正围绕选题进行搜索时记录 purpose=discovery。连通、材料质量、用户采纳分别验收，任何一步成功都不能替代下一步。
 
+正文定位不能只取第一个 `<article>`：它可能是站内 AI 总结卡。先核对原始标题、正文起止和末尾署名，再确定容器。人人都是产品经理本轮验证正文在 `.article--content`，页面另有 `article-intelligence` 摘要卡；读取其他站点也须检查同类问题。页面辅助总结和评论不能混作作者正文。
+
 不要只跑一个搜索引擎。每轮至少组合三个互补渠道：
 
 1. Exa 找跨站深度文章与独立博客：
