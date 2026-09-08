@@ -32,7 +32,7 @@
   "deferred_basic_workbuddy_terms": ["日常行政", "日常财务", "新媒体运营", "日常人事", "搞定客服", "市场营销", "电商运营"],
   "disfavored_product_subject_terms": ["扣子桌面", "扣子 桌面", "coze desktop", "coze 桌面", "扣子客户端", "zcode", "z-code", "z code"],
   "retired_workflow_platform_subject_terms": ["coze workflow", "coze 工作流", "扣子工作流", "扣子 工作流", "dify", "n8n", "可视化节点式 workflow", "可视化节点工作流"],
-  "covered_topic_patterns": ["computer\\s*history", "chatgpt.{0,15}(?:监控电脑|监控.{0,4}电脑|电脑活动回忆)", "(?:claude|anthropic).{0,12}(?:文字|文本)?水印", "(?:dhh|rails之父|rails 之父|ruby on rails).{0,60}(?:两个月|basecamp)", "basecamp.{0,45}(?:dhh|rails之父|rails 之父)"],
+  "covered_topic_patterns": ["computer\\s*history", "chatgpt.{0,15}(?:监控电脑|监控.{0,4}电脑|电脑活动回忆)", "(?:claude|anthropic).{0,12}(?:文字|文本)?水印", "(?:dhh|rails之父|rails 之父|ruby on rails).{0,60}(?:两个月|basecamp)", "basecamp.{0,45}(?:dhh|rails之父|rails 之父)", "warp.{0,30}(?:agent|skill).{0,30}(?:自我进化|自我改进|持续改进)"],
   "preferred_maturity": "secondary",
   "minimum_github_stars": 100,
   "blocked_domains": ["kylinlabai.github.io", "claudemax.shop", "aipodcast.jasonlin.tech", "onepod.site"],

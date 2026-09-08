@@ -89,6 +89,22 @@ class CuratorTest(unittest.TestCase):
         )
         self.assertNotIn("传统节点式 Workflow 平台已被用户明确淘汰", modern["penalty"])
 
+    def test_main2_161405_marks_only_the_warp_self_improvement_topic_as_covered(self):
+        base = {**self.items[0], "summary": "完整中文实践", "content": "公开反馈、失败案例和验证过程。" * 300}
+        for title in (
+            "Warp 如何让 Agent 自我进化",
+            "Warp 怎样让 Skill 从反馈中持续改进",
+        ):
+            result = score_item({**base, "title": title}, self.profile, now=self.now)
+            self.assertIn("主题已写过", result["penalty"])
+            self.assertEqual(result["editorial_decision"]["eligibility"]["status"], "failed")
+        reusable_method = score_item(
+            {**base, "title": "内容团队怎样让写作 Skill 根据人工反馈改进"},
+            self.profile,
+            now=self.now,
+        )
+        self.assertNotIn("主题已写过", reusable_method["penalty"])
+
     def test_radar_preserves_original_source_and_stays_discovery(self):
         source = {"name":"Radar", "category":"aggregate", "priority":4, "type":"learnprompt_radar", "url":"https://news.learnprompt.pro/classic/", "data_url":"https://news.learnprompt.pro/data/latest-24h-all.json"}
         row = {"url":"https://example.com/original", "title":"中文译题", "title_original":"Original English title", "source":"Original author", "first_seen_at":"2026-09-05", "summary":"AI generated summary", "ai_score":1}
