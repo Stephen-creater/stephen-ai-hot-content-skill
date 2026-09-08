@@ -38,7 +38,7 @@ def clean_text(value: str | None) -> str:
 def canonical_url(url: str) -> str:
     parts = urlsplit(url)
     host = parts.netloc.lower()
-    tracking = {"fbclid", "gclid", "msclkid", "spm", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
+    tracking = {"fbclid", "gclid", "msclkid", "spm", "from", "main2", "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content"}
     if host in {"youtube.com", "www.youtube.com", "m.youtube.com", "youtu.be"}:
         tracking |= {"si", "t", "start", "feature"}
     query = [(key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True) if key.lower() not in tracking and not key.lower().startswith("utm_")]

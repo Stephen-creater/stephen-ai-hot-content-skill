@@ -105,6 +105,15 @@ class CuratorTest(unittest.TestCase):
         )
         self.assertNotIn("主题已写过", reusable_method["penalty"])
 
+    def test_internal_source_tracking_parameters_never_create_a_new_candidate(self):
+        plain = "https://example.com/article"
+        self.assertEqual(canonical_url(plain), canonical_url(plain + "?from=main2-fulltext"))
+        self.assertEqual(canonical_url(plain), canonical_url(plain + "?main2=2"))
+        self.assertNotEqual(
+            canonical_url("https://example.com/article?newId=1"),
+            canonical_url("https://example.com/article?newId=2"),
+        )
+
     def test_radar_preserves_original_source_and_stays_discovery(self):
         source = {"name":"Radar", "category":"aggregate", "priority":4, "type":"learnprompt_radar", "url":"https://news.learnprompt.pro/classic/", "data_url":"https://news.learnprompt.pro/data/latest-24h-all.json"}
         row = {"url":"https://example.com/original", "title":"中文译题", "title_original":"Original English title", "source":"Original author", "first_seen_at":"2026-09-05", "summary":"AI generated summary", "ai_score":1}
