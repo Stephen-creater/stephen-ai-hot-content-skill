@@ -76,6 +76,21 @@ class BatchOwnershipTest(unittest.TestCase):
         (root / 'resources').mkdir()
         (root / 'resources/editorial_profile.json').write_text(json.dumps({'minimum_delivery_count':5,'minimum_non_github_candidates':4,'maximum_github_candidates':1}))
 
+    def test_publish_rechecks_stale_material_risks_and_actual_short_text(self):
+        for metadata in (
+            {'penalty': '文章正文偏短，不足以支撑高质量二创'},
+            {'editorial_decision': {'eligibility': {'status': 'passed'}, 'risk_signals': [{'evidence': '摘要不足以支撑高质量二创'}]}},
+            {'content_form': 'article', 'content_status': 'fulltext', 'content': '只有观点，没有展开。'},
+        ):
+            with self.subTest(metadata=metadata), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp); self.setup_root(root)
+                folder, rows = self.batch(root, 'stale')
+                rows[0].update(metadata)
+                (folder / 'candidates.json').write_text(json.dumps(rows))
+                with self.assertRaisesRegex(ValueError, '发布复核未通过'):
+                    publish_batch(folder, '主力', root)
+                self.assertFalse(json.loads((folder / 'run.json').read_text())['delivery_ready'])
+
     def batch(self, root, name, suffix=''):
         folder = root / 'topics' / name
         folder.mkdir(parents=True)

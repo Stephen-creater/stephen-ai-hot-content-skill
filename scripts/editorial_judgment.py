@@ -40,6 +40,7 @@ HARD_FAILURE_MARKERS = {
     "核验来源，不进入默认选题": "verification_only_source",
     "缺少完整文字材料": "incomplete_text",
     "材料过少": "incomplete_text",
+    "不足以支撑高质量二创": "insufficient_source_material",
     "只有版本号": "invalid_material",
     "标题与摘要缺少明确 AI 对象": "out_of_scope",
     "命中排除词": "excluded_subject",

@@ -75,6 +75,18 @@ class EditorialJudgmentTest(unittest.TestCase):
         self.assertEqual(contract["machine_disposition"], "blocked")
         self.assertEqual(contract["eligibility"]["failures"][0]["code"], "covered_topic")
 
+    def test_insufficient_material_cannot_be_offset_by_score_or_review(self):
+        for warning in ["文章正文偏短，不足以支撑高质量二创", "访谈摘要不足以支撑高质量二创"]:
+            contract = build_decision_contract(
+                {"manual_editorial_review": evidence_review()},
+                penalties=[warning], score=120, minimum_score=48,
+            )
+            self.assertEqual(contract["machine_disposition"], "blocked")
+            self.assertEqual(contract["eligibility"]["failures"][0]["code"], "insufficient_source_material")
+        hard, risks = classify_penalties(["文章篇幅较短，但已完整展开失败、调整和结果"])
+        self.assertEqual(hard, [])
+        self.assertEqual(len(risks), 1)
+
     def test_manual_review_requires_all_five_dimensions_and_objection(self):
         incomplete = validate_manual_review({"status": "passed", "topic_appeal": "很有意思"})
         self.assertFalse(incomplete.ok)

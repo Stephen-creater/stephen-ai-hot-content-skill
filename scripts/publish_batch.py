@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 
 from curator import canonical_url, deduplicate
-from editorial_judgment import final_decision_record, validate_manual_review
+from editorial_judgment import classify_penalties, final_decision_record, validate_manual_review
 from import_feedback import final_reviewed_candidates
 from report import generate_report
 from scrape_aihot import delivery_mix_ready, is_historical_content_duplicate
@@ -48,6 +48,15 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
         if len(deduplicate(rows)) != len(rows):
             raise ValueError("批内重复")
         for row in rows:
+            # Recheck persisted warnings: older drafts may label a failure as risk.
+            penalty = row.get("penalty", [])
+            warnings = [penalty] if isinstance(penalty, str) else list(penalty)
+            warnings.extend(signal.get("evidence", "") for signal in row.get("editorial_decision", {}).get("risk_signals", []))
+            if row.get("content_form") == "article" and row.get("content_status") == "fulltext" and len(row.get("content", "")) < 2500:
+                warnings.append("文章正文偏短，不足以支撑高质量二创")
+            failures, _ = classify_penalties(warnings)
+            if failures:
+                raise ValueError(f"发布复核未通过：{row.get('title')}：{failures[0]['evidence']}")
             eligibility = row.get("editorial_decision", {}).get("eligibility", {})
             if eligibility.get("status") == "failed":
                 raise ValueError(f"存在未通过客观资格门槛的候选：{row.get('title')}")
