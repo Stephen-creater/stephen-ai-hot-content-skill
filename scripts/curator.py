@@ -138,6 +138,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     source_domain = urlsplit(item.get("link", "")).netloc.lower()
     source_name = clean_text(item.get("source_name")).lower()
     github_stars = item.get("github_stars")
+    if language == "zh" and len(content) >= 400 and len(re.findall(r"[\u4e00-\u9fff]", content)) < 20:
+        penalties.append("正文缺少中文内容，不能按中文标签放行")
 
     if profile.get("required_chinese_script") == "simplified":
         chinese = re.findall(r"[\u4e00-\u9fff]", content or title)

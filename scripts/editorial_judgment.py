@@ -31,6 +31,7 @@ REVIEW_FIELD_LABELS = {
 }
 
 HARD_FAILURE_MARKERS = {
+    "正文缺少中文内容": "body_language_mismatch",
     "原文为繁体中文": "simplified_chinese_required",
     "主题已写过": "covered_topic",
     "常规岗位基础应用暂缓": "deferred_topic",

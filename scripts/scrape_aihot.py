@@ -337,7 +337,9 @@ def fetch_youtube_transcript(url: str) -> str:
             stderr=subprocess.STDOUT,
             timeout=90,
         )
-        paths = sorted(Path(directory).glob("*.vtt"))
+        # Alphabetical order selects .en before .zh even when Chinese exists.
+        paths = sorted(Path(directory).glob("*.vtt"), key=lambda p: (
+            0 if ".zh-Hans." in p.name else 1 if ".zh." in p.name else 2, p.name))
         if not paths:
             raise ValueError("yt-dlp 没有生成字幕文件")
         raw = paths[0].read_text(encoding="utf-8", errors="replace")

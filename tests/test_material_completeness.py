@@ -7,10 +7,26 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from scrape_aihot import hydrate, inbox_item, load_inbox
+from scrape_aihot import hydrate, inbox_item, load_inbox, fetch_youtube_transcript
+from curator import score_item
 
 
 class MaterialCompletenessTest(unittest.TestCase):
+    def test_chinese_metadata_cannot_hide_an_english_body(self):
+        profile = json.loads((ROOT / 'resources/editorial_profile.json').read_text())
+        item = score_item({'title': 'AI 实用方法', 'language': 'zh', 'content_status': 'fulltext',
+                           'content': 'This is an English transcript of a long discussion. ' * 100}, profile)
+        self.assertIn('body_language_mismatch', [f['code'] for f in item['editorial_decision']['eligibility']['failures']])
+    def test_chinese_subtitles_win_over_alphabetically_first_english(self):
+        def download(command, **kwargs):
+            folder = Path(command[command.index('-o') + 1]).parent
+            (folder / 'clip.en.vtt').write_text('English words only. ' * 50)
+            (folder / 'clip.zh-Hans.vtt').write_text('完整中文字幕保留了原始结论。' * 50)
+            return ''
+        with patch('scrape_aihot.shutil.which', return_value='/bin/yt-dlp'), patch('scrape_aihot.subprocess.check_output', side_effect=download):
+            text = fetch_youtube_transcript('https://www.youtube.com/watch?v=sample')
+        self.assertIn('完整中文字幕', text)
+        self.assertNotIn('English words', text)
     def test_reviewed_urls_are_skipped_before_expensive_reads(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'inbox.json'
