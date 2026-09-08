@@ -1,6 +1,61 @@
 {
   "sources": [
     {
+      "name": "Simon Willison",
+      "family": "global_newsletters",
+      "category": "海外实践作者线索",
+      "type": "rss",
+      "url": "https://simonwillison.net/atom/everything/",
+      "priority": 4,
+      "role": "discovery",
+      "language": "en",
+      "maturity": "primary"
+    },
+    {
+      "name": "Latent Space",
+      "family": "global_newsletters",
+      "category": "海外深度访谈线索",
+      "type": "rss",
+      "url": "https://www.latent.space/feed",
+      "priority": 4,
+      "role": "discovery",
+      "language": "en",
+      "maturity": "primary"
+    },
+    {
+      "name": "One Useful Thing",
+      "family": "global_newsletters",
+      "category": "海外AI使用观察线索",
+      "type": "rss",
+      "url": "https://www.oneusefulthing.org/feed",
+      "priority": 4,
+      "role": "discovery",
+      "language": "en",
+      "maturity": "primary"
+    },
+    {
+      "name": "Lenny's Newsletter",
+      "family": "global_newsletters",
+      "category": "海外产品访谈线索",
+      "type": "rss",
+      "url": "https://www.lennysnewsletter.com/feed",
+      "priority": 4,
+      "role": "discovery",
+      "language": "en",
+      "maturity": "primary"
+    },
+    {
+      "name": "极客公园 RSS",
+      "family": "chinese_product_interviews",
+      "category": "中文产品访谈与科技文章",
+      "type": "rss",
+      "url": "https://www.geekpark.net/rss",
+      "priority": 4,
+      "role": "discovery",
+      "language": "zh",
+      "maturity": "secondary"
+    },
+    {
       "name": "AI News Radar / LearnPrompt",
       "category": "AI聚合线索入口",
       "type": "learnprompt_radar",

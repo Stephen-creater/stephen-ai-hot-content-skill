@@ -243,20 +243,25 @@ def hydrate(item: dict, settings: dict) -> dict:
             response.raise_for_status()
             chunks = []
             size = 0
+            truncated = False
             for chunk in response.iter_content(65536):
                 if not chunk:
                     continue
                 remaining = settings["max_article_bytes"] - size
                 if remaining <= 0:
+                    truncated = True
                     break
+                if len(chunk) > remaining:
+                    truncated = True
                 chunks.append(chunk[:remaining])
                 size += min(len(chunk), remaining)
             raw = b"".join(chunks)
             text = decode_html(raw, response.encoding)
         extracted = trafilatura.extract(text, include_comments=False, include_tables=True) or ""
         if extracted:
-            item["content"] = clean_text(extracted)[:5000]
-            item["content_status"] = "shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext"
+            item["content"] = extracted.strip()
+            item["content_truncated"] = truncated
+            item["content_status"] = "partial" if truncated else ("shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext")
             if urlparse(item["link"]).netloc.lower().endswith("jxxy.net"):
                 item["published"] = embedded_original_date(extracted) or item.get("published", "")
         metadata = trafilatura.bare_extraction(text, include_comments=False)
@@ -374,7 +379,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
     if transcript_path:
         path = Path(transcript_path).expanduser()
         if path.exists():
-            item["content"] = clean_transcript(path.read_text(encoding="utf-8", errors="replace"))[:20000]
+            item["content"] = clean_transcript(path.read_text(encoding="utf-8", errors="replace"))
             item["content_status"] = "transcript"
             return item
         item["fetch_error"] = f"逐字稿不存在: {path}"
@@ -384,7 +389,12 @@ def inbox_item(row: dict, settings: dict) -> dict:
         try:
             response = requests.get(content_url, headers=HEADERS, timeout=settings["request_timeout_seconds"])
             response.raise_for_status()
-            text = decode_html(response.content[: settings["max_article_bytes"]], response.encoding)
+            if len(response.content) > settings["max_article_bytes"]:
+                item["content_truncated"] = True
+                item["content_status"] = "partial"
+                item["fetch_error"] = "指定正文超过读取上限，不能标为完整材料"
+                return item
+            text = decode_html(response.content, response.encoding)
             content_json_key = row.get("content_json_key", "").strip()
             if content_json_key:
                 match = re.search(r"=\s*(\{.*\})\s*;?\s*$", text, flags=re.S)
@@ -392,7 +402,9 @@ def inbox_item(row: dict, settings: dict) -> dict:
                     raise ValueError("原始正文映射格式无法识别")
                 payload = json.loads(match.group(1))
                 text = str(payload.get(content_json_key, ""))
-            item["content"] = clean_text(text)[:20000]
+            if re.search(r"<(?:html|body|!doctype)\b", text, re.I):
+                text = trafilatura.extract(text, include_comments=False, include_tables=True) or ""
+            item["content"] = text.strip()
             if len(item["content"]) < 400:
                 raise ValueError("原始正文为空或过短")
             item["content_status"] = "fulltext"
@@ -403,7 +415,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
 
     if platform == "youtube" and item["link"]:
         try:
-            item["content"] = fetch_youtube_transcript(item["link"])[:20000]
+            item["content"] = fetch_youtube_transcript(item["link"])
             item["content_status"] = "transcript"
             return item
         except Exception as exc:
@@ -572,6 +584,7 @@ def main() -> None:
     profile = load_json(RESOURCES / "editorial_profile.json")
     settings = source_config["fetch"]
     errors = []
+    source_attempts = []
 
     if args.fixture:
         items = load_json(args.fixture)
@@ -579,9 +592,13 @@ def main() -> None:
         items = load_inbox(args.inbox, settings)
         enabled_sources = [source for source in source_config["sources"] if args.include_verification or source.get("role") != "verification"]
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [executor.submit(fetch_source, source, settings) for source in enabled_sources]
+            futures = {executor.submit(fetch_source, source, settings): source for source in enabled_sources}
             for future in concurrent.futures.as_completed(futures):
                 rows, error = future.result()
+                source = futures[future]
+                source_attempts.append({"source": source["name"], "url": source["url"],
+                                        "family": source.get("family"), "role": source.get("role"),
+                                        "result_count": len(rows), "error": error})
                 items.extend(rows)
                 if error:
                     errors.append(error)
@@ -706,6 +723,7 @@ def main() -> None:
             {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
                 "input_count": len(items),
+                "source_attempts": source_attempts,
                 "discovery_count": len(discovery_items),
                 "skipped_reviewed_count": skipped_reviewed_count,
                 "skipped_content_duplicate_count": skipped_content_duplicate_count,

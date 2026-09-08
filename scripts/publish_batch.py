@@ -48,6 +48,8 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
         if len(deduplicate(rows)) != len(rows):
             raise ValueError("批内重复")
         for row in rows:
+            if row.get("content_truncated") or row.get("content_status") == "partial":
+                raise ValueError("正文被截断，不能发布为完整材料")
             # Recheck persisted warnings: older drafts may label a failure as risk.
             penalty = row.get("penalty", [])
             warnings = [penalty] if isinstance(penalty, str) else list(penalty)
