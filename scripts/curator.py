@@ -323,6 +323,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
     implementation_heavy_terms = [word for word in editorial_fit.get("implementation_heavy_terms", []) if word.lower() in title_summary]
     code_barrier_terms = [word for word in editorial_fit.get("code_barrier_terms", []) if word.lower() in haystack]
+    complex_technical_case_terms = [word for word in editorial_fit.get("complex_technical_case_terms", []) if word.lower() in haystack]
+    frontier_lab_safety_terms = [word for word in editorial_fit.get("frontier_lab_safety_terms", []) if word.lower() in haystack]
+    strategic_product_analysis_terms = [word for word in editorial_fit.get("strategic_product_analysis_terms", []) if word.lower() in haystack]
     developer_maintenance_terms = [word for word in editorial_fit.get("developer_maintenance_terms", []) if word.lower() in haystack]
     abstract_business_terms = [word for word in editorial_fit.get("abstract_business_terms", []) if word.lower() in haystack]
     formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
@@ -511,12 +514,22 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if content_form == "article" and len(code_like_lines) >= 8:
         score -= 80
         penalties.append("正文代码或实现片段占比过高，文章载体的普通读者难以独立理解")
+    if len(complex_technical_case_terms) >= 3:
+        score -= 80
+        penalties.append("核心案例同时依赖多种技术环境与实施概念，普通读者难以低成本复用")
     if len(terminal_cli_terms) >= 3:
         score -= 70
         penalties.append("以终端、CLI、Shell 或快捷键为主体，技术门槛超出目标读者")
     if len(cross_topic_macro_terms) >= 3 and not product_owner_speech_terms:
         score -= 55
         penalties.append("多个抽象大词和跨产品话题来回跳转，缺少单一连续的决策链")
+    frontier_lab_subject = any(entity in haystack for entity in ("openai", "anthropic", "deepmind", "模型实验室"))
+    if frontier_lab_subject and len(frontier_lab_safety_terms) >= 2 and len(concrete_end_user_task_terms) < 2:
+        score -= 80
+        penalties.append("前沿模型实验室的安全、对齐或攻击风险占主体，对目标读者缺少可用价值")
+    if len(strategic_product_analysis_terms) >= 3 and len(concrete_practice_terms) < 1 and len(concrete_end_user_task_terms) < 2:
+        score -= 80
+        penalties.append("单一大厂产品演进、生态解读和未来战略预测占主体，缺少可直接复用的当前任务")
     if len(professional_product_governance_terms) >= 3 and len(concrete_end_user_task_terms) < 2:
         score -= 65
         penalties.append("专业 AI 产品治理细节过多，普通读者难以学会或获得收益")

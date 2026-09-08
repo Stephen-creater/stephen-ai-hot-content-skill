@@ -1309,6 +1309,49 @@ Language: zh
             self.assertIn("专业缩写、系统名与工程标识密度过高", item["penalty"])
         self.assertNotIn("专业缩写、系统名与工程标识密度过高", accessible["penalty"])
 
+    def test_complex_technical_case_is_not_rescued_by_a_simple_lesson(self) -> None:
+        common = {
+            "summary": "普通人使用 AI 的失败复盘", "published": "2026-09-08", "source_name": "中文作者",
+            "source_priority": 5, "source_type": "web", "language": "zh", "maturity": "secondary",
+            "content_form": "article", "content_status": "fulltext",
+        }
+        complex_body = ("作者为了爬虫安装虚拟机和 Docker，使用 VPN、脚本与接口监听反复排查。" * 90)
+        blocked = score_item({**common, "title": "AI 为什么总把小问题做复杂", "link": "https://example.com/complex", "content": complex_body}, self.profile, now=self.now)
+        renamed = score_item({**common, "title": "先说最终目标的重要性", "link": "https://example.com/complex-renamed", "content": complex_body}, self.profile, now=self.now)
+        accessible = score_item({**common, "title": "AI 帮我改周报时误会了目标", "link": "https://example.com/simple", "content": "作者对照了修改前后的周报，发现说清读者和用途后返工明显减少。" * 150}, self.profile, now=self.now)
+        for item in (blocked, renamed):
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertIn("核心案例同时依赖多种技术环境", item["penalty"])
+        self.assertNotIn("核心案例同时依赖多种技术环境", accessible["penalty"])
+
+    def test_frontier_lab_safety_news_is_blocked_but_user_protection_survives(self) -> None:
+        common = {
+            "published": "2026-09-08", "source_name": "中文深度媒体", "source_priority": 5, "source_type": "web",
+            "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext",
+        }
+        risk = ("OpenAI 与 Anthropic 回查模型安全事故，记录越界、网络攻击、恶意软件与暂停评测。" * 90)
+        blocked = score_item({**common, "title": "两家 AI 实验室为什么踩了刹车", "summary": "前沿安全风险", "link": "https://example.com/lab-risk", "content": risk}, self.profile, now=self.now)
+        renamed = score_item({**common, "title": "模型能力越强，评测团队为什么越谨慎", "summary": "对齐安全报告", "link": "https://example.com/lab-risk-renamed", "content": risk}, self.profile, now=self.now)
+        practical = score_item({**common, "title": "收到 AI 换脸转账请求时怎样停下核对", "summary": "普通用户防诈", "link": "https://example.com/user-safety", "content": "用户收到转账消息后改用原联系方式回拨，核对姓名、金额和真实身份后再决定。" * 140}, self.profile, now=self.now)
+        for item in (blocked, renamed):
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertIn("前沿模型实验室的安全", item["penalty"])
+        self.assertNotIn("前沿模型实验室的安全", practical["penalty"])
+
+    def test_strategic_product_forecast_is_not_a_reader_task(self) -> None:
+        common = {
+            "published": "2026-09-08", "source_name": "产品媒体", "source_priority": 5, "source_type": "web",
+            "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext",
+        }
+        strategy = ("文章追踪某大厂 AI 产品演进、生态护城河和市场位置，预测下一阶段的未来竞争与战略布局。" * 90)
+        blocked = score_item({**common, "title": "某 AI 助手的下一阶段", "summary": "大厂生态战略解读", "link": "https://example.com/strategy", "content": strategy}, self.profile, now=self.now)
+        renamed = score_item({**common, "title": "从首次补贴到未来入口", "summary": "产品发展分析", "link": "https://example.com/strategy-renamed", "content": strategy}, self.profile, now=self.now)
+        practice = score_item({**common, "title": "我用 AI 重做客户拜访 PPT", "summary": "真实任务复盘", "link": "https://example.com/task", "content": "作者先找齐资料和历史沟通，核对事实后只做局部修改，最后带着客户拜访 PPT 进入会议。" * 130}, self.profile, now=self.now)
+        for item in (blocked, renamed):
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertIn("单一大厂产品演进", item["penalty"])
+        self.assertNotIn("单一大厂产品演进", practice["penalty"])
+
     def test_latest_feedback_rejects_short_engineering_and_commercial_noise(self) -> None:
         common = {
             "summary": "中文完整材料",
