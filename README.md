@@ -64,6 +64,9 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-b
 - `scripts/editorial_judgment.py`：资格、风险与人工证据契约。
 - `scripts/feedback_audit.py`：反馈覆盖、空备注、重复判断和冲突候选审计，不导出备注原文。
 - `scripts/quality_audit.py`：按公开的 100 分结构质量标准检查反馈保真、泛化、可靠性、可维护性、安全与测试。
+- `resources/source_portfolio.json`：将目标求解空间拆成 12 个加权来源族。
+- `scripts/source_coverage.py`：区分真实连通、已配置自动化和近 7 天实际探索覆盖率。
+- `scripts/discovery_ledger.py`：私有记录每次检索的结果、全文、合格和入选收益。
 - `scripts/curator.py`：确定性发现排序。
 - `scripts/publish_batch.py`：终审证据、归属、去重和发布门禁。
 - `tests/fixtures/editorial_boundary_cases.json`：可供不同模型回放的匿名正反边界集。

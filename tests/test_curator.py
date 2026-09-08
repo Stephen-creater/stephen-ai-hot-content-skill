@@ -14,13 +14,23 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from add_source import append_source
-from curator import canonical_url, deduplicate, rank_candidates, score_item
+from curator import canonical_url, deduplicate, rank_candidates, redact_untrusted_secrets, score_item
 import import_feedback as feedback_module
 from report import generate_report
 from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
+    def test_public_community_credentials_are_redacted_before_candidate_storage(self):
+        leaked = "试用凭据：sk-" + "A" * 40
+        self.assertNotIn("sk-", redact_untrusted_secrets(leaked))
+        item = score_item({
+            **self.items[0], "title": "AI 社区安全讨论", "summary": "公开帖子",
+            "content": leaked + "\n" + ("作者解释公开社区内容需要先脱敏。" * 180),
+        }, self.profile, now=self.now)
+        self.assertNotIn("sk-", item["content"])
+        self.assertIn("[REDACTED_CREDENTIAL]", item["content"])
+
     def test_main_160836_reader_barrier_and_covered_topic(self):
         base = {**self.items[0], "published": "2026-09-03", "summary": "",
                 "content": "HTTP、GPU 缓存、node_modules、pnpm、包管理缓存与依赖路径。" * 120}
@@ -1276,7 +1286,8 @@ Language: zh
         brief = score_item({**common, "title": "AI 文档修改如何不误伤人工编辑", "link": "https://example.com/brief", "content": prose + "\nconst runId = currentRun\n"}, self.profile, now=self.now)
         for item in (blocked, renamed):
             self.assertFalse(item["recommended"])
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
+            self.assertTrue(item["editorial_decision"]["human_review_required"])
             self.assertIn("正文代码或实现片段占比过高", item["penalty"])
         self.assertNotIn("正文代码或实现片段占比过高", brief["penalty"])
 
@@ -1305,7 +1316,8 @@ Language: zh
         }, self.profile, now=self.now)
         for item in (blocked, renamed):
             self.assertFalse(item["recommended"])
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
+            self.assertTrue(item["editorial_decision"]["risk_signals"])
             self.assertIn("专业缩写、系统名与工程标识密度过高", item["penalty"])
         self.assertNotIn("专业缩写、系统名与工程标识密度过高", accessible["penalty"])
 
@@ -1320,7 +1332,8 @@ Language: zh
         renamed = score_item({**common, "title": "先说最终目标的重要性", "link": "https://example.com/complex-renamed", "content": complex_body}, self.profile, now=self.now)
         accessible = score_item({**common, "title": "AI 帮我改周报时误会了目标", "link": "https://example.com/simple", "content": "作者对照了修改前后的周报，发现说清读者和用途后返工明显减少。" * 150}, self.profile, now=self.now)
         for item in (blocked, renamed):
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
+            self.assertTrue(item["editorial_decision"]["human_review_required"])
             self.assertIn("核心案例同时依赖多种技术环境", item["penalty"])
         self.assertNotIn("核心案例同时依赖多种技术环境", accessible["penalty"])
 
@@ -1334,7 +1347,8 @@ Language: zh
         renamed = score_item({**common, "title": "模型能力越强，评测团队为什么越谨慎", "summary": "对齐安全报告", "link": "https://example.com/lab-risk-renamed", "content": risk}, self.profile, now=self.now)
         practical = score_item({**common, "title": "收到 AI 换脸转账请求时怎样停下核对", "summary": "普通用户防诈", "link": "https://example.com/user-safety", "content": "用户收到转账消息后改用原联系方式回拨，核对姓名、金额和真实身份后再决定。" * 140}, self.profile, now=self.now)
         for item in (blocked, renamed):
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
+            self.assertTrue(item["editorial_decision"]["risk_signals"])
             self.assertIn("前沿模型实验室的安全", item["penalty"])
         self.assertNotIn("前沿模型实验室的安全", practical["penalty"])
 
@@ -1345,10 +1359,11 @@ Language: zh
         }
         strategy = ("文章追踪某大厂 AI 产品演进、生态护城河和市场位置，预测下一阶段的未来竞争与战略布局。" * 90)
         blocked = score_item({**common, "title": "某 AI 助手的下一阶段", "summary": "大厂生态战略解读", "link": "https://example.com/strategy", "content": strategy}, self.profile, now=self.now)
-        renamed = score_item({**common, "title": "从首次补贴到未来入口", "summary": "产品发展分析", "link": "https://example.com/strategy-renamed", "content": strategy}, self.profile, now=self.now)
+        renamed = score_item({**common, "title": "从 AI 首次补贴到未来入口", "summary": "产品发展分析", "link": "https://example.com/strategy-renamed", "content": strategy}, self.profile, now=self.now)
         practice = score_item({**common, "title": "我用 AI 重做客户拜访 PPT", "summary": "真实任务复盘", "link": "https://example.com/task", "content": "作者先找齐资料和历史沟通，核对事实后只做局部修改，最后带着客户拜访 PPT 进入会议。" * 130}, self.profile, now=self.now)
         for item in (blocked, renamed):
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
+            self.assertTrue(item["editorial_decision"]["risk_signals"])
             self.assertIn("单一大厂产品演进", item["penalty"])
         self.assertNotIn("单一大厂产品演进", practice["penalty"])
 

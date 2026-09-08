@@ -2,6 +2,27 @@
 
 当常规抓取结果不足 `minimum_delivery_count` 时，按下面顺序持续扩源。扩源的目标是找到更多高质量材料，不是降低门槛。
 
+## 先量化覆盖，不凭感觉扩源
+
+`resources/source_portfolio.json` 把求解空间分成 12 个来源族并按预期价值加权。每轮开始先运行：
+
+```bash
+python3 scripts/source_coverage.py --verified-channel exa_search --verified-channel github --write-snapshot .local/source_coverage.json
+python3 scripts/discovery_ledger.py report
+```
+
+`verified-channel` 只能填写本轮已经完成非空冒烟测试的渠道。Doctor 的 `warn`、工具安装成功或配置文件存在都不能算真实连通。
+
+每次检索后记录实际产出：
+
+```bash
+python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
+  --family chinese_longform_web --channel exa --query "作者或主题查询" --status success \
+  --result-count 10 --fulltext-count 4 --eligible-count 2 --selected-count 1
+```
+
+一周滚动窗口内应覆盖至少 80 分来源族；真实连通能力应达到至少 85 分。覆盖不足时从最高权重缺口开始补，不能用低权重 GitHub 搜索代替公众号、X、播客或中文长文。
+
 ## 第一层：中文深度成品
 
 - AI News Radar / LearnPrompt（https://news.learnprompt.pro/classic/）作为持续更新的聚合线索入口，自动读取其公开 JSON，结果见每轮 `discovery.json`。先按原始来源寻找中文长文，英文译题不能算中文底稿；上游“高分/精选”不免除本项目逐篇终审。重点来源登记以 `content_curator_sources.json` 为准。

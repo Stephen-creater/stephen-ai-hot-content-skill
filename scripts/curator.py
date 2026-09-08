@@ -21,6 +21,10 @@ CORE_AI_TERMS = (
     "reasoning", "kimi", "workbuddy", "qoder", "cursor", "copilot", "openclaw", "chatgpt", "chatbox",
     "人工智能", "模型", "智能体", "推理", "训练", "上下文", "缓存", "豆包",
 )
+SECRET_PATTERNS = (
+    re.compile(r"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"),
+    re.compile(r"(?i)(?:api[_-]?key|access[_-]?token|auth[_-]?token)\s*[:=]\s*['\"]?[A-Za-z0-9._-]{20,}"),
+)
 
 
 def contains_term(text: str, term: str) -> bool:
@@ -33,6 +37,13 @@ def clean_text(value: str | None) -> str:
     text = html.unescape(value or "")
     text = TAG_RE.sub(" ", text)
     return re.sub(r"\s+", " ", text).strip()
+
+
+def redact_untrusted_secrets(value: str | None) -> str:
+    text = value or ""
+    for pattern in SECRET_PATTERNS:
+        text = pattern.sub("[REDACTED_CREDENTIAL]", text)
+    return text
 
 
 def canonical_url(url: str) -> str:
@@ -113,7 +124,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     title = clean_text(item.get("title"))
     summary = clean_text(item.get("summary") or item.get("description"))
-    raw_content = item.get("content") or ""
+    raw_content = redact_untrusted_secrets(item.get("content"))
     content = clean_text(raw_content)
     haystack = f"{title} {summary} {content}".lower()
     title_summary = f"{title} {summary}".lower()
@@ -687,7 +698,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "id": item.get("id") or hashlib.sha1(f"{title}|{item.get('link', '')}".encode()).hexdigest()[:10],
         "title": title,
         "summary": summary,
-        "content": item.get("content") or "",
+        "content": raw_content,
         "age_days": age_days,
         "pillars": matched_pillars,
         "score": score,

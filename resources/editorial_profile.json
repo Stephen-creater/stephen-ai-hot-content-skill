@@ -9,11 +9,13 @@
     "require_counterargument": true,
     "require_decision_driver": true,
     "keyword_matches_are_risk_signals_not_verdicts": true,
+    "objective_hard_failures_only": true,
     "marginal_passes_are_rejected": true
   },
   "feedback_learning": {
     "types": ["invariant", "conditional_preference", "operational_rule", "topic_state", "case_only", "unexplained_decision", "hypothesis"],
     "require_counterexample_before_generalizing": true,
+    "single_batch_can_create_subjective_hard_gate": false,
     "blank_note_creates_rule": false,
     "pending_changes_preference": false
   },

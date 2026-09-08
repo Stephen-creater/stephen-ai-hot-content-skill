@@ -27,6 +27,7 @@ description: 按 Stephen 的历史文章与人工审核反馈，持续发现、�
 2. [反馈学习协议](references/feedback-learning-protocol.md)
 3. [编辑画像配置](resources/editorial_profile.json)
 4. [来源配置](resources/content_curator_sources.json)
+5. [加权来源组合](resources/source_portfolio.json)
 
 边界难判时读取 [正反校准案例](references/editorial-calibration-cases.md)。扩源时读取 [来源发现清单](resources/source_discovery_playbook.md)。多平台检索读取 [Agent Reach 路由](references/agent-reach-discovery.md)。使用朱雀时读取 [朱雀说明](references/zhuque-aigc.md)。
 
@@ -46,6 +47,8 @@ description: 按 Stephen 的历史文章与人工审核反馈，持续发现、�
 - 视频或播客没有逐字稿时只保留为线索。逐字稿须去时间码、恢复标点和段落，不能把字幕墙交给用户。
 - 检查原始公开页面。登录、关注、验证码或付费后才能看到剩余正文时直接淘汰；代理或缓存抓到隐藏文字不算公开完整。
 - 单个来源抓取失败时记录到 `run.json` 并继续其他来源；不得把网络、鉴权或解析失败误报为“没有好材料”。所有可用路径都失败且需要新授权时，才作为真实阻塞说明。
+- 每次搜索必须用 `discovery_ledger.py` 记录来源族、渠道、查询、结果数、全文数、合格数和最终入选数。安装但未实测、配置但本周未使用，都不算覆盖。
+- 每周运行 `source_coverage.py`。覆盖率按高价值来源族权重计算：真实连通目标至少 85%，近 7 天实际探索目标至少 80%；未达标时优先补覆盖缺口，不得继续重复同一批网页关键词。
 
 ### 3. 资格门槛
 
@@ -125,6 +128,7 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-b
 - 本项目不调用 OpenCLI，避免接管用户 Chrome；动态或登录页面使用 Ego Browser 隔离空间。
 - 朱雀和模型复排都是辅助证据。未配置或失败表示未知，不能证明文章由人创作。
 - 自动分数名为 `discovery_score`，只负责发现排序。最终发布必须通过证据化人工终审。
+- 单批反馈不得把读者兴趣、题材偏好、技术难度、行业价值或二创难度升级为客观硬失败。它们只能成为风险信号或待验证假设；只有语言、公开完整性、时效、精确历史状态、来源安全和可核验平台门槛等事实可以硬拦截。
 
 ## 修改后的验证
 

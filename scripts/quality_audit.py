@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from editorial_judgment import HARD_FAILURE_MARKERS
+
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -29,6 +31,10 @@ def audit() -> dict:
     calibration = read("references/editorial-calibration-cases.md")
     protocol = read("references/feedback-learning-protocol.md")
     profile = json.loads(read("resources/editorial_profile.json"))
+    subjective_hard_codes = {
+        "implementation_dominates_article", "specialist_language_dominates", "complex_technical_case",
+        "frontier_lab_safety_topic", "strategic_product_analysis",
+    }
     publisher = read("scripts/publish_batch.py")
     importer = read("scripts/import_feedback.py")
     ignore = read(".gitignore")
@@ -40,11 +46,11 @@ def audit() -> dict:
         Check("feedback_fidelity", "feedback learning types", 6,
               all(term in protocol for term in ("invariant", "conditional_preference", "case_only", "unexplained_decision", "hypothesis")),
               "feedback is classified before generalization"),
-        Check("feedback_fidelity", "paired boundary cases", 6,
+        Check("feedback_fidelity", "paired boundary cases", 4,
               calibration.count("### 可选") >= 5 and calibration.count("### 不选") >= 5,
               "positive and negative cases share surface traits"),
 
-        Check("generalization", "keywords are not final verdicts", 7,
+        Check("generalization", "keywords are not final verdicts", 5,
               profile["decision_model"].get("keyword_matches_are_risk_signals_not_verdicts") is True,
               "profile contract"),
         Check("generalization", "counterexample required", 5,
@@ -59,6 +65,10 @@ def audit() -> dict:
         Check("generalization", "human evidence can override risk only", 5,
               "validate_manual_review" in publisher and "eligibility.get(\"status\") == \"failed\"" in publisher,
               "objective failures stay absolute; editorial risks are reviewable"),
+        Check("generalization", "subjective preferences cannot become hard failures", 4,
+              profile["decision_model"].get("objective_hard_failures_only") is True
+              and not (set(HARD_FAILURE_MARKERS.values()) & subjective_hard_codes),
+              "single-batch reader-fit judgments remain reviewable risks"),
 
         Check("reliability", "five-item article-first gate", 5,
               profile.get("minimum_delivery_count") == 5 and profile.get("minimum_non_github_candidates") >= 4 and profile.get("maximum_github_candidates") <= 1,
@@ -76,7 +86,7 @@ def audit() -> dict:
               all(term in skill for term in ("主力2", "批次 ID", "归属")),
               "parallel lanes cannot guess file ownership"),
 
-        Check("maintainability", "compact core Skill", 5,
+        Check("maintainability", "compact core Skill", 3,
               len(skill.splitlines()) <= 160,
               f"{len(skill.splitlines())} lines"),
         Check("maintainability", "compact stable judgment model", 4,
@@ -88,10 +98,18 @@ def audit() -> dict:
         Check("maintainability", "machine-readable profile schema", 3,
               profile.get("schema_version") == 2 and (ROOT / "resources/editorial_profile.schema.json").exists(),
               "versioned configuration"),
+        Check("maintainability", "measurable source portfolio and private ledger", 4,
+              all((ROOT / path).exists() for path in (
+                  "resources/source_portfolio.json", "scripts/source_coverage.py", "scripts/discovery_ledger.py"
+              )),
+              "coverage and channel yield are observable rather than claimed"),
 
-        Check("safety", "private paths ignored", 5,
+        Check("safety", "private paths ignored", 4,
               all(term in ignore for term in (".config/", ".local/", "topics/", ".env")),
               "secrets, feedback and artifacts stay local"),
+        Check("safety", "untrusted source credentials are redacted", 1,
+              "redact_untrusted_secrets" in read("scripts/curator.py"),
+              "community posts cannot pass API keys into candidate artifacts"),
         Check("safety", "browser boundary explicit", 2,
               "不调用 OpenCLI" in skill and "Ego Browser" in skill,
               "user Chrome is not commandeered"),
@@ -99,7 +117,7 @@ def audit() -> dict:
               "不撰写文章正文" in skill and "stephen-writing-skill" in skill,
               "selection and writing remain separate"),
 
-        Check("tests", "decision contract tests", 5,
+        Check("tests", "decision contract tests", 3,
               (ROOT / "tests/test_editorial_judgment.py").exists(),
               "eligibility, risk and evidence boundaries"),
         Check("tests", "feedback audit tests", 2,

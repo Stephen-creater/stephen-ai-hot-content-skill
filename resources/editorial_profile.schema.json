@@ -21,22 +21,24 @@
     "target_readers": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
     "decision_model": {
       "type": "object",
-      "required": ["dimensions_in_order", "manual_review_required", "keyword_matches_are_risk_signals_not_verdicts"],
+      "required": ["dimensions_in_order", "manual_review_required", "keyword_matches_are_risk_signals_not_verdicts", "objective_hard_failures_only"],
       "properties": {
         "dimensions_in_order": {
           "const": ["topic_appeal", "reader_change", "material_increment", "re_authorability", "durability"]
         },
         "manual_review_required": {"const": true},
-        "keyword_matches_are_risk_signals_not_verdicts": {"const": true}
+        "keyword_matches_are_risk_signals_not_verdicts": {"const": true},
+        "objective_hard_failures_only": {"const": true}
       },
       "additionalProperties": true
     },
     "feedback_learning": {
       "type": "object",
-      "required": ["types", "require_counterexample_before_generalizing", "blank_note_creates_rule"],
+      "required": ["types", "require_counterexample_before_generalizing", "single_batch_can_create_subjective_hard_gate", "blank_note_creates_rule"],
       "properties": {
         "types": {"type": "array", "minItems": 7, "uniqueItems": true, "items": {"type": "string"}},
         "require_counterexample_before_generalizing": {"const": true},
+        "single_batch_can_create_subjective_hard_gate": {"const": false},
         "blank_note_creates_rule": {"const": false}
       },
       "additionalProperties": true

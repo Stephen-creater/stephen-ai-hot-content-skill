@@ -1,0 +1,135 @@
+{
+  "schema_version": 1,
+  "target_weighted_access_coverage": 85,
+  "target_rolling_attempt_coverage": 80,
+  "rolling_window_days": 7,
+  "principle": "覆盖率按高价值来源族权重计算，不按安装命令或平台数量计算；海外社媒主要发现线索，正式候选仍需完整简体中文材料。",
+  "families": [
+    {
+      "id": "chinese_longform_web",
+      "label": "中文独立长文与RSS",
+      "weight": 18,
+      "role": "candidate",
+      "doctor_channels": ["web", "rss", "exa_search"],
+      "automation_types": ["web", "rss", "aihot", "learnprompt_radar"],
+      "minimum_access_fraction": 0,
+      "strategy": "按作者、专题和引用链追踪独立博客、newsletter、产品复盘与深度媒体，不只搜热点关键词。"
+    },
+    {
+      "id": "wechat",
+      "label": "微信公众号作者图谱",
+      "weight": 18,
+      "role": "candidate",
+      "doctor_channels": [],
+      "automation_types": [],
+      "minimum_access_fraction": 0.35,
+      "strategy": "公开文章索引负责发现，逐篇回到原文核验；建立高命中作者订阅，而不是只依赖聚合站。",
+      "user_action": "若公开索引覆盖不足，再评估只读公众号搜索服务；不得上传私人 Cookie 到未知服务。"
+    },
+    {
+      "id": "chinese_product_interviews",
+      "label": "中文产品与人物深度访谈",
+      "weight": 10,
+      "role": "candidate",
+      "doctor_channels": ["web", "exa_search"],
+      "automation_types": ["web", "rss"],
+      "minimum_access_fraction": 0,
+      "strategy": "跟踪产品负责人、核心团队、Founder Park、极客公园、硅谷101等围绕具体产品决策的完整材料。"
+    },
+    {
+      "id": "zhihu",
+      "label": "知乎长回答与专栏",
+      "weight": 6,
+      "role": "candidate",
+      "doctor_channels": ["web", "exa_search"],
+      "automation_types": [],
+      "minimum_access_fraction": 0.25,
+      "maximum_access_fraction": 0.5,
+      "strategy": "只找有完整论证、真实经历和结果的长回答；搜索摘要不能成为候选。"
+    },
+    {
+      "id": "bilibili",
+      "label": "B站深度视频与访谈",
+      "weight": 8,
+      "role": "candidate",
+      "doctor_channels": ["bilibili", "xiaoyuzhou"],
+      "automation_types": [],
+      "minimum_access_fraction": 0,
+      "strategy": "使用创作者白名单和栏目追踪；搜索、视频详情与字幕/转写必须分别验证。"
+    },
+    {
+      "id": "chinese_podcasts",
+      "label": "中文播客与完整逐字稿",
+      "weight": 8,
+      "role": "candidate",
+      "doctor_channels": ["xiaoyuzhou"],
+      "automation_types": [],
+      "minimum_access_fraction": 0,
+      "strategy": "跟踪硅谷101、科技早知道、十字路口、Founder Park等节目；没有可读逐字稿不进入候选。",
+      "user_action": "配置 Groq API Key 后才能稳定转录无字幕节目。"
+    },
+    {
+      "id": "twitter_builder_graph",
+      "label": "Twitter/X 高信号作者图谱",
+      "weight": 10,
+      "role": "discovery",
+      "doctor_channels": ["twitter"],
+      "automation_types": [],
+      "minimum_access_fraction": 0,
+      "strategy": "按作者时间线、列表和长文追踪产品负责人、研究者与一线Builder；推文只做线索，继续寻找中文成熟材料。",
+      "user_action": "使用专门的只读 X 账号，通过 Cookie-Editor 手工导出 auth_token 与 ct0；不读取浏览器 Cookie。"
+    },
+    {
+      "id": "youtube_global",
+      "label": "YouTube全球深度访谈",
+      "weight": 6,
+      "role": "discovery",
+      "doctor_channels": ["youtube", "xiaoyuzhou"],
+      "automation_types": [],
+      "minimum_access_fraction": 0,
+      "strategy": "优先频道订阅和节目单，不依赖宽泛关键词搜索；字幕用于发现论点，再寻找或制作中文成熟材料。"
+    },
+    {
+      "id": "communities",
+      "label": "Reddit、Hacker News与V2EX",
+      "weight": 6,
+      "role": "discovery",
+      "doctor_channels": ["reddit", "v2ex"],
+      "automation_types": [],
+      "minimum_access_fraction": 0.2,
+      "strategy": "用于发现失败案例、真实争议和原作者；原始社区热帖默认不直接交付。",
+      "user_action": "Reddit 需要现成登录态或旧官方 API 凭证；Hacker News 与 V2EX 可走公开接口。"
+    },
+    {
+      "id": "global_newsletters",
+      "label": "海外独立博客与newsletter",
+      "weight": 5,
+      "role": "discovery",
+      "doctor_channels": ["web", "rss"],
+      "automation_types": ["rss", "web"],
+      "minimum_access_fraction": 0,
+      "strategy": "跟踪 Simon Willison、Latent Space、One Useful Thing、Every、Lenny等完整长文和RSS。"
+    },
+    {
+      "id": "github",
+      "label": "GitHub发布与实践仓库",
+      "weight": 3,
+      "role": "discovery",
+      "doctor_channels": ["github"],
+      "automation_types": [],
+      "minimum_access_fraction": 0,
+      "strategy": "只做小比例线索补充；实时核验Star、更新时间、Release和文档完整性。"
+    },
+    {
+      "id": "xiaohongshu",
+      "label": "小红书真实使用场景",
+      "weight": 2,
+      "role": "discovery",
+      "doctor_channels": ["xiaohongshu"],
+      "automation_types": [],
+      "minimum_access_fraction": 0,
+      "strategy": "发现普通用户痛点和产品使用语言，短笔记与图片笔记默认只作线索。",
+      "user_action": "通过 Cookie-Editor 手工导出小红书同域 Cookie，接入只读 xiaohongshu-mcp；不使用用户Chrome的OpenCLI。"
+    }
+  ]
+}
