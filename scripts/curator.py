@@ -113,7 +113,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     title = clean_text(item.get("title"))
     summary = clean_text(item.get("summary") or item.get("description"))
-    content = clean_text(item.get("content"))
+    raw_content = item.get("content") or ""
+    content = clean_text(raw_content)
     haystack = f"{title} {summary} {content}".lower()
     title_summary = f"{title} {summary}".lower()
     reasons: list[str] = []
@@ -225,6 +226,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if content_form == "video" and content_status != "transcript":
         score -= 55
         penalties.append("视频缺少逐字稿，无法核验完整论证")
+    visual_action_count = sum(
+        content.count(term)
+        for term in ("可以看到", "我们打开", "点击", "我来给大家看", "你看", "演示")
+    )
+    visual_object_count = sum(content.count(term) for term in ("界面", "画面", "截图", "这个页面"))
+    if content_form == "video" and content_status == "transcript" and visual_action_count >= 8 and visual_object_count >= 4:
+        score -= 80
+        penalties.append("关键证据依赖视频画面与操作演示，逐字稿无法独立支撑文章二创")
 
     if NUMBER_RE.search(haystack):
         score += 6
@@ -334,6 +343,10 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     technical_acronyms = {
         token for token in re.findall(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9-]{1,9}(?![A-Za-z0-9])", content)
         if token not in {"AI", "API", "URL", "PDF", "LLM", "GPT"}
+    }
+    technical_identifiers = {
+        token.lower()
+        for token in re.findall(r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_-]{3,}(?![A-Za-z0-9_])", content)
     }
     oversized_checklist = bool(re.search(r"(?:1[2-9]|2\d)(?:条|个)(?:实战经验|经验|方法|原则|技巧)", title_summary))
     self_disclosed_ai_authorship = bool(
@@ -489,6 +502,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     elif len(content) < 2500 and len(code_barrier_terms) >= 2:
         score -= 45
         penalties.append("文章偏短且技术术语密集，普通读者难以获得可复用价值")
+    code_line_pattern = re.compile(
+        r"(?:=>|===|\?\.|\.(?:get|set|push|map|toJSON|fromJSON|setMeta)\(|"
+        r"\b(?:const|let|function|return|import|export)\b|^[\s{}\[\],]+$|"
+        r"^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*[:=])"
+    )
+    code_like_lines = [line for line in raw_content.splitlines() if code_line_pattern.search(line.strip())]
+    if content_form == "article" and len(code_like_lines) >= 8:
+        score -= 80
+        penalties.append("正文代码或实现片段占比过高，文章载体的普通读者难以独立理解")
     if len(terminal_cli_terms) >= 3:
         score -= 70
         penalties.append("以终端、CLI、Shell 或快捷键为主体，技术门槛超出目标读者")
@@ -513,6 +535,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if paper_explainer and (len(deep_paper_metric_terms) >= 2 or len(technical_acronyms) >= 6):
         score -= 75
         penalties.append("深论文解读依赖大量专有名词、缩写或实验指标，不适合普通读者")
+    if len(technical_acronyms) >= 15 and len(technical_identifiers) >= 80:
+        score -= 80
+        penalties.append("专业缩写、系统名与工程标识密度过高，理解主线需要专业背景")
     if len(citation_collage_terms) >= 3:
         score -= 45
         penalties.append("研究、报告与人物引语堆叠，缺少作者自己的高密度结论")

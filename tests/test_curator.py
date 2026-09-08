@@ -1201,6 +1201,89 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("视频缺少逐字稿", result["penalty"])
 
+    def test_visual_demo_transcript_cannot_masquerade_as_article_material(self) -> None:
+        common = {
+            "link": "https://www.youtube.com/watch?v=demo",
+            "summary": "AI 产品完整实操",
+            "published": "2026-09-07",
+            "source_name": "中文创作者",
+            "source_priority": 5,
+            "source_type": "youtube",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "video",
+            "content_status": "transcript",
+        }
+        visual_body = ("我们打开这个页面，点击这里，现在可以看到界面的演示结果。" * 30)
+        blocked = score_item({**common, "title": "AI 开发全流程视频实操", "content": visual_body}, self.profile, now=self.now)
+        renamed = score_item({**common, "title": "从需求到交付的完整方法", "content": visual_body}, self.profile, now=self.now)
+        interview = score_item({
+            **common,
+            "title": "AI 产品负责人对话：失败后怎样改验收标准",
+            "content": "受访者讲述了真实任务的失败、调整、结果和限制条件。" * 120,
+        }, self.profile, now=self.now)
+        for item in (blocked, renamed):
+            self.assertFalse(item["recommended"])
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertIn("关键证据依赖视频画面", item["penalty"])
+        self.assertNotIn("关键证据依赖视频画面", interview["penalty"])
+
+    def test_code_dominated_article_is_ineligible_but_brief_example_survives(self) -> None:
+        common = {
+            "summary": "AI 协同编辑的完整实践",
+            "published": "2026-09-07",
+            "source_name": "中文产品团队",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        code = "\n".join([
+            "const beforeDoc = state.doc.toJSON()", "messages: []", "}", ".messages.push({",
+            "stepsJson: tr.steps.map(step => step.toJSON())", "tr.setMeta(", ",", "captureTransaction = tr =>",
+            ") === sessionId &&", ") === runId", "return afterDoc", "export function rollback()",
+        ])
+        prose = "人类编辑与 AI 修改必须能够区分，这是一个真实产品问题。" * 120
+        blocked = score_item({**common, "title": "AI 文档协作实现", "link": "https://example.com/code", "content": prose + "\n" + code}, self.profile, now=self.now)
+        renamed = score_item({**common, "title": "人和智能体如何安全共编", "link": "https://example.com/code-renamed", "content": prose + "\n" + code}, self.profile, now=self.now)
+        brief = score_item({**common, "title": "AI 文档修改如何不误伤人工编辑", "link": "https://example.com/brief", "content": prose + "\nconst runId = currentRun\n"}, self.profile, now=self.now)
+        for item in (blocked, renamed):
+            self.assertFalse(item["recommended"])
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertIn("正文代码或实现片段占比过高", item["penalty"])
+        self.assertNotIn("正文代码或实现片段占比过高", brief["penalty"])
+
+    def test_extreme_system_jargon_density_is_ineligible_without_code_blocks(self) -> None:
+        common = {
+            "summary": "AI 团队记忆方法",
+            "published": "2026-09-07",
+            "source_name": "中文技术团队",
+            "source_priority": 5,
+            "source_type": "web",
+            "language": "zh",
+            "maturity": "secondary",
+            "content_form": "article",
+            "content_status": "fulltext",
+        }
+        acronyms = " ".join(f"SYS{i}" for i in range(20))
+        identifiers = " ".join(f"componentName{i}" for i in range(90))
+        dense = ("团队解释复杂系统的调用边界与配置。" * 120) + acronyms + identifiers
+        blocked = score_item({**common, "title": "AI 团队记忆架构实践", "link": "https://example.com/jargon", "content": dense}, self.profile, now=self.now)
+        renamed = score_item({**common, "title": "如何让智能体不再重复犯错", "link": "https://example.com/jargon-renamed", "content": dense}, self.profile, now=self.now)
+        accessible = score_item({
+            **common,
+            "title": "AI 团队为什么要保留错误证据",
+            "link": "https://example.com/accessible",
+            "content": ("作者用一次真实失败说清了错误、根因、修复和后续验证。" * 150) + " ACL RAG SDK",
+        }, self.profile, now=self.now)
+        for item in (blocked, renamed):
+            self.assertFalse(item["recommended"])
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertIn("专业缩写、系统名与工程标识密度过高", item["penalty"])
+        self.assertNotIn("专业缩写、系统名与工程标识密度过高", accessible["penalty"])
+
     def test_latest_feedback_rejects_short_engineering_and_commercial_noise(self) -> None:
         common = {
             "summary": "中文完整材料",
