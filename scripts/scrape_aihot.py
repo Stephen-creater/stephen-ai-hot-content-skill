@@ -350,6 +350,8 @@ def inbox_item(row: dict, settings: dict) -> dict:
     platform = row.get("platform", "web")
     item = {
         "title": clean_text(row.get("title")),
+        "source_title": clean_text(row.get("source_title")),
+        "editorial_angle": clean_text(row.get("editorial_angle")),
         "link": row.get("url", ""),
         "summary": clean_text(row.get("notes")),
         "content": "",

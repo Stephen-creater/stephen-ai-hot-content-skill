@@ -39,6 +39,9 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
     payload = json.dumps(candidates, ensure_ascii=False).replace("</", "<\\/")
     cards = []
     for position, item in enumerate(candidates, start=1):
+        display_title = item.get('source_title') or item['title']
+        angle = item.get('editorial_angle') or item.get('title_zh')
+        angle_html = f'<p class="editorial-angle">拟议切口（非原文标题）：{html.escape(angle)}</p>' if angle and angle != display_title else ''
         aigc_detection = render_aigc_detection(item)
         github_stars = f" · GitHub {int(item['github_stars'])} Star" if item.get("github_stars") is not None else ""
         transcript = ""
@@ -49,7 +52,8 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
             f"""
 <article class="card" data-id="{html.escape(str(item['id']))}">
   <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}{github_stars}</span><span>发现排序分 {item['score']}（非质量评分）</span></div>
-  <h2><a href="{html.escape(item.get('link', '#'))}" target="_blank" rel="noreferrer">{position}. {html.escape(item.get('title_zh') or item['title'])}</a></h2>
+  <h2><a href="{html.escape(item.get('link', '#'))}" target="_blank" rel="noreferrer">{position}. {html.escape(display_title)}</a></h2>
+  {angle_html}
   <p>{html.escape(item.get('summary') or item.get('content', '')[:240])}</p>
   <p class="reason">{html.escape(item.get('reason', ''))}</p>
   <p class="penalty">{html.escape(item.get('penalty', ''))}</p>
@@ -185,6 +189,6 @@ renderSummary();
     output_path.write_text(document, encoding="utf-8")
     links = []
     for position, item in enumerate(candidates, start=1):
-        title = (item.get("title_zh") or item["title"]).replace("[", "\\[").replace("]", "\\]")
+        title = (item.get("source_title") or item["title"]).replace("[", "\\[").replace("]", "\\]")
         links.append(f"{position}. [{title}]({item.get('link', '#')})")
     output_path.with_name("links.md").write_text("\n".join(links) + "\n", encoding="utf-8")

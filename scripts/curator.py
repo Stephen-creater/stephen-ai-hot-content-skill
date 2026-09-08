@@ -122,7 +122,7 @@ def deduplicate(items: list[dict]) -> list[dict]:
 
 def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
-    title = clean_text(item.get("title"))
+    title = clean_text(item.get("source_title") or item.get("title"))
     summary = clean_text(item.get("summary") or item.get("description"))
     raw_content = redact_untrusted_secrets(item.get("content"))
     content = clean_text(raw_content)

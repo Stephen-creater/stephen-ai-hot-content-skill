@@ -9,9 +9,21 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from scrape_aihot import hydrate, inbox_item, load_inbox, fetch_youtube_transcript
 from curator import score_item
+from report import generate_report
 
 
 class MaterialCompletenessTest(unittest.TestCase):
+    def test_original_title_survives_editorial_reframing(self):
+        row = {'id': 'x', 'title': '编辑重写', 'source_title': '原文其实谈某公司的融资',
+               'title_zh': '普通人立刻能用的方法', 'link': 'https://example.org/x', 'score': 10}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'index.html'
+            generate_report([row], path, 'test')
+            page = path.read_text()
+            links = path.with_name('links.md').read_text()
+        self.assertIn('1. 原文其实谈某公司的融资</a>', page)
+        self.assertIn('拟议切口（非原文标题）：普通人立刻能用的方法', page)
+        self.assertIn('[原文其实谈某公司的融资]', links)
     def test_chinese_metadata_cannot_hide_an_english_body(self):
         profile = json.loads((ROOT / 'resources/editorial_profile.json').read_text())
         item = score_item({'title': 'AI 实用方法', 'language': 'zh', 'content_status': 'fulltext',

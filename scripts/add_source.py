@@ -44,6 +44,8 @@ def main() -> None:
     )
     parser.add_argument("--creator", default="")
     parser.add_argument("--title", default="")
+    parser.add_argument("--source-title", default="", help="从原页面核对的标题，不填拟议切口")
+    parser.add_argument("--editorial-angle", default="", help="可选编辑切口，与原题分别保存")
     parser.add_argument("--published", default="")
     parser.add_argument("--notes", default="")
     parser.add_argument("--maturity", choices=["secondary", "primary"], default="secondary")
@@ -62,6 +64,8 @@ def main() -> None:
             "platform": args.platform,
             "creator": args.creator,
             "title": args.title,
+            "source_title": args.source_title,
+            "editorial_angle": args.editorial_angle,
             "published": args.published,
             "notes": args.notes,
             "maturity": args.maturity,
