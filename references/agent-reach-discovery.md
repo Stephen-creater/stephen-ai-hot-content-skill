@@ -36,7 +36,7 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 
 本项目不得运行 `opencli`。当前 OpenCLI Browser Bridge 会连接用户的 Google Chrome，不能可靠绑定 Ego Browser 的隔离 Task Space，会弹出调试提示并干扰用户操作。
 
-所有需要浏览器渲染、登录态或交互的页面统一直接使用 `ego-browser`，为热点选题复用同一个独立任务空间。任务完成后关闭该空间；不得启动、调试或操作用户的 Chrome。公开网页优先使用 HTTP、RSS、Exa 和平台 CLI，只有这些路径拿不到完整内容时才进入 Ego Browser。
+所有需要浏览器渲染、登录态或交互的页面直接使用 `ego-browser`，按平台或研究分工创建独立任务空间。用户已明确授权多个空间并行；各任务独占空间，同一空间内的操作串行，禁止多个进程同时切换它的当前标签。Ego 可主动用于站内搜索和作者追踪，不必等 HTTP、RSS 或 CLI 失败才使用。任务完成后关闭自己的空间；不得启动、调试或操作用户的 Chrome。
 
 ## 热点选题检索组合
 
