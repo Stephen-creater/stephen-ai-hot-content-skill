@@ -154,6 +154,11 @@
     }
   ],
   "manual_registry": [
+    {"name": "申悦文章列表", "platform": "web", "url": "https://www.woshipm.com/u/65947", "family": "chinese_product_interviews", "priority": 4, "notes": "已验证作者列表可读。沿公开作者文章链找新材料，咨询案例是否可二创逐篇判断，不作免审白名单。"},
+    {"name": "小林coding知乎文章", "platform": "zhihu", "url": "https://www.zhihu.com/people/xiaolincoding/posts", "family": "zhihu", "priority": 4, "notes": "Ego Browser已验证搜索、全文、作者文章列表。工程教程、截图演示和即时发布仍须按标题和正文筛选。"},
+    {"name": "一起Vibe公开笔记", "platform": "xiaohongshu", "url": "https://www.xiaohongshu.com/user/profile/651465e9000000002402f600", "family": "xiaohongshu", "priority": 3, "notes": "已验证Ego搜索、笔记和作者页。短笔记仅用于追踪案例和原始作者，不把视频合集当文字底稿。"},
+    {"name": "OpenAI Developers公开时间线", "platform": "twitter", "url": "https://x.com/OpenAIDevs", "family": "twitter_builder_graph", "priority": 3, "notes": "Ego Browser已验证搜索、单条详情和作者页。官方发布作线索和事实核验；不直接当中文候选。"},
+    {"name": "Reddit ChatGPT社区", "platform": "reddit", "url": "https://www.reddit.com/r/ChatGPT/", "family": "communities", "priority": 3, "notes": "Ego Browser已验证社区搜索、帖子和作者页。求助和评论只作问题线索，追到独立完整文章再终审。"},
     {
       "name": "公众号作战室公开文章索引",
       "url": "https://yzdtoolbox.com/zuozhanshi/",
