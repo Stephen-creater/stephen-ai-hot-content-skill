@@ -126,6 +126,7 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-b
 - 不撰写文章正文；选题确认后交给 `stephen-writing-skill`。
 - 不提交 `.local/`、`.config/`、`topics/`、反馈、密钥、Cookie 或登录态。
 - 本项目不调用 OpenCLI，避免接管用户 Chrome；动态或登录页面使用 Ego Browser 隔离空间。
+- Ego Browser 的现成登录态是正式检索途径。CLI 缺凭据时先实测站内搜索与正文，不得直接要求导出 Cookie 或购买接口；按操作记录成功与失败。
 - 朱雀和模型复排都是辅助证据。未配置或失败表示未知，不能证明文章由人创作。
 - 自动分数名为 `discovery_score`，只负责发现排序。最终发布必须通过证据化人工终审。
 - 单批反馈不得把读者兴趣、题材偏好、技术难度、行业价值或二创难度升级为客观硬失败。它们只能成为风险信号或待验证假设；只有语言、公开完整性、时效、精确历史状态、来源安全和可核验平台门槛等事实可以硬拦截。
