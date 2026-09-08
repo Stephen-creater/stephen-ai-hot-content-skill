@@ -17,7 +17,7 @@ import requests
 import trafilatura
 from bs4 import BeautifulSoup
 
-from curator import clean_text, rank_candidates
+from curator import canonical_url, clean_text, rank_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
 from zhuque_aigc import ZhuqueClient, apply_policy, estimate_text_cost_yuan, load_config
@@ -82,7 +82,10 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
                 "source_role": source.get("role", "candidate"),
                 "language": source.get("language", "unknown"),
                 "maturity": source.get("maturity", "unknown"),
-                "content_form": "article",
+                "content_form": source.get("content_form", "article"),
+                "audio_url": next((e.get("href") for e in entry.get("enclosures", [])
+                                   if e.get("type", "").startswith("audio/")
+                                   and e.get("href", "").startswith(("https://", "http://"))), None),
                 "content_status": "summary",
             }
         )
@@ -437,13 +440,14 @@ def inbox_item(row: dict, settings: dict) -> dict:
     return hydrate(item, settings)
 
 
-def load_inbox(path: Path | None, settings: dict) -> list[dict]:
+def load_inbox(path: Path | None, settings: dict, skip_urls: set[str] | None = None) -> list[dict]:
     if not path or not path.exists():
         return []
     rows = load_json(path)
     if not isinstance(rows, list):
         raise ValueError("source inbox 必须是 JSON 数组")
-    return [inbox_item(row, settings) for row in rows]
+    skipped = skip_urls or set()
+    return [inbox_item(row, settings) for row in rows if canonical_url(row.get("url", "")) not in skipped]
 
 
 def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
@@ -585,11 +589,14 @@ def main() -> None:
     settings = source_config["fetch"]
     errors = []
     source_attempts = []
+    feedback_store = ROOT / ".local" / "editorial_feedback.jsonl"
+    reviewed_candidates = [] if args.fixture else final_reviewed_candidates(feedback_store)
+    reviewed_urls = {canonical_url(row.get("link", "")) for row in reviewed_candidates if row.get("link")}
 
     if args.fixture:
         items = load_json(args.fixture)
     else:
-        items = load_inbox(args.inbox, settings)
+        items = load_inbox(args.inbox, settings, skip_urls=reviewed_urls)
         enabled_sources = [source for source in source_config["sources"] if args.include_verification or source.get("role") != "verification"]
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = {executor.submit(fetch_source, source, settings): source for source in enabled_sources}
@@ -602,13 +609,12 @@ def main() -> None:
                 items.extend(rows)
                 if error:
                     errors.append(error)
+        items = [item for item in items if canonical_url(item.get("link", "")) not in reviewed_urls]
         with concurrent.futures.ThreadPoolExecutor(max_workers=settings["hydrate_workers"]) as executor:
             items = list(executor.map(lambda item: hydrate(item, settings), items))
 
     ranked = rank_candidates(items, profile)
-    feedback_store = ROOT / ".local" / "editorial_feedback.jsonl"
     reviewed_ids = set() if args.fixture else final_reviewed_ids(feedback_store)
-    reviewed_candidates = [] if args.fixture else final_reviewed_candidates(feedback_store)
     skipped_reviewed_count = sum(1 for item in ranked if str(item["id"]) in reviewed_ids)
     ranked = [item for item in ranked if str(item["id"]) not in reviewed_ids]
     skipped_content_duplicate_count = sum(1 for item in ranked if is_historical_content_duplicate(item, reviewed_candidates))
@@ -739,7 +745,8 @@ def main() -> None:
                 "maximum_github_candidates": maximum_github_candidates,
                 "non_github_candidate_count": non_github_candidate_count,
                 "github_candidate_count": github_candidate_count,
-                "delivery_ready": ready_to_deliver,
+                "composition_ready": ready_to_deliver,
+                "delivery_ready": False,
                 "include_rejected": args.include_rejected,
                 "errors": errors,
             },
@@ -749,7 +756,7 @@ def main() -> None:
         encoding="utf-8",
     )
     generate_report(candidates, output_dir / "index.html", timestamp)
-    print(f"合格候选 {len(candidates)} 条，输入 {len(items)} 条，硬门槛拒绝 {rejected_by_gate_count} 条")
+    print(f"待终审材料 {len(candidates)} 条，输入 {len(items)} 条，资格拒绝 {rejected_by_gate_count} 条；须完成原文终审与发布登记")
     if len(candidates) < minimum_delivery_count and not args.fixture:
         print(f"尚未达到交付门槛 {minimum_delivery_count} 条：继续扩展来源并检索，不得交付或用弱题补位")
     elif non_github_candidate_count < minimum_non_github_candidates and not args.fixture:

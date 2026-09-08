@@ -82,6 +82,18 @@ Twitter、Reddit、V2EX、小红书短笔记和 GitHub 项目页默认只是线�
 
 ## 阅读与字幕
 
+字幕失败时，先查发布者官网/RSS 的原始音频和文字稿链接。已验证硅谷101官方 RSS 提供单集页面、日期和音频 enclosure，抓取器将其保存为 `audio_url`，不把 Show Notes 当逐字稿。
+
+Apple Silicon 本地已有 MLX Whisper 模型时，可用本地转写兜底：
+
+```bash
+HF_HUB_OFFLINE=1 uv run --with mlx-whisper==0.4.3 python scripts/local_transcribe.py \
+  本地音频.wav --model 本地模型目录 --output .local/work/转写.json \
+  --initial-prompt "发布者给出的人名、公司名和术语"
+```
+
+此路径无外部音频上传。测试片段加 `--sample`；转写器始终不自行宣称原来源完整。正式材料须核对音频时长、尾部覆盖、专名与数字；不得把样本或异常重复转写标为完整逐字稿。没有本地模型时，先核验可用浏览器字幕，再决定是否需要安装或外部转写服务。
+
 ```bash
 curl -s "https://r.jina.ai/URL"
 yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "YOUTUBE_URL"

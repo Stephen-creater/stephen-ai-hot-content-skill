@@ -1,6 +1,18 @@
 {
   "sources": [
     {
+      "name": "硅谷101 官方播客",
+      "family": "chinese_podcasts",
+      "category": "中文播客原始音频线索",
+      "type": "rss",
+      "url": "https://feeds.fireside.fm/sv101/rss",
+      "content_form": "podcast",
+      "priority": 4,
+      "role": "discovery",
+      "language": "zh",
+      "maturity": "primary"
+    },
+    {
       "name": "Simon Willison",
       "family": "global_newsletters",
       "category": "海外实践作者线索",

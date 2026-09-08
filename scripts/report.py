@@ -48,7 +48,7 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
         cards.append(
             f"""
 <article class="card" data-id="{html.escape(str(item['id']))}">
-  <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}{github_stars}</span><span>评分 {item['score']}</span></div>
+  <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}{github_stars}</span><span>发现排序分 {item['score']}（非质量评分）</span></div>
   <h2><a href="{html.escape(item.get('link', '#'))}" target="_blank" rel="noreferrer">{position}. {html.escape(item.get('title_zh') or item['title'])}</a></h2>
   <p>{html.escape(item.get('summary') or item.get('content', '')[:240])}</p>
   <p class="reason">{html.escape(item.get('reason', ''))}</p>

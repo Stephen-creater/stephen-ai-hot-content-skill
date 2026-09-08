@@ -1,4 +1,5 @@
 import sys
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -6,10 +7,19 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
-from scrape_aihot import hydrate, inbox_item
+from scrape_aihot import hydrate, inbox_item, load_inbox
 
 
 class MaterialCompletenessTest(unittest.TestCase):
+    def test_reviewed_urls_are_skipped_before_expensive_reads(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'inbox.json'
+            path.write_text(json.dumps([{'url': 'https://example.org/old?utm_source=x'}, {'url': 'https://example.org/new'}]))
+            with patch('scrape_aihot.inbox_item', side_effect=lambda row, settings: row) as read:
+                rows = load_inbox(path, {}, {'https://example.org/old'})
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(read.call_count, 1)
+            self.assertEqual(rows[0]['url'], 'https://example.org/new')
     def test_web_keeps_end_and_paragraphs_beyond_old_limit(self):
         body = ('真实经历及限制条件。\n\n' * 800) + '文末决定性反例：这次试验没有成功。'
         with patch('scrape_aihot.requests.get') as get, patch('scrape_aihot.trafilatura.extract', return_value=body), patch('scrape_aihot.trafilatura.bare_extraction', return_value={}):
