@@ -1030,6 +1030,11 @@ Language: zh
             "link": "https://example.com/human-review",
             "source_url": "https://github.com/example/daily-life-skill",
             "skill_url": "https://skills.sh/example/daily-life-skill",
+            "article_zh": "这是一份可以直接阅读的中文文章解读，讲清真人为什么使用这项 Skill、具体减少了哪一步操作，以及什么情况下不值得安装。",
+            "localization_review": {
+                "status": "passed",
+                "evidence": "使用本地文件和中文界面，不依赖海外专属服务，国内用户可以按原流程完成任务。",
+            },
             "summary": "一篇人类作者的真实使用复盘与对应公开 Skill。",
             "source_name": "作者博客 / GitHub",
             "content_form": "article",
@@ -1050,6 +1055,9 @@ Language: zh
         self.assertIn("人类文章", report)
         self.assertIn("GitHub / Skill 原文", report)
         self.assertIn("Skill 目录页", report)
+        self.assertIn("中文文章解读", report)
+        self.assertIn("中文用户适配", report)
+        self.assertIn("不依赖海外专属服务", report)
 
     def test_report_gate_does_not_fill_with_rejected_items(self) -> None:
         ranked = [

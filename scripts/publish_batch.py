@@ -36,6 +36,16 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
         if len(deduplicate(rows)) != len(rows):
             raise ValueError("批内重复")
         for row in rows:
+            if row.get("github_skill_focus"):
+                localization = row.get("localization_review", {})
+                if not row.get("human_article_verified"):
+                    raise ValueError(f"GitHub Skill 缺少真人文章核验：{row.get('title')}")
+                if not str(row.get("source_url", "")).startswith("https://github.com/"):
+                    raise ValueError(f"GitHub Skill 缺少原始仓库链接：{row.get('title')}")
+                if len(str(row.get("article_zh", "")).strip()) < 120:
+                    raise ValueError(f"GitHub Skill 缺少可直接阅读的中文文章解读：{row.get('title')}")
+                if localization.get("status") != "passed" or len(str(localization.get("evidence", "")).strip()) < 20:
+                    raise ValueError(f"GitHub Skill 未通过中文用户适配：{row.get('title')}")
             if row.get("content_truncated") or row.get("content_status") == "partial":
                 raise ValueError("正文被截断，不能发布为完整材料")
             # Recheck persisted warnings: older drafts may label a failure as risk.

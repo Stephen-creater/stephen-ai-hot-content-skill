@@ -92,6 +92,29 @@ class BatchOwnershipTest(unittest.TestCase):
                     publish_batch(folder, '主力', root)
                 self.assertFalse(json.loads((folder / 'run.json').read_text())['delivery_ready'])
 
+    def test_github_skill_focus_requires_chinese_article_and_localization_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            self.setup_root(root)
+            folder, rows = self.batch(root, 'github-life')
+            for row in rows:
+                row['github_skill_focus'] = True
+                row['source_url'] = f"https://github.com/example/skill-{row['id']}"
+                row['human_article_verified'] = True
+            (folder / 'candidates.json').write_text(json.dumps(rows))
+            with self.assertRaisesRegex(ValueError, '中文文章解读'):
+                publish_batch(folder, '主力', root)
+
+            for row in rows:
+                row['article_zh'] = '真人文章的中文转述，说明具体使用过程、可见结果、限制条件和国内用户需要调整的数据源。' * 4
+                row['localization_review'] = {
+                    'status': 'passed',
+                    'evidence': '依赖本地文件或国内可用平台，中文用户不需要替换关键数据源即可完成主要流程。',
+                }
+            (folder / 'candidates.json').write_text(json.dumps(rows))
+            publish_batch(folder, '主力', root)
+            self.assertTrue(json.loads((folder / 'run.json').read_text())['delivery_ready'])
+
     def batch(self, root, name, suffix=''):
         folder = root / 'topics' / name
         folder.mkdir(parents=True)
