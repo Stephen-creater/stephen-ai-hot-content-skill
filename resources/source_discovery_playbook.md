@@ -68,9 +68,9 @@ python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
 
 ## 持续搜索循环
 
-1. 运行 `agent-reach doctor --json`，确认本机各平台的非浏览器后端；禁用 OpenCLI，浏览器任务统一使用 Ego Browser 隔离空间。
+1. 优先复用已验证的常规来源和非浏览器后端；能力状态未知或执行报错时再运行 `agent-reach doctor --json`。禁用 OpenCLI；Ego 只作为按需补充，不是每轮必做步骤。
 2. 运行常规来源与本地 inbox。
-3. 合格候选不足 5 条时，组合 Exa、微信公众号、知乎、小红书、B站/YouTube 字幕搜索；Twitter、Reddit、V2EX 与 GitHub 只负责发现线索。
+3. 合格候选不足 5 条时，先组合 Exa、公开文章索引、中文 RSS、网页检索与 B站/YouTube 字幕；仍有材料缺口或值得读取的原文确需交互时，再按需用 Ego 补查公众号、知乎、小红书等。Twitter、Reddit、V2EX 与 GitHub 只负责发现线索。
 4. 从尚未覆盖的层级选择至少两个渠道继续搜索，不得只重复同一组网页关键词。
 5. GitHub 只负责局部补充，每批最多 1 条；文章、博客、公众号或完整音视频材料至少要有 4 条。
 6. 找到线索后先读取完整正文、字幕或逐字稿，确认没有登录墙、关注墙和正文截断，再写入 `.local/source_inbox.json`。

@@ -4,9 +4,9 @@
 
 ## 首次运行
 
-用户已授权使用 Ego Browser 中的现成登录态。CLI 缺少 Cookie 或 Doctor 返回未验证时，必须先在 Ego Browser 隔离空间实测平台页面；不得据此宣称平台不可用或要求用户导出 Cookie。浏览器页面操作是正式检索后端。
+默认先用已有内容源、聚合检索、RSS、公开文章索引、网页抓取与可用 CLI。Ego Browser 仅是补充路径，不是首次运行或每轮必测项目。CLI 缺少 Cookie 或 Doctor 返回未验证时，不据此宣称整个平台不可用，也不强制启动浏览器；优先其他可用常规入口，确有材料缺口或用户指定时再用已授权的 Ego 登录态。
 
-按能力逐项验证：站内搜索返回真实结果、打开结果读取正文、作者主页读取近期内容。已登录但列表为空只表示该操作未成功，继续检查加载状态、页面提示和其他站内入口。仅在浏览器实际要求登录或验证时才请求用户操作；API 和付费接入在现有浏览器能力不足时再评估。
+决定使用 Ego 后，按本次需要验证搜索、正文或作者页，不重复无关通路测试。已登录但列表为空只表示该操作未成功，检查加载状态和页面提示。仅在页面实际要求登录或验证时才请求用户操作；API 和付费接入另行评估并取得授权，不导出 Cookie。
 
 覆盖报告必须注明已测试的后端与操作。Doctor 不能检测 Ego Browser 登录态；由 Doctor 推算的分数不能称为全渠道真实覆盖率。
 
@@ -36,7 +36,7 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 
 本项目不得运行 `opencli`。当前 OpenCLI Browser Bridge 会连接用户的 Google Chrome，不能可靠绑定 Ego Browser 的隔离 Task Space，会弹出调试提示并干扰用户操作。
 
-所有需要浏览器渲染、登录态或交互的页面直接使用 `ego-browser`，按平台或研究分工创建独立任务空间。用户已明确授权多个空间并行；各任务独占空间，同一空间内的操作串行，禁止多个进程同时切换它的当前标签。Ego 可主动用于站内搜索和作者追踪，不必等 HTTP、RSS 或 CLI 失败才使用。任务完成后关闭自己的空间；不得启动、调试或操作用户的 Chrome。
+仅在常规路径不足、值得读取的原文需要渲染/登录态/交互或用户指定时，按需使用 `ego-browser`。各任务独占空间，同一空间内的操作串行，禁止多个进程同时切换它的当前标签；不默认大量多开。完成后关闭自己的空间，不得启动、调试或操作用户的 Chrome。无需为了使用 Ego 先穷尽所有工具，也不能因为有动态页面就强制走浏览器。
 
 ## 热点选题检索组合
 
@@ -59,7 +59,7 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 mcporter call exa.web_search_exa query="查询词" numResults=10
 ```
 
-2. 中文成品材料：B站先用非浏览器 CLI；公众号、知乎和小红书等动态页面使用 Ego Browser 独立空间检索。
+2. 中文成品材料：优先公开文章索引、中文 RSS、网页全文与非浏览器 CLI；Ego 仅在这些路径不足或原文确需交互时补充。下面浏览器命令是可选用法，不是必跑步骤。
 
 ```bash
 bili search "查询词" --type video -n 10
@@ -78,7 +78,7 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 gh search repos "查询词" --sort updated --limit 10
 ```
 
-X、Reddit 等没有稳定非浏览器后端时，只能在 Ego Browser 独立空间中读取，不能回退 OpenCLI。
+X、Reddit 等没有稳定非浏览器后端时，可先转向其他常规来源；只有值得继续追踪的材料才用 Ego 独立空间补读，不能回退 OpenCLI。
 
 Twitter、Reddit、V2EX、小红书短笔记和 GitHub 项目页默认只是线索。必须继续追到完整中文文章、原始长文、字幕或逐字稿，才能写入 `.local/source_inbox.json`。
 
@@ -109,6 +109,6 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -
 
 - 先看 `status` 中的 `channels` 和 `missing_or_unverified_channels`。
 - 不得因为 `doctor` 显示 OpenCLI 已连接而使用它；本项目明确禁用该后端。
-- 普通 HTTP 抓取遇到 403 或动态渲染页时，使用 Ego Browser 隔离空间人工获取正文，再作为本地材料加入；不得回退用户 Chrome。
+- 普通 HTTP 抓取遇到 403 或动态渲染页时，先判断该材料是否值得补读；可换其他公开来源，或按需使用 Ego 获取正文再作为本地材料加入，不强制浏览器重试，不回退用户 Chrome。
 - Exa 不可用时继续使用公众号、知乎、B站和现有网页检索，不降低质量标准。
 - 任何渠道失败都不能用低质量候选补足 5 条；继续切换其他渠道，直到满足 `SKILL.md` 的数量、质量与来源构成要求。
