@@ -112,6 +112,26 @@ class BatchOwnershipTest(unittest.TestCase):
                     'evidence': '依赖本地文件或国内可用平台，中文用户不需要替换关键数据源即可完成主要流程。',
                 }
             (folder / 'candidates.json').write_text(json.dumps(rows))
+            with self.assertRaisesRegex(ValueError, '配置与付费审查'):
+                publish_batch(folder, '主力', root)
+
+            for row in rows:
+                row['setup_cost_review'] = {
+                    'status': 'passed',
+                    'evidence': '基础能力开源免费，只需本地 Node.js，首次安装一条命令，没有额外 API Key 或持续订阅。',
+                }
+                row['security_review'] = {
+                    'status': 'passed',
+                    'risk': 'high',
+                    'evidence': '已审查 SKILL.md、脚本和测试，核心路径只读取公开来源并写入用户指定目录。',
+                }
+            (folder / 'candidates.json').write_text(json.dumps(rows))
+            with self.assertRaisesRegex(ValueError, '安全审查未通过'):
+                publish_batch(folder, '主力', root)
+
+            for row in rows:
+                row['security_review']['risk'] = 'low'
+            (folder / 'candidates.json').write_text(json.dumps(rows))
             publish_batch(folder, '主力', root)
             self.assertTrue(json.loads((folder / 'run.json').read_text())['delivery_ready'])
 

@@ -1035,6 +1035,15 @@ Language: zh
                 "status": "passed",
                 "evidence": "使用本地文件和中文界面，不依赖海外专属服务，国内用户可以按原流程完成任务。",
             },
+            "setup_cost_review": {
+                "status": "passed",
+                "evidence": "基础功能开源免费，只需一条本地安装命令，不需要购买订阅或申请额外 API Key。",
+            },
+            "security_review": {
+                "status": "passed",
+                "risk": "low",
+                "evidence": "已检查 SKILL.md、执行脚本和仓库测试，核心流程不读取密钥，也不会自动发布内容。",
+            },
             "summary": "一篇人类作者的真实使用复盘与对应公开 Skill。",
             "source_name": "作者博客 / GitHub",
             "content_form": "article",
@@ -1058,6 +1067,9 @@ Language: zh
         self.assertIn("中文文章解读", report)
         self.assertIn("中文用户适配", report)
         self.assertIn("不依赖海外专属服务", report)
+        self.assertIn("配置与付费", report)
+        self.assertIn("安全审查", report)
+        self.assertIn("不需要购买订阅", report)
 
     def test_report_gate_does_not_fill_with_rejected_items(self) -> None:
         ranked = [
