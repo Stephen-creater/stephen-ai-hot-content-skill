@@ -1023,6 +1023,34 @@ Language: zh
             report = path.read_text()
         self.assertIn("GitHub 128 Star", report)
 
+    def test_report_exposes_human_article_and_skill_source_links(self) -> None:
+        candidate = {
+            "id": "skill-with-article",
+            "title": "daily-life-skill",
+            "link": "https://example.com/human-review",
+            "source_url": "https://github.com/example/daily-life-skill",
+            "skill_url": "https://skills.sh/example/daily-life-skill",
+            "summary": "一篇人类作者的真实使用复盘与对应公开 Skill。",
+            "source_name": "作者博客 / GitHub",
+            "content_form": "article",
+            "content_status": "fulltext",
+            "adaptation_readiness": "高",
+            "research_cost": "低",
+            "score": 100,
+            "recommended": True,
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "index.html"
+            generate_report([candidate], path, "2026-09-09-120000")
+            report = path.read_text()
+        self.assertIn('aria-label="参考链接"', report)
+        self.assertIn('href="https://example.com/human-review"', report)
+        self.assertIn('href="https://github.com/example/daily-life-skill"', report)
+        self.assertIn('href="https://skills.sh/example/daily-life-skill"', report)
+        self.assertIn("人类文章", report)
+        self.assertIn("GitHub / Skill 原文", report)
+        self.assertIn("Skill 目录页", report)
+
     def test_report_gate_does_not_fill_with_rejected_items(self) -> None:
         ranked = [
             {"id": "good", "recommended": True, "score": 100},
