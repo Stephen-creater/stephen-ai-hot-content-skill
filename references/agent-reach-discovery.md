@@ -34,7 +34,7 @@ python3 scripts/agent_reach_runtime.py install --system --channels all
 
 ## 浏览器隔离硬规则
 
-本项目不得运行 `opencli`。当前 OpenCLI Browser Bridge 会连接用户的 Google Chrome，不能可靠绑定 Ego Browser 的隔离 Task Space，会弹出调试提示并干扰用户操作。
+OpenCLI 默认禁用。知乎扩源是唯一例外，但必须先读取 [知乎 CLI 与 Ego 路由](zhihu-cli-ego.md)：允许检查知乎适配器的静态帮助与只读能力契约，不得为了取得 Cookie 启动、调试或接管用户 Chrome。当前 OpenCLI Browser Bridge 不能可靠绑定 Ego Browser 的隔离 Task Space；直连返回 `AUTH_REQUIRED` 时，改用 Ego 中的既有知乎登录态执行等价只读请求，且必须如实记录为“CLI 契约 + Ego 会话”，不能宣称 CLI 已直接取回数据。
 
 仅在常规路径不足、值得读取的原文需要渲染/登录态/交互或用户指定时，按需使用 `ego-browser`。各任务独占空间，同一空间内的操作串行，禁止多个进程同时切换它的当前标签；不默认大量多开。完成后关闭自己的空间，不得启动、调试或操作用户的 Chrome。无需为了使用 Ego 先穷尽所有工具，也不能因为有动态页面就强制走浏览器。
 
@@ -78,7 +78,7 @@ curl -s "https://www.v2ex.com/api/topics/hot.json" -H "User-Agent: agent-reach/1
 gh search repos "查询词" --sort updated --limit 10
 ```
 
-X、Reddit 等没有稳定非浏览器后端时，可先转向其他常规来源；只有值得继续追踪的材料才用 Ego 独立空间补读，不能回退 OpenCLI。
+X、Reddit 等没有稳定非浏览器后端时，可先转向其他常规来源；只有值得继续追踪的材料才用 Ego 独立空间补读。不得把知乎专用例外扩展为其他 OpenCLI 平台。
 
 Twitter、Reddit、V2EX、小红书短笔记和 GitHub 项目页默认只是线索。必须继续追到完整中文文章、原始长文、字幕或逐字稿，才能写入 `.local/source_inbox.json`。
 
@@ -108,7 +108,7 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -
 ## 失败处理
 
 - 先看 `status` 中的 `channels` 和 `missing_or_unverified_channels`。
-- 不得因为 `doctor` 显示 OpenCLI 已连接而使用它；本项目明确禁用该后端。
+- 不得因为 `doctor` 显示 OpenCLI 已连接就调用其数据命令；除知乎专用只读路由外，本项目仍禁用该后端。
 - 普通 HTTP 抓取遇到 403 或动态渲染页时，先判断该材料是否值得补读；可换其他公开来源，或按需使用 Ego 获取正文再作为本地材料加入，不强制浏览器重试，不回退用户 Chrome。
 - Exa 不可用时继续使用公众号、知乎、B站和现有网页检索，不降低质量标准。
 - 任何渠道失败都不能用低质量候选补足 5 条；继续切换其他渠道，直到满足 `SKILL.md` 的数量、质量与来源构成要求。

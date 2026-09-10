@@ -47,7 +47,7 @@ Ego Browser 不是默认入口、最高优先级或每轮必做步骤。只有�
 4. [来源配置](resources/content_curator_sources.json)
 5. [加权来源组合](resources/source_portfolio.json)
 
-边界难判时读取 [正反校准案例](references/editorial-calibration-cases.md)。扩源时读取 [来源发现清单](resources/source_discovery_playbook.md)。多平台检索读取 [Agent Reach 路由](references/agent-reach-discovery.md)。使用朱雀时读取 [朱雀说明](references/zhuque-aigc.md)。
+边界难判时读取 [正反校准案例](references/editorial-calibration-cases.md)。扩源时读取 [来源发现清单](resources/source_discovery_playbook.md)。多平台检索读取 [Agent Reach 路由](references/agent-reach-discovery.md)。需要从知乎扩源时读取 [知乎 CLI 与 Ego 路由](references/zhihu-cli-ego.md)。使用朱雀时读取 [朱雀说明](references/zhuque-aigc.md)。
 
 ## 决策流水线
 
@@ -153,7 +153,7 @@ python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-b
 
 - 不撰写文章正文；选题确认后交给 `stephen-writing-skill`。
 - 不提交 `.local/`、`.config/`、`topics/`、反馈、密钥、Cookie 或登录态。
-- 本项目不调用 OpenCLI，避免接管用户 Chrome；确需浏览器补充时才使用 Ego Browser 隔离空间。
+- OpenCLI 默认禁用；仅知乎扩源可按 [知乎 CLI 与 Ego 路由](references/zhihu-cli-ego.md)读取适配器能力契约。不得为取得 CLI Cookie 启动或接管用户 Chrome；CLI 直连未鉴权时使用 Ego Browser 的既有登录态执行只读检索与全文核验，不能把两种隔离会话说成已经打通。
 - Ego Browser 可按需利用现成登录态；CLI 缺凭据不代表平台不可用，也不意味着必须启动 Ego。优先其他可用常规路径，不直接要求导出 Cookie 或购买接口。
 - 朱雀和模型复排都是辅助证据。未配置或失败表示未知，不能证明文章由人创作。
 - 自动分数名为 `discovery_score`，只负责发现排序。最终发布必须通过证据化人工终审。
