@@ -1,6 +1,6 @@
 ---
 name: stephen-ai-hot-content-skill
-description: 按 Stephen 的历史文章与人工审核反馈，持续发现、全文核验并筛选适合日课二创的简体中文 AI 选题。用于寻找新选题、生成候选审核页、导入反馈和迭代编辑判断；不负责撰写文章正文。
+description: "按 Stephen 的文章与反馈筛选 AI 热点选题；用于候选报告和选题审核，不写正文。"
 ---
 
 # Stephen AI 热点选题
