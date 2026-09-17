@@ -17,7 +17,7 @@ from add_source import append_source
 from curator import canonical_url, deduplicate, rank_candidates, redact_untrusted_secrets, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_bestblogs, fetch_follow_builders, fetch_rss, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -391,6 +391,106 @@ Language: zh
             items, error = fetch_source({**source, "type": "wechat_index"}, {"request_timeout_seconds": 1})
         self.assertEqual(items, [])
         self.assertIn("articles", error)
+
+    def test_bestblogs_recovers_original_url_body_and_readable_transcript(self) -> None:
+        feed = """<rss><channel><title>BestBlogs</title>
+          <item><title>文章</title><link>https://www.bestblogs.dev/article/a1?utm_source=rss</link><description>摘要</description></item>
+          <item><title>推文</title><link>https://www.bestblogs.dev/status/123?utm_source=rss</link></item>
+          <item><title>播客</title><link>https://www.bestblogs.dev/podcast/p1?utm_source=rss</link></item>
+          <item><title>坏条目</title><link>https://www.bestblogs.dev/article/broken</link></item>
+        </channel></rss>""".encode("utf-8")
+        payloads = {
+            "a1": {"data": {"metaData": {"title": "一线复盘", "url": "https://mp.weixin.qq.com/s/abc", "sourceName": "某作者",
+                                        "score": 92, "publishTimeStamp": 1789621260000},
+                           "contentData": {"displayDocument": "<p>第一段真实经历。</p><script>x()</script><p>" + "第二段方法细节。" * 40 + "</p>"}}},
+            "p1": {"data": {"metaData": {"title": "访谈", "url": "https://www.xiaoyuzhoufm.com/episode/e1", "sourceName": "某播客"},
+                           "podCastContentData": {"transcriptionSegments": [
+                               {"speakerId": "1", "speakerName": "发言人1", "text": "你好。"},
+                               {"speakerId": "1", "speakerName": "发言人1", "text": "今天聊产品。"},
+                               {"speakerId": "2", "speakerName": "发言人2", "text": "先说失败。"}]}}},
+        }
+
+        class Response:
+            def __init__(self, content=b"", payload=None):
+                self.content, self.payload = content, payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                if self.payload is None:
+                    raise ValueError("not json")
+                return self.payload
+
+        def fake_get(url, **kwargs):
+            if "feeds" in url:
+                return Response(feed)
+            resource = url.rsplit("/", 1)[-1].split("?")[0]
+            if resource == "broken":
+                raise TimeoutError("api timeout")
+            return Response(payload=payloads[resource])
+
+        source = {"name": "BestBlogs", "category": "中文AI精选", "priority": 5, "url": "https://www.bestblogs.dev/zh/feeds/rss?category=ai",
+                  "api_url_template": "https://www.bestblogs.dev/api/proxy/resources/{id}?language=zh"}
+        with patch("scrape_aihot.requests.get", side_effect=fake_get):
+            rows = fetch_bestblogs(source, {"request_timeout_seconds": 1, "hydrate_workers": 2})
+        by_link = {row["link"]: row for row in rows}
+        self.assertEqual(set(by_link), {"https://mp.weixin.qq.com/s/abc", "https://www.xiaoyuzhoufm.com/episode/e1"})
+        article = by_link["https://mp.weixin.qq.com/s/abc"]
+        self.assertEqual((article["source_name"], article["bestblogs_score"], article["published"]), ("某作者", 92, "2026-09-17"))
+        self.assertEqual(article["content_origin"], "bestblogs_api")
+        self.assertTrue(article["content"].startswith("第一段真实经历。\n"))
+        self.assertNotIn("x()", article["content"])
+        podcast = by_link["https://www.xiaoyuzhoufm.com/episode/e1"]
+        self.assertEqual(podcast["content_status"], "transcript")
+        self.assertEqual(podcast["content"], "发言人1：你好。今天聊产品。\n\n发言人2：先说失败。")
+        with patch("scrape_aihot.requests.get") as get:
+            self.assertEqual(hydrate(article, {"request_timeout_seconds": 1}), article)
+            get.assert_not_called()
+
+    def test_follow_builders_is_discovery_radar_only(self) -> None:
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"x": [{"name": "Boris", "handle": "bcherny", "bio": "Claude Code", "tweets": [
+                    {"text": "低热度", "url": "https://x.com/bcherny/status/1", "createdAt": "2026-09-16T16:28:29Z", "likes": 3},
+                    {"text": "高热度", "url": "https://x.com/bcherny/status/2", "createdAt": "2026-09-16T17:00:00Z", "likes": 900},
+                    {"text": "无链接", "url": "javascript:alert(1)"}]}, None]}
+
+        source = {"name": "follow-builders", "category": "英文一手雷达", "priority": 4, "url": "https://raw.example/feed-x.json"}
+        with patch("scrape_aihot.requests.get", return_value=Response()):
+            rows = fetch_follow_builders(source, {"request_timeout_seconds": 1})
+        self.assertEqual([row["title"] for row in rows], ["高热度", "低热度"])
+        self.assertTrue(all(row["source_role"] == "discovery" and row["language"] == "en" for row in rows))
+        self.assertEqual(rows[0]["published"], "2026-09-16")
+
+    def test_rss_feed_content_and_generic_title_exclusion(self) -> None:
+        feed = """<rss version="2.0" xmlns:content="http://purl.org/rss/1.0/modules/content/"><channel><title>号</title>
+          <item><title>对话某产品负责人</title><link>https://mp.weixin.qq.com/s/a</link>
+            <content:encoded><![CDATA[<p>""" + "完整访谈正文。" * 60 + """</p>]]></content:encoded></item>
+          <item><title>线下活动报名开启</title><link>https://mp.weixin.qq.com/s/b</link>
+            <content:encoded><![CDATA[<p>""" + "报名信息。" * 60 + """</p>]]></content:encoded></item>
+          <item><title>短帖</title><link>https://mp.weixin.qq.com/s/c</link><content:encoded><![CDATA[<p>很短</p>]]></content:encoded></item>
+        </channel></rss>"""
+
+        class Response:
+            content = feed.encode("utf-8")
+
+            def raise_for_status(self):
+                return None
+
+        source = {"name": "访谈号", "category": "公众号访谈", "priority": 4, "type": "rss", "url": "https://feed.example/a.xml",
+                  "items_limit": 5, "use_feed_content": True, "title_exclude_pattern": "报名"}
+        with patch("scrape_aihot.requests.get", return_value=Response()):
+            rows, error = fetch_source(source, {"request_timeout_seconds": 1, "rss_items_per_source": 1})
+        self.assertIsNone(error)
+        self.assertEqual([row["title"] for row in rows], ["对话某产品负责人", "短帖"])
+        self.assertEqual(rows[0]["content_origin"], "feed_fulltext")
+        self.assertNotIn("content", rows[1])
+        with patch("scrape_aihot.requests.get", return_value=Response()):
+            self.assertEqual(len(fetch_rss({**source, "use_feed_content": False}, {"request_timeout_seconds": 1, "rss_items_per_source": 1})), 3)
 
     def test_paged_web_index_walks_pages_and_dedupes(self) -> None:
         pages = {

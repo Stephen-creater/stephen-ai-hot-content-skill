@@ -64,12 +64,23 @@ def api_key() -> str:
     return local_file.read_text(encoding="utf-8").strip() if local_file.exists() else ""
 
 
+def html_to_text(value: str | None) -> str:
+    """Keep paragraph breaks so feed and API bodies stay readable and anchorable."""
+    soup = BeautifulSoup(value or "", "html.parser")
+    for node in soup(["script", "style"]):
+        node.decompose()
+    lines = (clean_text(line) for line in soup.get_text("\n").splitlines())
+    return "\n".join(line for line in lines if line)
+
+
 def fetch_rss(source: dict, settings: dict) -> list[dict]:
     response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
     response.raise_for_status()
     feed = feedparser.parse(response.content)
     items = []
-    for entry in feed.entries[: settings["rss_items_per_source"]]:
+    for entry in feed.entries[: int(source.get("items_limit", settings["rss_items_per_source"]))]:
+        body = html_to_text((entry.get("content") or [{}])[0].get("value")) if source.get("use_feed_content") else ""
+        extra = {"content": body, "content_status": "fulltext", "content_origin": "feed_fulltext"} if len(body) >= 200 else {}
         items.append(
             {
                 "title": clean_text(entry.get("title")),
@@ -88,22 +99,123 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
                                    if e.get("type", "").startswith("audio/")
                                    and e.get("href", "").startswith(("https://", "http://"))), None),
                 "content_status": "summary",
+                **extra,
             }
         )
     return items
+
+
+BESTBLOGS_ID_RE = re.compile(r"/(article|podcast|video|status)/([0-9a-zA-Z]+)")
+
+
+def bestblogs_transcript(podcast: dict) -> str:
+    """Merge consecutive ASR segments by speaker into readable paragraphs."""
+    paragraphs, speaker, buffer = [], None, []
+    for segment in podcast.get("transcriptionSegments") or []:
+        text = clean_text(segment.get("text"))
+        if not text:
+            continue
+        current = segment.get("speakerName") or f"发言人{segment.get('speakerId', '')}"
+        if current != speaker and buffer:
+            paragraphs.append(f"{speaker}：{''.join(buffer)}")
+            buffer = []
+        speaker = current
+        buffer.append(text)
+    if buffer:
+        paragraphs.append(f"{speaker}：{''.join(buffer)}")
+    return "\n\n".join(paragraphs)
+
+
+def fetch_bestblogs(source: dict, settings: dict) -> list[dict]:
+    """Use BestBlogs' scored feed for discovery and its resource API to recover the original URL and body."""
+    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response.raise_for_status()
+    feed = feedparser.parse(response.content)
+    skip_types = set(source.get("skip_types", ["status", "video"]))
+    targets, seen = [], set()
+    for entry in feed.entries:
+        match = BESTBLOGS_ID_RE.search(urlparse(entry.get("link", "")).path)
+        if not match or match.group(1) in skip_types or match.group(2) in seen:
+            continue
+        seen.add(match.group(2))
+        targets.append((match.group(1), match.group(2), entry))
+        if len(targets) >= int(source.get("items_limit", 40)):
+            break
+
+    def resolve(target: tuple) -> dict | None:
+        kind, resource_id, entry = target
+        try:
+            payload = requests.get(source["api_url_template"].format(id=resource_id), headers=HEADERS,
+                                   timeout=settings["request_timeout_seconds"])
+            payload.raise_for_status()
+            data = payload.json()
+            data = data.get("data", data) if isinstance(data, dict) else {}
+            meta = data.get("metaData") or {}
+        except Exception:
+            return None
+        link = meta.get("url") or ""
+        if not link.startswith(("https://", "http://")) or "bestblogs.dev" in urlparse(link).netloc:
+            return None
+        stamp = meta.get("publishTimeStamp")
+        row = {
+            "title": clean_text(meta.get("title") or entry.get("title")), "link": link,
+            "summary": clean_text(entry.get("summary"))[:600],
+            "published": datetime.fromtimestamp(stamp / 1000, timezone.utc).strftime("%Y-%m-%d") if isinstance(stamp, (int, float)) else "",
+            "source_name": clean_text(meta.get("sourceName")) or source["name"], "source_category": source["category"],
+            "source_priority": source["priority"], "source_type": "web", "source_role": source.get("role", "candidate"),
+            "language": source.get("language", "zh"), "maturity": source.get("maturity", "secondary"),
+            "content_form": "podcast" if kind == "podcast" else "article", "content_status": "summary",
+            "bestblogs_id": resource_id, "bestblogs_score": meta.get("score"), "discovery_source": source["name"],
+        }
+        if kind == "podcast":
+            transcript = bestblogs_transcript(data.get("podCastContentData") or {})
+            if transcript:
+                # Machine transcript: speaker labels and proper nouns still need editing before delivery.
+                row.update(content=transcript, content_status="transcript", content_origin="bestblogs_api")
+        else:
+            body = html_to_text((data.get("contentData") or {}).get("displayDocument"))
+            if len(body) >= 200:
+                row.update(content=body, content_status="fulltext", content_origin="bestblogs_api")
+        return row
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=int(settings.get("hydrate_workers", 5))) as executor:
+        return [row for row in executor.map(resolve, targets) if row]
+
+
+def fetch_follow_builders(source: dict, settings: dict) -> list[dict]:
+    """Builder tweets are radar only: they point to a topic, never to deliverable Chinese material."""
+    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response.raise_for_status()
+    builders = response.json().get("x")
+    if not isinstance(builders, list):
+        raise ValueError("follow-builders 数据结构变化：缺少 x 列表")
+    rows = []
+    for builder in builders:
+        if not isinstance(builder, dict):
+            continue
+        for tweet in builder.get("tweets") or []:
+            link = tweet.get("url", "") if isinstance(tweet, dict) else ""
+            if not str(link).startswith("https://"):
+                continue
+            rows.append({
+                "title": clean_text(tweet.get("text"))[:240], "link": link, "summary": clean_text(builder.get("bio")),
+                "published": str(tweet.get("createdAt", ""))[:10], "source_name": f"{builder.get('name', '')} (@{builder.get('handle', '')})",
+                "source_category": source["category"], "source_priority": source["priority"], "source_type": "web",
+                "source_role": "discovery", "language": "en", "maturity": "primary", "content_form": "article",
+                "content_status": "summary", "engagement": tweet.get("likes", 0),
+            })
+    rows.sort(key=lambda row: row["engagement"], reverse=True)
+    return rows[: int(source.get("items_limit", 60))]
 
 
 def fetch_paged_web_index(source: dict, settings: dict) -> list[dict]:
     """Walk numbered list pages so a high-yield library is not limited to its homepage."""
     limit = int(source.get("items_limit", settings["web_links_per_source"]))
     page_settings = {**settings, "web_links_per_source": limit}
-    exclude = re.compile(source["title_exclude_pattern"]) if source.get("title_exclude_pattern") else None
     rows, seen = [], set()
     for page in range(1, int(source.get("pages", 1)) + 1):
         url = source["url"] if page == 1 else source["page_url_template"].format(page=page)
         for row in fetch_web_index({**source, "url": url}, page_settings):
-            if exclude and exclude.search(row["title"]):
-                continue
             if row["link"] not in seen:
                 seen.add(row["link"])
                 rows.append(row)
@@ -315,8 +427,16 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
             rows = fetch_wechat_index(source, settings)
         elif source["type"] == "paged_web":
             rows = fetch_paged_web_index(source, settings)
+        elif source["type"] == "bestblogs":
+            rows = fetch_bestblogs(source, settings)
+        elif source["type"] == "follow_builders":
+            rows = fetch_follow_builders(source, settings)
         else:
             rows = fetch_web_index(source, settings)
+        # wechat_index applies its own exclusion before fetching bodies.
+        if source.get("title_exclude_pattern") and source["type"] != "wechat_index":
+            exclude = re.compile(source["title_exclude_pattern"])
+            rows = [row for row in rows if not exclude.search(row.get("title", ""))]
         return rows, None if rows else f"{source['name']}: 未发现条目"
     except Exception as exc:
         return [], f"{source['name']}: {exc}"
@@ -326,7 +446,7 @@ def hydrate(item: dict, settings: dict) -> dict:
     if not item.get("link") or item.get("source_role") == "discovery":
         return item
     if item.get("content") and (
-        item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext", "public_index_cache"}
+        item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext", "public_index_cache", "bestblogs_api", "feed_fulltext"}
     ):
         return item
     try:

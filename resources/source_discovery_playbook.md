@@ -26,34 +26,49 @@ python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
 
 权重是待校准的规划假设，不代表互联网内容份额。每个来源族分别验证 search、read、author；只计有时间、非空结果和证据 URL 的操作。Doctor 和命令安装不加分，连通测试使用 purpose=smoke，不计实际选题探索覆盖。最终入选数只能在用户审核后填写，不能由 Agent 代填。
 
-## 第一层：中文深度成品
+## 分层来源模型（2026-09-17 实测后重排）
 
-- AI News Radar / LearnPrompt（https://news.learnprompt.pro/classic/）作为持续更新的聚合线索入口，自动读取其公开 JSON，结果见每轮 `discovery.json`。先按原始来源寻找中文长文，英文译题不能算中文底稿；上游“高分/精选”不免除本项目逐篇终审。重点来源登记以 `content_curator_sources.json` 为准。
+历史入选材料集中在少数「访谈与编译号、精选站、一线博主」，资讯媒体几乎不出货；不少入选访谈的上游是英文播客或演讲，中文稿是编译或整理。因此按作者和栏目订阅，不再扩综合媒体。具体地址与说明以 `content_curator_sources.json` 为准。
 
-- 高质量主题汇总站：优先遍历用户已验证的「觉醒AI」之类站点的专题页、分类页与相关文章；把网站当来源地图，不是整站免审白名单。
-- 中文独立博客、个人站与 newsletter：寻找连续数周或数月的实践复盘、失败记录和方法沉淀。
-- 深度媒体与垂直作者：哈佛商业评论中文版、人人都是产品经理、极客公园、InfoQ，以及 36氪中的独立作者和深度栏目。
-- 工程与产品社区：SegmentFault、掘金、博客园、V2EX。只保留第一人称真实项目、明确数字、失败与调整过程完整的内容。
-- 企业技术团队博客：美团技术团队、腾讯技术工程、阿里技术、字节技术。优先工作流、评测、组织实践，排除纯底层实现和产品通稿。
+### 第一层：中文精选主入口
 
-## 第二层：长音视频材料
+- BestBlogs（`type: bestblogs`）：官方公开 RSS 带 category、minScore、featured、type、timeFilter 参数；资源接口返回原文 URL、来源、评分和正文。评分和摘要由它的 AI 生成，只决定先读什么；交付前回核原文。
+- 觉醒AI（`type: paged_web`）：遍历文章库分页，用页面 datePublished 判定时效；旧 X 帖子重新导入时，还要按正文提到的模型版本核对。
+- 宝玉：官方 feed 只有摘要，抓取时回原页取全文。
 
-- 小宇宙、Apple Podcasts、Podwise：优先 30 分钟以上访谈、完整 Show Notes 或逐字稿。
-- B站与 YouTube：优先真实实测、项目复盘、核心团队访谈；先取得字幕或逐字稿再进入候选。
-- 值得长期跟踪的节目包括科技早知道、硅谷101、Founder Park、AI Engineer、How I AI。英文节目先作为选题线索，默认继续寻找中文整理材料。
+### 第二层：访谈与文字稿公众号
 
-## 第三层：社区与论坛线索
+- 经 wechat2rss 订阅的访谈号：语言即世界（张小珺）、Web3天空之城、Founder Park、十字路口、海外独角兽、晚点AI、晚点再听、深思圈、乱翻书、产品犬舍、AI炼金术、有新Newin、42章经。
+- 实践与方法号：花叔、一泽Eze、范冰、刘言飞语、AI产品黄叔、歸藏、刘小排。
+- 公众号作战室索引（`type: wechat_index`）作为补充，只保留访谈、实录、复盘和长期实测标题。
+- 按号判断价值，不按平台：同一个号的访谈可能入选，活动报名和资讯不入选，已用标题排除过滤。
 
-- V2EX、Hacker News、Reddit、GitHub Discussions 和 Issues 用于发现一线实践者、长帖和失败案例。
-- 社区帖子不能只看热度。必须回到原帖、项目仓库、作者博客或完整讨论，核验真实经历和上下文。
-- GitHub Trending 只提供线索。只有 README、设计文档、复盘或中文深度解读足够完整时才能成为候选。
-- Benchmark、评测集、跑分和排行榜只用于发现事实，不进入正式候选；优先寻找作者亲自做真实任务后的实践复盘。
-- 排除 AI 总结站、机器翻译站、中英混杂材料和已被用户明确屏蔽的作者渠道。
+### 第三层：播客变文字稿
 
-## 第四层：英文深度来源
+按顺序取材，前一步拿到就停：
 
-- Latent Space、Simon Willison、One Useful Thing、Every、Lenny's Newsletter、Substack 技术作者和核心团队博客可用于发现新命题。
-- 英文官方发布只用于核验。英文独立深度文章若没有成熟中文整理，标记为高研究成本，不直接占用正式候选名额。
+1. 官方或编辑过的文字版（公众号全文、红杉 Training Data、Latent Space 逐字稿）。
+2. BestBlogs 播客转录：按说话人合并成段落；专名可能错，说话人只有编号，交付前补主持人/嘉宾标签并校对专名。
+3. 本地转写 `scripts/local_transcribe.py`：离线零费用，但没有标点、专名错误多，只在前两步都没有时使用。
+
+没有可读文字稿的音频只作线索。
+
+### 第四层：英文一手雷达（discovery，不进候选）
+
+- follow-builders：X 上 Claude Code、Codex 等团队一线作者的推文。
+- Anthropic Engineering、OpenAI Developers、Cursor 的 RSS 镜像；The Pragmatic Engineer、Latent Space、Lenny、Simon Willison、Hamel Husain、Addy Osmani、Jason Liu、Every AI & I、Training Data、YC Lightcone。
+- 雷达命中后依次找中文成熟稿：宝玉、Web3天空之城、瓜哥AI新知、Z Finance、海外独角兽、BestBlogs 关键词 feed。都没有就说明中文材料缺位，标记为高研究成本，交给用户判断是否原创。
+
+### 第五层：独立博客低频池
+
+向阳乔木、最小可读、Tw93、唐巧、Joway、wklken、Sagasu、XINDOO、明立非、谢乾坤、创见思考、imlee-tech。更新慢但多为一线复盘，非 AI 文章由资格门槛过滤。
+
+### 不再接入
+
+- 以资讯为主：36氪、虎嗅、少数派、IT之家、Solidot、Readhub、机器之心、新智元。
+- 需要 Cookie 或已不可用：公共 RSSHub 的知乎和 X 路由、nitter/xcancel、搜狗微信、feeddd、wewe-rss。
+- 已停更：OnBoard!。
+- 各层仍用 `discovery_ledger.py` 记账；连续多轮全文通过率为 0 的来源降为 discovery，不凭印象增删。
 
 ## 搜索组合
 
