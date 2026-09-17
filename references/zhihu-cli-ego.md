@@ -4,7 +4,7 @@
 
 ## 已验证能力与真实边界
 
-2026-09-10 本机 OpenCLI 1.8.7 的 `zhihu` 适配器提供：
+OpenCLI 的 `zhihu` 适配器（以本机 `opencli zhihu --help -f yaml` 为准）提供：
 
 - `hot`：热榜，只作线索；
 - `search`：按 `all / answer / article / question` 搜索，支持分页；
@@ -14,7 +14,7 @@
 
 其中搜索使用 `/api/v4/search_v3`，完整回答使用 `/api/v4/answers/<answer_id>`。可用 `opencli zhihu --help -f yaml` 读取静态命令契约；帮助命令不需要打开浏览器。
 
-当前 OpenCLI Browser Bridge 与 Ego Browser 是两套隔离会话。本轮 `opencli zhihu whoami` 和搜索数据命令因其 Chrome 会话缺少 `z_c0` 返回 `AUTH_REQUIRED`，而 Ego 中的知乎登录态可正常读取。这个结果不能表述成“知乎 CLI 已登录”或“CLI 已直接抓到数据”。
+OpenCLI Browser Bridge 与 Ego Browser 是两套隔离会话。CLI 数据命令返回 `AUTH_REQUIRED` 而 Ego 中知乎登录态可读时，不能表述成“知乎 CLI 已登录”或“CLI 已直接抓到数据”。
 
 ## 运行方式
 
@@ -23,11 +23,12 @@
 3. 若 OpenCLI 数据命令没有现成、不会干扰用户 Chrome 的已授权会话，不运行 `login`，不要求用户复制 Cookie，也不反复重试。进入 Ego 独立 Task Space，在 `https://www.zhihu.com` 同源页面内用 `browserFetch` 或页面 `fetch(..., {credentials: 'include'})` 执行适配器等价的只读请求。
 4. 搜索结果先保留原题、类型、作者、赞同数、URL 和分页信息。热榜、问题页与搜索列表都只算线索；逐条打开回答或专栏原文，核对标题、作者、日期、正文起止和结尾。
 5. 对命中作者继续读取 `user-articles` / `user-answers` 对应作者页或接口，优先找围绕同一产品问题持续展开的完整访谈与产品决策材料。
-6. 完成后关闭 Ego Task Space；在探索台账中分别记录 `search`、`read`、`author` 的非空结果和证据 URL。渠道名写成 `zhihu-cli-contract+ego-browser`，不得记成已验证的 OpenCLI 直连。
+6. 只读请求保持低频：同一接口相邻请求间隔不少于 2 秒，每个查询最多翻 5 页、单次任务最多读取 50 篇正文；遇到 403、429、验证码或风控提示立即停止并改走其他来源，不重试绕过。
+7. 完成后关闭 Ego Task Space；在探索台账中分别记录 `search`、`read`、`author` 的非空结果和证据 URL。渠道名写成 `zhihu-cli-contract+ego-browser`，不得记成已验证的 OpenCLI 直连。
 
 ## 选题判断
 
-本轮用户从 20 条知乎候选中保留了两条：一条手机 AI Memory 产品负责人访谈，一条 AI 社交产品创始人访谈。当前可复用的条件偏好是：知乎优先寻找完整的创始人、产品负责人或核心团队对话，且正文必须给出具体产品决策、用户任务、限制条件与取舍。
+历史反馈中，知乎候选入选的是产品负责人和创始人围绕具体产品决策的完整访谈。可复用的条件偏好是：知乎优先寻找完整的创始人、产品负责人或核心团队对话，且正文必须给出具体产品决策、用户任务、限制条件与取舍。
 
 这不是“人物访谈自动入选”的白名单。宏观趋势、创业经历、品牌宣传、松散 QA、单点观点、技术实现细节或只能依赖作者身份成立的访谈仍按五维终审淘汰。单篇回答只有在自身形成连续因果链、读者改变明确、去掉作者专属资产后仍能二创时才进入审核页。
 

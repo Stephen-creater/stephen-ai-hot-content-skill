@@ -4,7 +4,7 @@
 
 ## 先量化覆盖，不凭感觉扩源
 
-`resources/source_portfolio.json` 把求解空间分成 12 个来源族并按预期价值加权。每轮开始先运行：
+`resources/source_portfolio.json` 把求解空间分成 12 个来源族并按预期价值加权。每周运行一次覆盖检查，并在扩源前查看台账：
 
 ```bash
 python3 scripts/source_coverage.py --verified-channel exa_search --verified-channel github --write-snapshot .local/source_coverage.json

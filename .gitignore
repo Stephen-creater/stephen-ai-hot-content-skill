@@ -10,3 +10,7 @@ fetched_content.json
 aihot_valid_all_debug.json
 .env
 .env.*
+# 并发 worktree 里这三个目录是软链接，带斜杠的规则匹配不到链接本身
+.local
+.config
+topics
