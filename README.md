@@ -30,9 +30,8 @@
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
-.venv/bin/python3 scripts/agent_reach_runtime.py install
-.venv/bin/python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
-.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round 1 --output-root .local/work/<批次ID>
+.venv/bin/python3 scripts/agent_reach_runtime.py status    # 先看已安装与缺失渠道
+.venv/bin/python3 scripts/agent_reach_runtime.py install   # 只在 status 显示缺失时运行
 ```
 
 本机 Homebrew Python 禁止直接 `pip install`（PEP 668），所以统一使用 `.venv`。
@@ -43,21 +42,9 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 .venv/bin/python3 scripts/agent_reach_runtime.py install --system --channels all
 ```
 
-每轮输出位于 `.local/work/<批次ID>/<时间戳>/`，只是待终审材料；终审后组装到 `topics/<批次ID>/` 再发布。发布数量、构成与停止条件见 SKILL.md 的完成契约。
+一批选题的流程是：分轮抓取（输出到 `.local/work/<批次ID>/`）→ 终审前去重 → 读全文人工终审 → 组装到 `topics/<批次ID>/` → 发布前只校验 → 发布审核页 → 导入审核反馈。每一步的命令、数量门槛与停止条件以 [SKILL.md](SKILL.md) 为准，这里不重复。
 
-人工终审完成后发布：
-
-```bash
-.venv/bin/python3 scripts/publish_batch.py topics/<批次ID> --owner 主力
-```
-
-用户在审核页导出反馈后导入：
-
-```bash
-.venv/bin/python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <批次ID> --owner 主力
-```
-
-导入会核验批次、任务归属、候选顺序和持久化结果；成功后默认删除下载目录中的临时 JSON，失败则保留。
+导入反馈会核验批次、任务归属、候选顺序和持久化结果；成功后才删除下载目录中的临时 JSON，失败则保留。
 
 ## 目录职责
 

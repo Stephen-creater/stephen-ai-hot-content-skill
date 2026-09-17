@@ -60,6 +60,11 @@ class BatchOwnershipTest(unittest.TestCase):
             self.assertEqual({path.name:path.read_bytes() for path in folder.iterdir()},before)
             self.assertEqual(delivered_candidates(root/'topics'),[])
             publish_batch(folder,'主力',root)
+            unscored,rows=self.batch(root,'dry-run-unscored')
+            for row in rows: row.pop('score',None)
+            (unscored/'candidates.json').write_text(json.dumps(rows))
+            with self.assertRaises(ValueError):
+                publish_batch(unscored,'主力2',root,check_only=True)  # duplicates the delivered batch
             other,_=self.batch(root,'dry-run-duplicate')
             with self.assertRaises(ValueError):
                 publish_batch(other,'主力2',root,check_only=True)

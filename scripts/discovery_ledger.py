@@ -42,6 +42,8 @@ def record_attempt(path: Path, entry: dict) -> None:
     for key in ("round", "max_age_days"):
         if entry.get(key) is not None and (not isinstance(entry[key], int) or entry[key] < 0):
             raise ValueError(f"{key} 必须是非负整数")
+    if entry.get("status") == "blocked" and (not str(entry.get("failure_type", "")).strip() or any(entry[key] for key in numeric)):
+        raise ValueError("blocked 记录必须填写 failure_type 说明受阻原因，且各项数量为 0")
     keys = entry.get("eligible_keys")
     if keys is not None and (not isinstance(keys, list) or len(keys) > entry["eligible_count"] or not all(isinstance(key, str) and key for key in keys)):
         raise ValueError("eligible_keys 必须是不超过合格数的非空字符串列表")
@@ -111,7 +113,11 @@ def stop_check(entries: list[dict], batch: str, portfolio: dict, min_weight: int
         new_by_round[number] = fresh
     recent = rounds[-2:]
     recent_new = sum(new_by_round[number] for number in recent)
-    expanded = any(row.get("round") in recent and row.get("status") == "success" and row.get("channel") != "scrape_aihot" for row in rows)
+    expansion_channels = {
+        row.get("channel") for row in rows
+        if row.get("round") in recent and row.get("status") == "success" and row.get("channel") != "scrape_aihot" and row.get("result_count", 0) > 0
+    }
+    searched = [family for family in required if family in {row["family"] for row in rows if row.get("status") == "success"}]
     reasons = []
     if missing:
         reasons.append(f"高权重来源族尚未成功检索：{', '.join(missing)}")
@@ -119,12 +125,14 @@ def stop_check(entries: list[dict], batch: str, portfolio: dict, min_weight: int
         reasons.append(f"只记录了 {len(rounds)} 轮检索，至少需要两轮")
     elif recent_new:
         reasons.append(f"最近两轮（{recent[0]}、{recent[1]}）仍有 {recent_new} 条此前未出现的合格材料")
-    elif not expanded:
-        reasons.append("最近两轮只有常规抓取，没有换渠道或换查询的扩源记录")
+    elif len(expansion_channels) < 2:
+        reasons.append(f"最近两轮只有 {len(expansion_channels)} 个常规抓取以外、有结果的扩源渠道，至少需要 2 个")
+    if required and not searched:
+        reasons.append("高权重来源族全部受阻，没有任何实际检索，无法判断材料已经耗尽")
     return {
         "batch": batch, "should_stop": not reasons, "required_families": required, "missing_families": missing,
         "blocked_families": blocked, "rounds": rounds, "new_eligible_by_round": new_by_round,
-        "recent_rounds_new_eligible": recent_new, "recent_rounds_expanded": expanded,
+        "recent_rounds_new_eligible": recent_new, "recent_expansion_channels": sorted(expansion_channels),
         "unrounded_records": unrounded, "continue_reasons": reasons,
     }
 

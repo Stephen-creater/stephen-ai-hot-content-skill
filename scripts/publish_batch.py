@@ -5,6 +5,7 @@ import argparse
 import fcntl
 import json
 import os
+import tempfile
 from pathlib import Path
 
 from curator import canonical_url, deduplicate
@@ -86,6 +87,9 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool 
             if row.get("id") in old_ids or canonical_url(row.get("link", "")) in old_urls or is_historical_content_duplicate(row, history):
                 raise ValueError(f"另一任务或历史批次已推送/审核：{row.get('title')}")
         if check_only:
+            # Render once into a throwaway file so report-time failures surface before registration.
+            with tempfile.TemporaryDirectory() as scratch:
+                generate_report(rows, Path(scratch) / "index.html", folder.name, batch_owner=owner)
             return folder
         candidates_path = folder / "candidates.json"
         candidates_temp = candidates_path.with_suffix(".json.tmp")

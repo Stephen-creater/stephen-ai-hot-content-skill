@@ -62,60 +62,67 @@ class SourceCoverageTest(unittest.TestCase):
     def test_stop_check_requires_coverage_and_two_rounds_without_new_material(self):
         required = sorted(row["id"] for row in self.portfolio["families"] if row["role"] == "candidate" and row["weight"] >= 8)
 
-        def row(family, round_no, keys=None, status="success", batch="b1", purpose="discovery", eligible=None):
-            entry = {"batch": batch, "family": family, "round": round_no, "status": status, "purpose": purpose,
-                     "eligible_count": len(keys) if keys is not None else (eligible or 0)}
-            if keys is not None:
-                entry["eligible_keys"] = keys
+        def row(family, round_no, keys=(), channel="scrape_aihot", status="success", results=5, batch="b1", purpose="discovery", eligible=None):
+            entry = {"batch": batch, "family": family, "round": round_no, "channel": channel, "status": status, "purpose": purpose,
+                     "result_count": results, "eligible_count": len(keys) if eligible is None else eligible}
+            if eligible is None:
+                entry["eligible_keys"] = list(keys)
             return entry
 
         covered = [row(family, 1, keys=["a", "b"] if family == required[0] else []) for family in required]
-        # Re-fetching the same feed yields the same eligible items: that is not new material.
-        repeated = covered + [row(required[0], 2, keys=["a", "b"]), row(required[0], 3, keys=["b"])]
-        stopped = stop_check(repeated, "b1", self.portfolio)
-        self.assertTrue(stopped["should_stop"])
+        expansion = [row(required[0], 2, keys=["a"], channel="exa"), row(required[1], 3, channel="zhihu")]
+        # Re-finding the same eligible items in later rounds is not new material.
+        stopped = stop_check(covered + expansion + [row(required[0], 3, keys=["a", "b"])], "b1", self.portfolio)
+        self.assertTrue(stopped["should_stop"], stopped["continue_reasons"])
         self.assertEqual(stopped["new_eligible_by_round"], {1: 2, 2: 0, 3: 0})
+        self.assertEqual(stopped["recent_expansion_channels"], ["exa", "zhihu"])
 
-        fresh = stop_check(covered + [row(required[0], 2, keys=["a", "c"])], "b1", self.portfolio)
+        fresh = stop_check(covered + expansion + [row(required[0], 3, keys=["c"])], "b1", self.portfolio)
         self.assertFalse(fresh["should_stop"])
-        self.assertEqual(fresh["recent_rounds_new_eligible"], 3)
+        self.assertEqual(fresh["recent_rounds_new_eligible"], 1)
 
-        manual_without_keys = stop_check(covered + [row(required[0], 2, eligible=1), row(required[0], 3)], "b1", self.portfolio)
+        manual_without_keys = stop_check(covered + expansion + [row(required[0], 3, channel="v2ex", eligible=1)], "b1", self.portfolio)
         self.assertFalse(manual_without_keys["should_stop"])
 
-        failed_family = [row(f, 1, keys=[]) for f in required[1:]] + [row(required[0], 1, keys=[], status="failed"), row(required[1], 2, keys=[])]
-        result = stop_check(failed_family, "b1", self.portfolio)
+        empty_expansion = covered + [row(required[0], 2, channel="exa", results=0), row(required[0], 3, channel="zhihu", results=0)]
+        self.assertIn("至少需要 2 个", " ".join(stop_check(empty_expansion, "b1", self.portfolio)["continue_reasons"]))
+
+        failed = [row(f, 1) for f in required[1:]] + [row(required[0], 1, status="failed"),
+                                                    row(required[1], 2, channel="exa"), row(required[1], 3, channel="zhihu")]
+        result = stop_check(failed, "b1", self.portfolio)
         self.assertFalse(result["should_stop"])
         self.assertEqual(result["missing_families"], [required[0]])
 
+        all_blocked = [row(f, 1, status="blocked", results=0) for f in required] + [row("zhihu", 2, channel="exa"), row("zhihu", 3, channel="zhihu")]
+        self.assertIn("全部受阻", " ".join(stop_check(all_blocked, "b1", self.portfolio)["continue_reasons"]))
+
         self.assertIn("至少需要两轮", " ".join(stop_check(covered, "b1", self.portfolio)["continue_reasons"]))
-        unrounded = covered + [{**row(required[0], None, keys=[]), "round": None}]
+        unrounded = covered + [{**row(required[0], None), "round": None}]
         self.assertEqual(stop_check(unrounded, "b1", self.portfolio)["unrounded_records"], 1)
-        noise = [row(f, 1, batch="b2", keys=[]) for f in required] + [row(f, 2, purpose="smoke", keys=[]) for f in required]
+        noise = [row(f, 1, batch="b2") for f in required] + [row(f, 2, purpose="smoke") for f in required]
         self.assertEqual(stop_check(noise, "b1", self.portfolio)["rounds"], [])
 
-    def test_stop_check_needs_real_expansion_and_shared_key_format(self):
+    def test_stop_check_uses_shared_key_format_and_reports_blocked_families(self):
         required = sorted(row["id"] for row in self.portfolio["families"] if row["role"] == "candidate" and row["weight"] >= 8)
         link = "https://mp.weixin.qq.com/s/abc?from=rss"
         scrape_key = eligible_key("https://mp.weixin.qq.com/s/abc")
         self.assertEqual(eligible_key(link), scrape_key)
         self.assertEqual(eligible_key("already-a-hash"), "already-a-hash")
 
-        def row(family, round_no, channel="scrape_aihot", keys=(), status="success"):
+        def row(family, round_no, channel="scrape_aihot", keys=(), status="success", results=3):
             return {"batch": "b", "family": family, "round": round_no, "channel": channel, "status": status,
-                    "purpose": "discovery", "eligible_count": len(keys), "eligible_keys": list(keys)}
+                    "purpose": "discovery", "result_count": results, "eligible_count": len(keys), "eligible_keys": list(keys)}
 
         base = [row(f, 1, keys=[scrape_key] if f == "wechat" else []) for f in required if f != "bilibili"]
-        base.append(row("bilibili", 1, channel="bili-cli", status="blocked"))
+        base.append(row("bilibili", 1, channel="bili-cli", status="blocked", results=0))
         rerun_only = base + [row("wechat", 2, keys=[scrape_key]), row("wechat", 3, keys=[scrape_key])]
         result = stop_check(rerun_only, "b", self.portfolio)
         self.assertFalse(result["should_stop"])
-        self.assertIn("只有常规抓取", " ".join(result["continue_reasons"]))
         self.assertEqual(result["blocked_families"], ["bilibili"])
 
-        manual_same_article = rerun_only + [row("wechat", 3, channel="exa", keys=[eligible_key(link)])]
+        manual_same_article = rerun_only + [row("wechat", 3, channel="exa", keys=[eligible_key(link)]), row("wechat", 2, channel="zhihu")]
         stopped = stop_check(manual_same_article, "b", self.portfolio)
-        self.assertTrue(stopped["should_stop"])
+        self.assertTrue(stopped["should_stop"], stopped["continue_reasons"])
         self.assertEqual(stopped["recent_rounds_new_eligible"], 0)
 
     def test_ledger_rejects_invalid_round_metadata(self):
@@ -127,8 +134,14 @@ class SourceCoverageTest(unittest.TestCase):
                 record_attempt(Path(tmp) / "l.jsonl", {**base, "round": -1})
             with self.assertRaises(ValueError):
                 record_attempt(Path(tmp) / "l.jsonl", {**base, "eligible_keys": ["a"]})
+            blocked = {**base, "status": "blocked", "result_count": 0, "fulltext_count": 0}
+            with self.assertRaises(ValueError):
+                record_attempt(Path(tmp) / "l.jsonl", blocked)
+            with self.assertRaises(ValueError):
+                record_attempt(Path(tmp) / "l.jsonl", {**blocked, "failure_type": "no_backend", "result_count": 2, "fulltext_count": 1})
+            record_attempt(Path(tmp) / "l.jsonl", {**blocked, "failure_type": "no_backend"})
             record_attempt(Path(tmp) / "l.jsonl", {**base, "round": 2, "max_age_days": 45})
-            self.assertEqual(load_entries(Path(tmp) / "l.jsonl")[0]["round"], 2)
+            self.assertEqual([row.get("round") for row in load_entries(Path(tmp) / "l.jsonl")], [None, 2])
 
     def test_ledger_is_locked_validated_and_reports_yield(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -94,10 +94,12 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
         if item.get("content_form") in {"video", "podcast"} and item.get("content_status") == "transcript":
             transcript = f"""
   <details class="transcript"><summary>查看整理后的完整逐字稿</summary><div class="transcript-note">转写文本供阅读参考；专有名词、数字及正式引用请回到原音视频核对。</div><pre>{html.escape(item.get('content', ''))}</pre></details>"""
+        # Reviewers see the human verdict in plain words, not internal scores or penalty codes.
+        review = item.get("manual_editorial_review") if isinstance(item.get("manual_editorial_review"), dict) else {}
         cards.append(
             f"""
 <article class="card" data-id="{html.escape(str(item['id']))}">
-  <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}{github_stars}</span><span>发现排序分 {item['score']}（非质量评分）</span></div>
+  <div class="meta"><span>{html.escape(item.get('source_name', '未知来源'))} · {html.escape(item.get('content_form', 'article'))}{github_stars}</span><span>{html.escape(str(item.get('published', ''))[:16])}</span></div>
   <h2><a href="{html.escape(item.get('link', '#'))}" target="_blank" rel="noreferrer">{position}. {html.escape(display_title)}</a></h2>
   {angle_html}
   {reference_links_html}
@@ -105,8 +107,8 @@ def generate_report(candidates: list[dict], output_path: Path, generated_at: str
   {localization_html}
   {practical_review_html}
   <p>{html.escape(item.get('summary') or item.get('content', '')[:240])}</p>
-  <p class="reason">{html.escape(item.get('reason', ''))}</p>
-  <p class="penalty">{html.escape(item.get('penalty', ''))}</p>
+  <p class="reason">{html.escape(review.get('reader_change') or item.get('reason', ''))}</p>
+  <p class="penalty">{html.escape(('需要注意：' + review['counterargument']) if review.get('counterargument') else '')}</p>
   <p class="readiness">文字材料 {html.escape(item.get('content_status', 'unknown'))} · 二创成熟度 {html.escape(item.get('adaptation_readiness', '未知'))} · 研究成本 {html.escape(item.get('research_cost', '未知'))}</p>
   {aigc_detection}
   {transcript}
