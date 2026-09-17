@@ -8,9 +8,9 @@ import re
 import shutil
 import subprocess
 import tempfile
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import feedparser
 import requests
@@ -91,6 +91,94 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
             }
         )
     return items
+
+
+def fetch_paged_web_index(source: dict, settings: dict) -> list[dict]:
+    """Walk numbered list pages so a high-yield library is not limited to its homepage."""
+    limit = int(source.get("items_limit", settings["web_links_per_source"]))
+    page_settings = {**settings, "web_links_per_source": limit}
+    exclude = re.compile(source["title_exclude_pattern"]) if source.get("title_exclude_pattern") else None
+    rows, seen = [], set()
+    for page in range(1, int(source.get("pages", 1)) + 1):
+        url = source["url"] if page == 1 else source["page_url_template"].format(page=page)
+        for row in fetch_web_index({**source, "url": url}, page_settings):
+            if exclude and exclude.search(row["title"]):
+                continue
+            if row["link"] not in seen:
+                seen.add(row["link"])
+                rows.append(row)
+        if len(rows) >= limit:
+            break
+    return rows[:limit]
+
+
+def fetch_wechat_index(source: dict, settings: dict) -> list[dict]:
+    """Read a public WeChat article index, keeping interviews and long-horizon practice over news flashes."""
+    end = datetime.now()
+    start = end - timedelta(days=int(source.get("lookback_days", 5)))
+    response = requests.get(
+        source["url"],
+        params={"start": start.strftime("%Y%m%d"), "end": end.strftime("%Y%m%d"), "limit": int(source.get("index_limit", 2000))},
+        headers=HEADERS,
+        timeout=settings["request_timeout_seconds"],
+    )
+    response.raise_for_status()
+    articles = response.json().get("articles")
+    if not isinstance(articles, list):
+        raise ValueError("公众号公开索引数据结构变化：缺少 articles 列表")
+    include = re.compile(source["title_include_pattern"])
+    exclude = re.compile(source["title_exclude_pattern"]) if source.get("title_exclude_pattern") else None
+    preferred = set(source.get("preferred_accounts", []))
+    rows, seen = [], set()
+    for article in articles:
+        if not isinstance(article, dict):
+            continue
+        raw_title = str(article.get("title") or "")
+        title, account, link = clean_text(raw_title), clean_text(article.get("account_name")), article.get("url", "")
+        # Image-text posts put their whole body in the title field; they are not articles.
+        if not title or "\n" in raw_title or len(title) > 80 or not str(link).startswith(("https://", "http://")):
+            continue
+        if exclude and exclude.search(title):
+            continue
+        # Preferred accounts rank first but still need an interview or practice title.
+        if not include.search(title):
+            continue
+        key = str(article.get("article_key") or "")
+        if not key or link in seen:
+            continue
+        seen.add(link)
+        day = key[:8]
+        rows.append({
+            "title": title, "link": link.replace("http://", "https://", 1), "summary": clean_text(article.get("lead")),
+            "published": f"{day[:4]}-{day[4:6]}-{day[6:]}" if day.isdigit() else "",
+            "source_name": account or source["name"], "source_category": source["category"],
+            "source_priority": source["priority"] + (1 if account in preferred else 0),
+            "source_type": "web", "source_role": source.get("role", "candidate"),
+            "language": source.get("language", "zh"), "maturity": source.get("maturity", "secondary"),
+            "content_form": "article", "content_status": "summary", "index_article_key": key,
+        })
+    rows.sort(key=lambda row: (row["source_name"] in preferred, row["published"]), reverse=True)
+    rows = rows[: int(source.get("items_limit", 60))]
+
+    def attach_body(row: dict) -> dict:
+        try:
+            body = requests.get(
+                source["content_url_template"].format(key=quote(row["index_article_key"], safe="")),
+                headers=HEADERS, timeout=settings["request_timeout_seconds"],
+            )
+            body.raise_for_status()
+            payload = body.json()
+            article = payload.get("article", payload) if isinstance(payload, dict) else {}
+            content = str(article.get("content") or "").strip()
+            if content:
+                # Cached body is a reading aid; the original page must still be checked before delivery.
+                row.update(content=content, content_status="fulltext", content_origin="public_index_cache")
+        except Exception as exc:
+            row["fetch_error"] = str(exc)
+        return row
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=int(settings.get("hydrate_workers", 5))) as executor:
+        return list(executor.map(attach_body, rows))
 
 
 def fetch_web_index(source: dict, settings: dict) -> list[dict]:
@@ -223,6 +311,10 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
             rows = fetch_aihot(source, settings)
         elif source["type"] == "learnprompt_radar":
             rows = fetch_learnprompt_radar(source, settings)
+        elif source["type"] == "wechat_index":
+            rows = fetch_wechat_index(source, settings)
+        elif source["type"] == "paged_web":
+            rows = fetch_paged_web_index(source, settings)
         else:
             rows = fetch_web_index(source, settings)
         return rows, None if rows else f"{source['name']}: 未发现条目"
@@ -234,7 +326,7 @@ def hydrate(item: dict, settings: dict) -> dict:
     if not item.get("link") or item.get("source_role") == "discovery":
         return item
     if item.get("content") and (
-        item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext"}
+        item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext", "public_index_cache"}
     ):
         return item
     try:
@@ -267,7 +359,9 @@ def hydrate(item: dict, settings: dict) -> dict:
             item["content_truncated"] = truncated
             item["content_status"] = "partial" if truncated else ("shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext")
             if urlparse(item["link"]).netloc.lower().endswith("jxxy.net"):
-                item["published"] = embedded_original_date(extracted) or item.get("published", "")
+                structured = re.search(r'"datePublished"\s*:\s*"(\d{4}-\d{2}-\d{2})', text)
+                # List pages show refresh dates; prefer the page's own publication date.
+                item["published"] = embedded_original_date(extracted) or (structured.group(1) if structured else "") or item.get("published", "")
         metadata = trafilatura.bare_extraction(text, include_comments=False)
         meta = metadata.as_dict() if hasattr(metadata, "as_dict") else metadata or {}
         if not item.get("published") and isinstance(meta, dict):

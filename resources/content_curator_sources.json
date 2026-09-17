@@ -82,24 +82,50 @@
     },
     {
       "name": "觉醒AI",
+      "family": "chinese_longform_web",
       "category": "中文AI实战知识库",
-      "type": "web",
-      "url": "https://www.jxxy.net/ai/",
+      "type": "paged_web",
+      "url": "https://www.jxxy.net/ai/articles/",
+      "page_url_template": "https://www.jxxy.net/ai/articles/{page}/",
+      "pages": 8,
+      "items_limit": 160,
       "include_path_prefix": "/ai/articles/",
+      "title_exclude_pattern": "BestBlogs|早报|周刊|日报|v\\d+(\\.\\d+)+|\\d+\\.\\d+\\.\\d+|rc\\.\\d|发布：|全清单|盘点",
       "priority": 5,
       "role": "candidate",
       "language": "zh",
-      "maturity": "secondary"
+      "maturity": "secondary",
+      "notes": "历史入选最多的来源。遍历文章库而非首页；列表日期是更新时间，抓全文时改用页面 datePublished。旧 X 帖子重新导入时 datePublished 也可能偏新，终审仍须按正文提到的模型版本核对时效。"
     },
     {
-      "name": "少数派",
-      "category": "中文科技深度内容",
-      "type": "rss",
-      "url": "https://sspai.com/feed",
+      "name": "公众号访谈与实录",
+      "family": "wechat",
+      "category": "中文产品访谈与长期实践",
+      "type": "wechat_index",
+      "url": "https://yzdtoolbox.com/zuozhanshi-api/cloud/articles",
+      "content_url_template": "https://yzdtoolbox.com/zuozhanshi-api/cloud/articles/{key}",
+      "lookback_days": 5,
+      "items_limit": 60,
+      "preferred_accounts": ["Z Finance", "硅星人Pro", "腾讯研究院"],
+      "title_include_pattern": "对话|访谈|专访|实录|文字稿|逐字稿|复盘|踩坑|手记|(\\d+|一|两|三|半)(天|周|个月|年).{0,10}(实测|实践|使用|之后|后)|我用.{0,15}(做|搭|跑|整理)",
+      "title_exclude_pattern": "早报|晚报|速览|速递|周报|ZPedia|8点1氪|日记|一句话看|快讯|招聘|微信群|交流群|倒计时|议程|报名|直播预告|首发丨|融资|IPO|上市|榜单|峰会|大会|末日|毁灭",
       "priority": 4,
       "role": "candidate",
       "language": "zh",
-      "maturity": "secondary"
+      "maturity": "secondary",
+      "notes": "公开只读索引只收录约 60 个固定公众号，资讯号占多数；全量标题实测全文通过率仅 1–3%，因此只保留访谈、实录、复盘和长期实测标题，优先账号只提前排序，不跳过标题筛选。缓存正文只用于阅读，交付前须回核原文可读。42章经、晚点、张小珺等高密度访谈号不在该索引内，需另找入口。"
+    },
+    {
+      "name": "少数派",
+      "family": "chinese_longform_web",
+      "category": "中文科技深度内容",
+      "type": "rss",
+      "url": "https://sspai.com/feed",
+      "priority": 3,
+      "role": "discovery",
+      "language": "zh",
+      "maturity": "secondary",
+      "notes": "历史反馈 0/16 入选，降为线索；专题访谈仍可人工追到全文后进入 inbox。"
     },
     {
       "name": "AIHot中文媒体",
@@ -110,7 +136,8 @@
       "role": "candidate",
       "language": "zh",
       "maturity": "secondary",
-      "allowed_platforms": ["机器之心", "量子位", "新智元", "极客公园", "InfoQ", "少数派"]
+      "allowed_platforms": ["量子位", "极客公园"],
+      "notes": "只保留历史有入选的平台；机器之心、新智元以快讯为主，InfoQ 0/6、少数派 0/16。"
     },
     {
       "name": "OpenAI News",

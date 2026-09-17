@@ -17,7 +17,7 @@ from add_source import append_source
 from curator import canonical_url, deduplicate, rank_candidates, redact_untrusted_secrets, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -334,6 +334,110 @@ Language: zh
     def test_aggregator_uses_original_publication_date_not_refresh_date(self) -> None:
         text = "更新时间：2026-09-04\n原文信息\n发布于 2026 年 7 月 24 日，时长 75 分钟。"
         self.assertEqual(embedded_original_date(text), "2026-07-24")
+
+    def test_wechat_index_keeps_interviews_and_skips_news_flashes(self) -> None:
+        class Response:
+            def __init__(self, payload):
+                self.payload = payload
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return self.payload
+
+        def article(title, account="某科技号", day="20260916"):
+            return {"title": title, "account_name": account, "url": f"http://mp.weixin.qq.com/s?t={title}",
+                    "article_key": f"{day}#wechat#{title}", "lead": "导语"}
+
+        index = {"articles": [
+            article("深度｜对话某产品负责人：为什么要先删功能"),
+            article("两个月百余个真实任务后：Codex 不是数字员工"),
+            article("【AI 晚报｜9 月 16 日】国产大模型密集迭代"),
+            article("对话某公司 CEO：完成亿元融资"),
+            article("刚刚，某模型发布"),
+            article("深度｜对话优先账号的产品负责人", account="Z Finance", day="20260915"),
+            article("优先账号的普通资讯", account="Z Finance"),
+            {**article("图文帖子"), "title": "第一段正文\n第二段正文"},
+            None,
+        ]}
+        source = {
+            "name": "公众号访谈与实录", "category": "中文产品访谈", "priority": 4, "url": "https://index.example/articles",
+            "content_url_template": "https://index.example/articles/{key}", "items_limit": 10,
+            "preferred_accounts": ["Z Finance"],
+            "title_include_pattern": "^深度｜|对话|(\\d+|两)(天|个月).{0,10}(实测|实践|后)",
+            "title_exclude_pattern": "晚报|融资",
+        }
+
+        def fake_get(url, **kwargs):
+            if url == source["url"]:
+                return Response(index)
+            if "%E5%88%9A%E5%88%9A" in url:
+                raise TimeoutError("cache timeout")
+            return Response({"article": {"content": "完整正文" * 800}})
+
+        with patch("scrape_aihot.requests.get", side_effect=fake_get):
+            rows = fetch_wechat_index(source, {"request_timeout_seconds": 1, "hydrate_workers": 2})
+        titles = [row["title"] for row in rows]
+        self.assertEqual(titles[0], "深度｜对话优先账号的产品负责人")
+        self.assertEqual(set(titles), {"深度｜对话优先账号的产品负责人", "深度｜对话某产品负责人：为什么要先删功能", "两个月百余个真实任务后：Codex 不是数字员工"})
+        self.assertTrue(all(row["link"].startswith("https://") for row in rows))
+        self.assertTrue(all(row["content_origin"] == "public_index_cache" and row["content_status"] == "fulltext" for row in rows))
+        self.assertEqual(rows[0]["published"], "2026-09-15")
+        with patch("scrape_aihot.requests.get") as get:
+            self.assertEqual(hydrate(rows[1], {"request_timeout_seconds": 1}), rows[1])
+            get.assert_not_called()
+        with patch("scrape_aihot.requests.get", return_value=Response({"changed": []})):
+            items, error = fetch_source({**source, "type": "wechat_index"}, {"request_timeout_seconds": 1})
+        self.assertEqual(items, [])
+        self.assertIn("articles", error)
+
+    def test_paged_web_index_walks_pages_and_dedupes(self) -> None:
+        pages = {
+            "https://lib.example/ai/articles/": "<main><a href='/ai/articles/a/'><h3>第一篇中文 AI 实战长文标题</h3></a><a href='/ai/articles/b/'><h3>第二篇中文 AI 实战长文标题</h3></a></main>",
+            "https://lib.example/ai/articles/2/": "<main><a href='/ai/articles/b/'><h3>第二篇中文 AI 实战长文标题</h3></a><a href='/ai/articles/c/'><h3>第三篇中文 AI 实战长文标题</h3></a><a href='/ai/articles/d/'><h3>BestBlogs早报·09-13｜汇总不进入</h3></a></main>",
+        }
+
+        class Response:
+            encoding = "utf-8"
+
+            def __init__(self, url):
+                self.content = pages[url].encode("utf-8")
+
+            def raise_for_status(self):
+                return None
+
+        source = {"name": "觉醒AI", "category": "中文AI实战知识库", "priority": 5, "type": "paged_web",
+                  "url": "https://lib.example/ai/articles/", "page_url_template": "https://lib.example/ai/articles/{page}/",
+                  "pages": 2, "items_limit": 10, "include_path_prefix": "/ai/articles/", "title_exclude_pattern": "早报"}
+        with patch("scrape_aihot.requests.get", side_effect=lambda url, **kwargs: Response(url)):
+            rows, error = fetch_source(source, {"request_timeout_seconds": 1, "web_links_per_source": 1})
+        self.assertIsNone(error)
+        self.assertEqual([row["link"].rsplit("/", 2)[-2] for row in rows], ["a", "b", "c"])
+
+    def test_library_uses_structured_publication_date_over_list_refresh_date(self) -> None:
+        html = ('<html><head><script type="application/ld+json">{"datePublished":"2026-01-27","dateModified":"2026-09-17"}</script></head>'
+                "<body><article><h1>一家五岁初创的全员 AI 改造</h1>" + "<p>非工程师成了智能体最大用户，服务迁移从四个月缩到一周。</p>" * 40 + "</article></body></html>")
+
+        class Response:
+            encoding = "utf-8"
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *args):
+                return False
+
+            def raise_for_status(self):
+                return None
+
+            def iter_content(self, size):
+                yield html.encode("utf-8")
+
+        item = {"link": "https://www.jxxy.net/ai/articles/craft/", "title": "一家五岁初创的全员 AI 改造", "published": "2026-09-17", "source_role": "candidate"}
+        with patch("scrape_aihot.requests.get", return_value=Response()):
+            result = hydrate(item, {"request_timeout_seconds": 1, "max_article_bytes": 1_000_000})
+        self.assertEqual(result["published"], "2026-01-27")
 
     def test_web_index_decodes_utf8_and_respects_article_prefix(self) -> None:
         class Response:

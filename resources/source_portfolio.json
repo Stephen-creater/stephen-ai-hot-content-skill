@@ -11,7 +11,7 @@
       "weight": 18,
       "role": "candidate",
       "doctor_channels": ["web", "rss", "exa_search"],
-      "automation_types": ["web", "rss", "aihot", "learnprompt_radar"],
+      "automation_types": ["web", "paged_web", "rss", "aihot", "learnprompt_radar"],
       "minimum_access_fraction": 0,
       "strategy": "按作者、专题和引用链追踪独立博客、newsletter、产品复盘与深度媒体，不只搜热点关键词。"
     },
@@ -21,7 +21,7 @@
       "weight": 18,
       "role": "candidate",
       "doctor_channels": [],
-      "automation_types": [],
+      "automation_types": ["wechat_index"],
       "minimum_access_fraction": 0.35,
       "strategy": "公开文章索引负责发现，逐篇回到原文核验；建立高命中作者订阅，而不是只依赖聚合站。",
       "user_action": "若公开索引覆盖不足，再评估只读公众号搜索服务；不得上传私人 Cookie 到未知服务。"
