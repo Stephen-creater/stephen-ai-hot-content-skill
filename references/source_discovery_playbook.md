@@ -7,8 +7,8 @@
 `resources/source_portfolio.json` 把求解空间分成 12 个来源族并按预期价值加权。每周运行一次覆盖检查，并在扩源前查看台账：
 
 ```bash
-python3 scripts/source_coverage.py --verified-channel exa_search --verified-channel github --write-snapshot .local/source_coverage.json
-python3 scripts/discovery_ledger.py report
+.venv/bin/python3 scripts/source_coverage.py --verified-channel exa_search --verified-channel github --write-snapshot .local/source_coverage.json
+.venv/bin/python3 scripts/discovery_ledger.py report
 ```
 
 `verified-channel` 只能填写本轮已经完成非空冒烟测试的渠道。Doctor 的 `warn`、工具安装成功或配置文件存在都不能算真实连通。
@@ -16,7 +16,7 @@ python3 scripts/discovery_ledger.py report
 每次检索后记录实际产出：
 
 ```bash
-python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
+.venv/bin/python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
   --family chinese_longform_web --channel exa --query "作者或主题查询" --status success \
   --operation search --purpose discovery --evidence-url "已读取的搜索结果页URL" \
   --result-count 10 --fulltext-count 4 --eligible-count 2 --selected-count 1
@@ -26,7 +26,9 @@ python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
 
 权重是待校准的规划假设，不代表互联网内容份额。每个来源族分别验证 search、read、author；只计有时间、非空结果和证据 URL 的操作。Doctor 和命令安装不加分，连通测试使用 purpose=smoke，不计实际选题探索覆盖。最终入选数只能在用户审核后填写，不能由 Agent 代填。
 
-## 分层来源模型（2026-09-17 实测后重排）
+## 分层来源模型
+
+五个来源层描述「从哪里取材、按什么顺序取」；`source_portfolio.json` 的 12 个来源族用于覆盖率记账和停止条件判断。一个层可以对应多个族，例如访谈公众号记在 `wechat`，播客转录记在 `chinese_podcasts`。
 
 历史入选材料集中在少数「访谈与编译号、精选站、一线博主」，资讯媒体几乎不出货；不少入选访谈的上游是英文播客或演讲，中文稿是编译或整理。因此按作者和栏目订阅，不再扩综合媒体。具体地址与说明以 `content_curator_sources.json` 为准。
 
@@ -91,6 +93,6 @@ python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
 6. 找到线索后先读取完整正文、字幕或逐字稿，确认没有登录墙、关注墙和正文截断，再写入 `.local/source_inbox.json`。
 7. 重新抓取、硬门槛筛选和历史去重。
 8. 人工检查所有候选，拦截提问帖、通稿、SEO 内容、AI 模板文、标题党、泛泛观点和过深实现细节。
-9. 仍不足 5 条，或非 GitHub 高质量材料不足 4 条，则回到第 3 步，不得交付当前批次。
+9. 仍不足目标数量，或非 GitHub 高质量材料不足 4 条，则回到第 3 步，直到满足 `SKILL.md` 的完成契约或停止条件；满足停止条件时交付缺口报告，不用弱题补位。
 
 最终候选仍必须同时满足：材料完整、切口具体、有事实或案例、能形成因果链、对普通读者有价值，并具有长期回看意义。

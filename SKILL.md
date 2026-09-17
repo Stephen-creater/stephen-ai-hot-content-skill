@@ -16,7 +16,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 .venv/bin/python3 -m unittest discover -s tests   # 冒烟：依赖齐全才会通过
 ```
 
-并发 worktree 没有 `.venv`、`.local`、`topics`、`.config`：用权威仓库的 `.venv/bin/python3`，并把后三个目录软链接到权威仓库。缺少这些私有目录时，不得运行抓取、发布或导入，否则历史去重和反馈会失效。
+并发 worktree 没有 `.venv`、`.local`、`topics`、`.config`：解释器用 `"$(git rev-parse --path-format=absolute --git-common-dir)/../.venv/bin/python3"`，并把后三个目录软链接到权威仓库。缺少这些私有目录时，不得运行抓取、发布或导入，否则历史去重和反馈会失效。
 
 ## 完成契约与停止条件
 
@@ -26,16 +26,16 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 通过机器资格检查和证据化人工终审；
 - 构成满足至少 4 条文章型材料、GitHub 最多 1 条。
 
-数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。** 同时满足下面两条时停止扩源，交付缺口报告，由用户决定继续、换方向还是调整数量：
+数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。** 同时满足下面两条时停止扩源，交付缺口报告，并给出三个选项：继续扩源、换方向、调整数量，由用户决定：
 
-1. 本批已在 `discovery_ledger.py` 记录过所有已启用的高权重来源层，并把时间窗扩到画像上限；
+1. 本批已在 `discovery_ledger.py` 记录过 `source_portfolio.json` 中所有 `role` 为 candidate 且 `weight` ≥ 8 的来源族（以 `discovery_ledger.py report` 为准），并把时间窗扩到画像 `max_age_days`；
 2. 连续两轮扩源没有新增合格材料。
 
 达标条目 ≥5 条时照常发布并在报告中说明缺口；不足 5 条时不发布，草稿留在 `topics/<批次>`，报告写明已达标条目与各来源的全文数和通过数。用户主动暂停、取消或出现真实权限阻塞时立即停下。长任务在 `.local/work/` 维护可续跑检查点。
 
 ## 读取路由
 
-每批开始读取：[编辑判断模型](references/editorial-judgment.md)、[反馈学习协议](references/feedback-learning-protocol.md)。
+每批开始读取：[编辑判断模型](references/editorial-judgment.md)。导入反馈或修改判断规则时读取 [反馈学习协议](references/feedback-learning-protocol.md)。
 
 按需读取：
 - 边界难判：[正反校准案例](references/editorial-calibration-cases.md)
@@ -56,7 +56,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 2. 发现与全文恢复
 
-- 运行 `.venv/bin/python3 scripts/scrape_aihot.py`。来源按分层模型组织：
+- 运行 `.venv/bin/python3 scripts/scrape_aihot.py`。它每次只输出 `report_candidate_count` 条待终审材料；用户要的数量更多时，从 `discovery.json`、各来源台账和补充检索中继续扩池。来源按分层模型组织：
   - BestBlogs 与觉醒AI 是中文主入口；
   - 访谈、文字稿公众号和有转录的播客是高命中层；
   - 英文一手雷达只发现选题，命中后去找中文成熟稿；
@@ -76,7 +76,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 即时事件不超过 5 天，深度材料遵守画像时间窗；
 - GitHub 实时不少于 100 Star，且近 7 天有实质更新；
 - 不属于屏蔽来源、屏蔽作者或精确主题状态；
-- 文章自己没有披露由 AI 生成；
+- 文章自己没有披露由 AI 生成；已配置朱雀时，检测 `ai ≥ 98%` 同样硬淘汰（其余区间只作风险提示，见朱雀说明）；
 - 关键内容不在缺失的图片里。
 
 ### 4. 五维人工终审
@@ -131,7 +131,8 @@ AI 味、新闻腔、第一人称、技术词、访谈、图片多、垂直行�
 选题批次：
 1. 批次 ID、审核页路径、条数与构成（文章/播客/GitHub）；
 2. 与审核页同序的列表：原题、原文链接、一句话推荐理由；
-3. 未达目标时附缺口报告：各来源全文数和通过数、失败或未覆盖的来源、建议下一步。
+3. 抓取失败或未覆盖的来源、剩余风险（如原文可读性待回核、转录专名待校对）；
+4. 未达目标时附缺口报告：各来源全文数和通过数，以及继续扩源、换方向、调整数量三个选项。
 
 维护任务：改动文件、测试与校验结果、push 回读结果、剩余风险。
 
@@ -142,7 +143,7 @@ AI 味、新闻腔、第一人称、技术词、访谈、图片多、垂直行�
 - 默认不调用 OpenCLI；只有知乎扩源可按知乎路由读取适配器的能力契约。不为取得 Cookie 启动或接管用户 Chrome。
 - Ego Browser 只在常规来源不足、原文确需动态渲染或已有登录态、或用户指定时按缺口使用。使用隔离空间、同空间串行、用完关闭；登录、验证码和付费交给用户，不索取、不导出 Cookie。
 - 只有用户明确要求时才开启多任务协作。协作时认领不重叠的来源，工作文件分开放；共同批次由一个归属任务发布并导入反馈，不按下载时间猜反馈归属。
-- 朱雀和模型复排只是辅助证据；未配置或失败表示未知。自动分数 `discovery_score` 只负责排序。
+- 朱雀除 `ai ≥ 98%` 硬淘汰外、以及模型复排，都只是辅助证据；未配置或失败表示未知，不能证明由人创作。自动分数 `discovery_score` 只负责排序。
 - 单批反馈不得把读者兴趣、题材偏好、技术难度或二创难度升级为硬失败。只有语言、公开完整性、时效、精确历史状态、来源安全和可核验平台门槛这类事实可以硬拦截。
 
 ## 修改后的验证

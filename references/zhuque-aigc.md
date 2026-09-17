@@ -12,9 +12,9 @@
 4. 运行状态检查，再做一次会产生费用的真实测试：
 
 ```bash
-python3 scripts/zhuque_aigc.py status
-python3 scripts/zhuque_aigc.py test --text "待检测的一小段中文"
-python3 scripts/zhuque_aigc.py test --file /path/to/article.txt
+.venv/bin/python3 scripts/zhuque_aigc.py status
+.venv/bin/python3 scripts/zhuque_aigc.py test --text "待检测的一小段中文"
+.venv/bin/python3 scripts/zhuque_aigc.py test --file /path/to/article.txt
 ```
 
 `.config/` 和 `.local/` 已被 Git 忽略。不得把真实 API Key 写进 README、`SKILL.md`、测试、报告或提交历史。

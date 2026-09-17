@@ -76,6 +76,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - `scripts/curator.py`：确定性发现排序。
 - `scripts/publish_batch.py`：终审证据、归属、去重和发布门禁。
 - `tests/fixtures/editorial_boundary_cases.json`：可供不同模型回放的匿名正反边界集。
+- `docs/plans/`：历史设计记录，不作为执行依据；现行规则以 `SKILL.md` 与 `references/` 为准。
 - `.local/`、`.config/`、`topics/`：私有状态与运行产物，不提交。
 
 ## 浏览器与隐私

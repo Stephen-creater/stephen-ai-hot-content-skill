@@ -979,7 +979,7 @@ def main() -> None:
     generate_report(candidates, output_dir / "index.html", timestamp)
     print(f"待终审材料 {len(candidates)} 条，输入 {len(items)} 条，资格拒绝 {rejected_by_gate_count} 条；须完成原文终审与发布登记")
     if len(candidates) < minimum_delivery_count and not args.fixture:
-        print(f"尚未达到交付门槛 {minimum_delivery_count} 条：继续扩展来源并检索，不得交付或用弱题补位")
+        print(f"尚未达到交付门槛 {minimum_delivery_count} 条：继续扩源，直到满足完成契约或停止条件；不得用弱题补位")
     elif non_github_candidate_count < minimum_non_github_candidates and not args.fixture:
         print("候选全部来自 GitHub：继续补充高质量中文文章、博客或完整音视频材料，不得交付单一来源批次")
     if errors:

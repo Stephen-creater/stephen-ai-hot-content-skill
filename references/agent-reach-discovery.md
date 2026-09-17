@@ -15,19 +15,19 @@
 先执行只读检查：
 
 ```bash
-python3 scripts/agent_reach_runtime.py status
+.venv/bin/python3 scripts/agent_reach_runtime.py status
 ```
 
 若 `installed` 为 `false`，运行下面的命令。它只把固定版本安装到 `~/.agent-reach/stephen-hot-content-runtime`，不会安装全局工具或读取浏览器 Cookie：
 
 ```bash
-python3 scripts/agent_reach_runtime.py install
+.venv/bin/python3 scripts/agent_reach_runtime.py install
 ```
 
 若核心渠道仍缺失，先向用户说明将安装的上游工具和登录边界。用户明确允许系统级安装后再运行：
 
 ```bash
-python3 scripts/agent_reach_runtime.py install --system --channels all
+.venv/bin/python3 scripts/agent_reach_runtime.py install --system --channels all
 ```
 
 不得把 API Key、Token、Cookie 或浏览器登录态写入本仓库。登录态平台只使用用户已经存在且明确控制的会话，不替用户登录。
@@ -46,10 +46,11 @@ OpenCLI 默认禁用。知乎扩源是唯一例外，但必须先读取 [知乎 
 - 小红书：打开 `/search_result?keyword=查询词`，读取结果中的完整链接，进入详情核对正文、图片依赖、评论，再打开作者主页。详情链接里的 xsec_token 是页面链接参数，保留在私有材料内；不要把评论中的 AI 总结当作作者正文。
 - Reddit：先打开目标社区 `/r/ChatGPT/`，用社区搜索 `/r/ChatGPT/search/?q=workflow&restrict_sr=1`；打开搜索结果中的帖子，读取正文和回复，再由页面作者链接追踪公开主页。
 - 每个新标签页检查视口并等待内容实际出现，不能只在 load 事件后立刻把空列表判为失败。
+- 用登录态读取 X、小红书、Reddit 时保持低频：相邻页面操作间隔不少于 3 秒，每个查询最多翻 3 页，单次任务最多打开 30 个详情页；出现验证码、429、登录失效或风控提示立即停止，改走其他来源，不重试绕过。
 
 首次检索记录 purpose=smoke；真正围绕选题进行搜索时记录 purpose=discovery。连通、材料质量、用户采纳分别验收，任何一步成功都不能替代下一步。
 
-正文定位不能只取第一个 `<article>`：它可能是站内 AI 总结卡。先核对原始标题、正文起止和末尾署名，再确定容器。人人都是产品经理本轮验证正文在 `.article--content`，页面另有 `article-intelligence` 摘要卡；读取其他站点也须检查同类问题。页面辅助总结和评论不能混作作者正文。
+正文定位不能只取第一个 `<article>`：它可能是站内 AI 总结卡。先核对原始标题、正文起止和末尾署名，再确定容器。例如人人都是产品经理的正文在 `.article--content`，页面另有 `article-intelligence` 摘要卡；读取其他站点也须检查同类问题。页面辅助总结和评论不能混作作者正文。
 
 需要跨平台扩源时，不要只依赖一个搜索引擎，按材料缺口组合互补渠道，例如：
 
@@ -111,4 +112,4 @@ yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -
 - 不得因为 `doctor` 显示 OpenCLI 已连接就调用其数据命令；除知乎专用只读路由外，本项目仍禁用该后端。
 - 普通 HTTP 抓取遇到 403 或动态渲染页时，先判断该材料是否值得补读；可换其他公开来源，或按需使用 Ego 获取正文再作为本地材料加入，不强制浏览器重试，不回退用户 Chrome。
 - Exa 不可用时继续使用公众号、知乎、B站和现有网页检索，不降低质量标准。
-- 任何渠道失败都不能用低质量候选补足 5 条；继续切换其他渠道，直到满足 `SKILL.md` 的数量、质量与来源构成要求。
+- 任何渠道失败都不能用低质量候选补位；继续切换其他渠道，直到满足 `SKILL.md` 的完成契约或停止条件。
