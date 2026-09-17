@@ -26,9 +26,9 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 通过机器资格检查和证据化人工终审；
 - 构成满足至少 4 条文章型材料、GitHub 最多 1 条。
 
-数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。** 每轮抓取带上 `--batch <批次ID> --round <轮次>` 自动记账；人工补充检索用 `discovery_ledger.py record --round <轮次> --eligible-key <规范化链接>` 记录。是否停止以 `.venv/bin/python3 scripts/discovery_ledger.py stop-check --batch <批次ID>` 的 `should_stop` 为准，它同时要求：所有 candidate 且权重 ≥8 的来源族都成功检索过；至少两轮检索；最近两轮没有此前未出现的合格材料（按链接跨轮去重，重复抓到同一批不算新增）。
+数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。** 每轮抓取带上 `--batch <批次ID> --round <轮次>` 自动记账；人工补充检索用 `.venv/bin/python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 --family <来源族> --channel <渠道> --query <查询> --status success --operation search --round <轮次> --eligible-key <原文链接>` 记录（合格数默认取链接数；没有授权或后端的来源族记 `--status blocked`）。是否停止以 `.venv/bin/python3 scripts/discovery_ledger.py stop-check --batch <批次ID>` 的 `should_stop` 为准，它同时要求：所有 candidate 且权重 ≥8 的来源族都检索过或记为 blocked；至少两轮检索；最近两轮有常规抓取以外的扩源记录；最近两轮没有此前未出现的合格材料（按链接跨轮去重）。
 
-达标条目 ≥5 条时照常发布并在报告中说明缺口；不足 5 条时不发布，草稿留在 `topics/<批次>`，报告写明已达标条目与各来源的全文数和通过数。用户主动暂停、取消或出现真实权限阻塞时立即停下。批次约定：批次 ID 形如 `2026-09-17-main-a`；每轮抓取用 `--output-root .local/work/<批次ID>` 输出；终审通过的条目组装为 `topics/<批次ID>/candidates.json` 与 `run.json`。检查点写在 `.local/work/<批次ID>/checkpoint.json`，至少包含 `batch`、`owner`、`target_count`、`round`、`passed`（id、link、source_sha256）、`rejected_links`、`next_step`。
+达标条目 ≥5 条时照常发布并在报告中说明缺口；不足 5 条时不发布，草稿留在 `topics/<批次>`，报告写明已达标条目与各来源的全文数和通过数。用户主动暂停、取消或出现真实权限阻塞时立即停下。批次约定：批次 ID 形如 `2026-09-17-main-a`；每轮抓取用 `--output-root .local/work/<批次ID>` 输出；终审通过的条目按原文链接去重后，组装为 `topics/<批次ID>/candidates.json`（字段同抓取输出，并补上 `manual_editorial_review`）与 `run.json`（至少含 `batch_id`、`requested_count`、`candidate_count`；归属与登记字段由发布脚本写入）。检查点写在 `.local/work/<批次ID>/checkpoint.json`，至少包含 `batch`、`owner`、`target_count`、`round`、`passed`（id、link、source_sha256）、`rejected_links`、`next_step`。
 
 ## 读取路由
 
@@ -47,7 +47,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 1. 继承状态
 
-- 读取 `.local/editorial_feedback.jsonl`、已交付批次和当前检查点，不靠对话记忆。
+- 反馈原文很大，不直接读：用 `feedback_audit.py`、`editorial_outcomes.py` 看反馈结论，读当前检查点续跑，不靠对话记忆。
 - **终审前**把待读材料存成 JSON 数组，运行 `.venv/bin/python3 scripts/history_check.py <文件>` 去重：同一访谈常被不同站点换标题转载，链接不同但正文重合。
 - 相似主题只有新增事实、方法或结果才算新材料；换标题、换转载地址不算。
 
@@ -62,7 +62,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 聚合页、社区、X、GitHub 和英文官方资料只作线索或核验；回到完整简体中文正文或可读逐字稿后才能成为候选。机器转录须合并段落、校正专名、标注说话人，不能把字幕墙交给用户。
 - 检查原始公开页面：登录、关注、验证码或付费后才可见的正文直接淘汰；代理或缓存抓到的隐藏文字不算公开完整。
 - 单个来源失败写入 `run.json` 并继续其他来源；不得把网络、鉴权或解析失败说成“没有好材料”。
-- 每次检索用 `discovery_ledger.py` 记账。每周运行一次 `source_coverage.py` 检查覆盖缺口。
+- 每次检索用 `discovery_ledger.py` 记账。`.local/source_coverage.json` 超过 7 天未更新时运行 `source_coverage.py` 检查覆盖缺口。
 
 ### 3. 资格门槛
 
@@ -139,7 +139,7 @@ AI 味、新闻腔、第一人称、技术词、访谈、图片多、垂直行�
 - 不撰写文章正文；选题确认后交给 `stephen-writing-skill`。
 - 不提交 `.local/`、`.config/`、`topics/`、反馈、密钥、Cookie 或登录态。
 - 默认不调用 OpenCLI；只有知乎扩源可按知乎路由读取适配器的能力契约。不为取得 Cookie 启动或接管用户 Chrome。
-- Ego Browser 只在常规来源不足、原文确需动态渲染或已有登录态、或用户指定时按缺口使用。使用隔离空间、同空间串行、用完关闭、遵守路由里的限频；登录态只用于发现与核验，候选原文必须公开可读。遇到登录、验证码、风控或付费时默认停下换源，只有用户指定或唯一缺口的来源才请用户处理，不索取、不导出 Cookie。浏览器与 CLI 的细则集中在 [Agent Reach 路由](references/agent-reach-discovery.md)。
+- Ego Browser 只在常规来源不足、原文确需浏览器或用户指定时按缺口使用；登录态只用于发现与核验，候选原文必须公开可读，不索取、不导出 Cookie。空间、限频与验证码处理见 [Agent Reach 路由](references/agent-reach-discovery.md)。
 - 只有用户明确要求时才开启多任务协作。协作时认领不重叠的来源，工作文件分开放；共同批次由一个归属任务发布并导入反馈，不按下载时间猜反馈归属。
 - 朱雀除 `ai ≥ 98%` 硬淘汰外、以及模型复排，都只是辅助证据；未配置或失败表示未知，不能证明由人创作。自动分数 `discovery_score` 只负责排序。
 - 单批反馈不得把读者兴趣、题材偏好、技术难度或二创难度升级为硬失败。只有语言、公开完整性、时效、精确历史状态、来源安全和可核验平台门槛这类事实可以硬拦截。

@@ -43,7 +43,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 .venv/bin/python3 scripts/agent_reach_runtime.py install --system --channels all
 ```
 
-输出位于 `topics/<时间戳>/`，只是待终审材料；发布数量、构成与停止条件见 SKILL.md 的完成契约。
+每轮输出位于 `.local/work/<批次ID>/<时间戳>/`，只是待终审材料；终审后组装到 `topics/<批次ID>/` 再发布。发布数量、构成与停止条件见 SKILL.md 的完成契约。
 
 人工终审完成后发布：
 
@@ -91,7 +91,7 @@ API Key、Cookie、登录态、审核反馈和完整候选正文都不得进入�
 离线演示：
 
 ```bash
-.venv/bin/python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --no-ai
+.venv/bin/python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --output-root .local/work/fixture
 ```
 
 ## 验证

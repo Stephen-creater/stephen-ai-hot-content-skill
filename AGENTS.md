@@ -19,7 +19,7 @@
 ## 验证
 
 - 修改评分、抓取或报告逻辑后，运行 `.venv/bin/python3 -m unittest discover -s tests -v`（worktree 内使用权威仓库的 `.venv`）。
-- 修改来源后，至少运行一次离线夹具；条件允许时再运行联网抓取。
+- 修改来源后，至少运行一次离线夹具 `.venv/bin/python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --output-root .local/work/fixture`；条件允许时再运行联网抓取。
 - 声称完成前，回读远程仓库最新提交。
 
 ## 版本管理

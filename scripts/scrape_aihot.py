@@ -801,9 +801,7 @@ def is_historical_content_duplicate(item: dict, reviewed_candidates: list[dict],
 
 def record_source_attempts(attempts: list[dict], items: list[dict], ranked: list[dict], args, max_age_days: int, errors: list[str]) -> None:
     """Write one ledger row per configured source so the stop condition is computed, not remembered."""
-    from discovery_ledger import DEFAULT_LEDGER, record_attempt
-
-    import hashlib
+    from discovery_ledger import DEFAULT_LEDGER, eligible_key, record_attempt
 
     fulltext: dict[str, int] = {}
     eligible: dict[str, list[str]] = {}
@@ -812,7 +810,7 @@ def record_source_attempts(attempts: list[dict], items: list[dict], ranked: list
             fulltext[item.get("collected_by", "")] = fulltext.get(item.get("collected_by", ""), 0) + 1
     for item in ranked:
         if item.get("editorial_decision", {}).get("eligibility", {}).get("status") == "passed" and item.get("content_status") in {"fulltext", "transcript"}:
-            key = hashlib.sha1(canonical_url(item.get("link", "")).encode("utf-8")).hexdigest()[:16]
+            key = eligible_key(item.get("link", ""))
             eligible.setdefault(item.get("collected_by", ""), []).append(key)
     for attempt in attempts:
         if not attempt.get("family"):

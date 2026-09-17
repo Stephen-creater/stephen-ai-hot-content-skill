@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from discovery_ledger import load_entries, record_attempt, stop_check, summarize
+from discovery_ledger import eligible_key, load_entries, record_attempt, stop_check, summarize
 from source_coverage import audit_coverage
 
 
@@ -93,6 +93,30 @@ class SourceCoverageTest(unittest.TestCase):
         self.assertEqual(stop_check(unrounded, "b1", self.portfolio)["unrounded_records"], 1)
         noise = [row(f, 1, batch="b2", keys=[]) for f in required] + [row(f, 2, purpose="smoke", keys=[]) for f in required]
         self.assertEqual(stop_check(noise, "b1", self.portfolio)["rounds"], [])
+
+    def test_stop_check_needs_real_expansion_and_shared_key_format(self):
+        required = sorted(row["id"] for row in self.portfolio["families"] if row["role"] == "candidate" and row["weight"] >= 8)
+        link = "https://mp.weixin.qq.com/s/abc?from=rss"
+        scrape_key = eligible_key("https://mp.weixin.qq.com/s/abc")
+        self.assertEqual(eligible_key(link), scrape_key)
+        self.assertEqual(eligible_key("already-a-hash"), "already-a-hash")
+
+        def row(family, round_no, channel="scrape_aihot", keys=(), status="success"):
+            return {"batch": "b", "family": family, "round": round_no, "channel": channel, "status": status,
+                    "purpose": "discovery", "eligible_count": len(keys), "eligible_keys": list(keys)}
+
+        base = [row(f, 1, keys=[scrape_key] if f == "wechat" else []) for f in required if f != "bilibili"]
+        base.append(row("bilibili", 1, channel="bili-cli", status="blocked"))
+        rerun_only = base + [row("wechat", 2, keys=[scrape_key]), row("wechat", 3, keys=[scrape_key])]
+        result = stop_check(rerun_only, "b", self.portfolio)
+        self.assertFalse(result["should_stop"])
+        self.assertIn("只有常规抓取", " ".join(result["continue_reasons"]))
+        self.assertEqual(result["blocked_families"], ["bilibili"])
+
+        manual_same_article = rerun_only + [row("wechat", 3, channel="exa", keys=[eligible_key(link)])]
+        stopped = stop_check(manual_same_article, "b", self.portfolio)
+        self.assertTrue(stopped["should_stop"])
+        self.assertEqual(stopped["recent_rounds_new_eligible"], 0)
 
     def test_ledger_rejects_invalid_round_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:

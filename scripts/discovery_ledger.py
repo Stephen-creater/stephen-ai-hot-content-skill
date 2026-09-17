@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 from collections import defaultdict
@@ -13,6 +14,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_LEDGER = ROOT / ".local" / "discovery_attempts.jsonl"
 PORTFOLIO = ROOT / "resources" / "source_portfolio.json"
+
+
+def eligible_key(value: str) -> str:
+    """One key format for scraper and manual records, so the same article is never counted twice."""
+    value = value.strip()
+    if value.startswith(("http://", "https://")):
+        from curator import canonical_url
+
+        return hashlib.sha1(canonical_url(value).encode("utf-8")).hexdigest()[:16]
+    return value
 
 
 def valid_families() -> set[str]:
@@ -80,8 +91,9 @@ def stop_check(entries: list[dict], batch: str, portfolio: dict, min_weight: int
     """Decide the completion contract's stop condition from recorded evidence only."""
     rows = [row for row in entries if row.get("batch") == batch and row.get("purpose", "discovery") == "discovery"]
     required = sorted(row["id"] for row in portfolio["families"] if row.get("role") == "candidate" and row.get("weight", 0) >= min_weight)
-    # A failed or blocked attempt proves the channel was tried, not that the family was searched.
-    covered = {row["family"] for row in rows if row.get("status") == "success"}
+    # Failed attempts do not count; a blocked family (no authorization or no backend) is covered but reported.
+    covered = {row["family"] for row in rows if row.get("status") in {"success", "blocked"}}
+    blocked = sorted({row["family"] for row in rows if row.get("status") == "blocked"} - {row["family"] for row in rows if row.get("status") == "success"})
     missing = [family for family in required if family not in covered]
     unrounded = sum(1 for row in rows if not isinstance(row.get("round"), int) or row["round"] < 1)
     rounds = sorted({row["round"] for row in rows if isinstance(row.get("round"), int) and row["round"] >= 1})
@@ -99,6 +111,7 @@ def stop_check(entries: list[dict], batch: str, portfolio: dict, min_weight: int
         new_by_round[number] = fresh
     recent = rounds[-2:]
     recent_new = sum(new_by_round[number] for number in recent)
+    expanded = any(row.get("round") in recent and row.get("status") == "success" and row.get("channel") != "scrape_aihot" for row in rows)
     reasons = []
     if missing:
         reasons.append(f"高权重来源族尚未成功检索：{', '.join(missing)}")
@@ -106,9 +119,12 @@ def stop_check(entries: list[dict], batch: str, portfolio: dict, min_weight: int
         reasons.append(f"只记录了 {len(rounds)} 轮检索，至少需要两轮")
     elif recent_new:
         reasons.append(f"最近两轮（{recent[0]}、{recent[1]}）仍有 {recent_new} 条此前未出现的合格材料")
+    elif not expanded:
+        reasons.append("最近两轮只有常规抓取，没有换渠道或换查询的扩源记录")
     return {
         "batch": batch, "should_stop": not reasons, "required_families": required, "missing_families": missing,
-        "rounds": rounds, "new_eligible_by_round": new_by_round, "recent_rounds_new_eligible": recent_new,
+        "blocked_families": blocked, "rounds": rounds, "new_eligible_by_round": new_by_round,
+        "recent_rounds_new_eligible": recent_new, "recent_rounds_expanded": expanded,
         "unrounded_records": unrounded, "continue_reasons": reasons,
     }
 
@@ -124,14 +140,15 @@ def main() -> None:
     record.add_argument("--channel", required=True)
     record.add_argument("--query", required=True)
     record.add_argument("--status", choices=["success", "failed", "blocked"], required=True)
-    for key in ("result-count", "fulltext-count", "eligible-count", "selected-count"):
+    for key in ("result-count", "fulltext-count", "selected-count"):
         record.add_argument(f"--{key}", type=int, default=0)
+    record.add_argument("--eligible-count", type=int, help="不填时取 --eligible-key 的数量")
     record.add_argument("--failure-type", default="")
     record.add_argument("--purpose", choices=["discovery", "smoke"], default="discovery")
     record.add_argument("--operation", choices=["search", "read", "author"], required=True)
     record.add_argument("--evidence-url", default="")
     record.add_argument("--round", type=int, help="本批第几轮检索，从 1 开始；不填的记录不参与停止判断")
-    record.add_argument("--eligible-key", action="append", default=None, help="合格材料的规范化链接或内容哈希，可重复；用于跨轮去重")
+    record.add_argument("--eligible-key", action="append", default=None, help="合格材料的原文链接（自动换算成与抓取记账相同的哈希），可重复；用于跨轮去重")
     record.add_argument("--max-age-days", type=int, default=0, help="本次检索使用的时间窗（天）")
     report = sub.add_parser("report")
     report.add_argument("--batch")
@@ -140,13 +157,17 @@ def main() -> None:
     check.add_argument("--min-weight", type=int, default=8)
     args = parser.parse_args()
     if args.action == "record":
+        keys = sorted({eligible_key(value) for value in args.eligible_key}) if args.eligible_key else None
+        eligible_count = args.eligible_count if args.eligible_count is not None else len(keys or [])
+        fulltext_count = max(args.fulltext_count, eligible_count)
+        result_count = max(args.result_count, fulltext_count)
         record_attempt(args.ledger, {
             "batch": args.batch, "owner": args.owner, "family": args.family, "channel": args.channel,
-            "query": args.query, "status": args.status, "result_count": args.result_count,
-            "fulltext_count": args.fulltext_count, "eligible_count": args.eligible_count,
+            "query": args.query, "status": args.status, "result_count": result_count,
+            "fulltext_count": fulltext_count, "eligible_count": eligible_count,
             "selected_count": args.selected_count, "failure_type": args.failure_type,
             "purpose": args.purpose, "operation": args.operation, "evidence_url": args.evidence_url,
-            "round": args.round, "max_age_days": args.max_age_days, "eligible_keys": args.eligible_key,
+            "round": args.round, "max_age_days": args.max_age_days, "eligible_keys": keys,
         })
         print(args.ledger)
     elif args.action == "stop-check":
