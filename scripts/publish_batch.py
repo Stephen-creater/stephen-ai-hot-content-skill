@@ -17,7 +17,7 @@ from scrape_aihot import delivery_mix_ready, is_historical_content_duplicate
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
+def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool = False) -> Path:
     folder = folder.resolve()
     if owner not in {"主力", "主力2"} or folder.parent != (root / "topics").resolve():
         raise ValueError("仅允许发布当前项目 topics 下的批次，且必须声明归属")
@@ -85,6 +85,8 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT) -> Path:
         for row in rows:
             if row.get("id") in old_ids or canonical_url(row.get("link", "")) in old_urls or is_historical_content_duplicate(row, history):
                 raise ValueError(f"另一任务或历史批次已推送/审核：{row.get('title')}")
+        if check_only:
+            return folder
         candidates_path = folder / "candidates.json"
         candidates_temp = candidates_path.with_suffix(".json.tmp")
         with candidates_temp.open("w", encoding="utf-8") as out:
@@ -110,5 +112,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("folder", type=Path)
     parser.add_argument("--owner", choices=["主力", "主力2"], required=True)
+    parser.add_argument("--check-only", action="store_true", help="只执行全部发布前校验，不写文件、不登记交付")
     args = parser.parse_args()
-    print(publish_batch(args.folder, args.owner))
+    result = publish_batch(args.folder, args.owner, check_only=args.check_only)
+    print(f"校验通过，未登记：{result}" if args.check_only else result)

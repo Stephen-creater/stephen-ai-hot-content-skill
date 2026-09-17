@@ -51,6 +51,27 @@ class BatchOwnershipTest(unittest.TestCase):
                 outcomes=list(pool.map(attempt,[(a,'主力'),(b,'主力2')]))
             self.assertEqual(sorted(outcomes),[False,True])
 
+    def test_check_only_validates_without_registering_delivery(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); self.setup_root(root)
+            folder,_=self.batch(root,'dry-run')
+            before={path.name:path.read_bytes() for path in folder.iterdir()}
+            self.assertEqual(publish_batch(folder,'主力',root,check_only=True),folder.resolve())
+            self.assertEqual({path.name:path.read_bytes() for path in folder.iterdir()},before)
+            self.assertEqual(delivered_candidates(root/'topics'),[])
+            publish_batch(folder,'主力',root)
+            other,_=self.batch(root,'dry-run-duplicate')
+            with self.assertRaises(ValueError):
+                publish_batch(other,'主力2',root,check_only=True)
+
+    def test_history_check_catches_retitled_reposts_before_review(self):
+        from history_check import duplicate_reason
+        body='作者复盘了真实产品决策、失败原因和取舍条件，并给出可以复用的方法。'*120
+        history=[{'id':'old','title':'原标题','link':'https://mp.weixin.qq.com/s/abc','content':body}]
+        self.assertEqual(duplicate_reason({'link':'https://mp.weixin.qq.com/s/abc?from=rss','title':'x'},history),'原文链接已出现')
+        self.assertIn('换标题转载',duplicate_reason({'link':'https://www.woshipm.com/ai/1.html','title':'新标题','content':'导语。'+body},history))
+        self.assertEqual(duplicate_reason({'link':'https://example.org/new','title':'无关','content':'完全不同的内容，讲另一件事。'*120},history),'')
+
     def test_complete_human_evidence_can_override_editorial_risk_but_not_eligibility(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp); self.setup_root(root)

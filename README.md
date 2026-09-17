@@ -32,7 +32,7 @@
 python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 .venv/bin/python3 scripts/agent_reach_runtime.py install
 .venv/bin/python3 scripts/add_source.py "内容链接" --platform wechat --creator "作者"
-.venv/bin/python3 scripts/scrape_aihot.py
+.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round 1 --output-root .local/work/<批次ID>
 ```
 
 本机 Homebrew Python 禁止直接 `pip install`（PEP 668），所以统一使用 `.venv`。
@@ -74,7 +74,8 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - `scripts/source_coverage.py`：区分真实连通、已配置自动化和近 7 天实际探索覆盖率。
 - `scripts/discovery_ledger.py`：私有记录每次检索的结果、全文、合格和入选收益；`stop-check` 判定是否达到停止条件。
 - `scripts/curator.py`：确定性发现排序。
-- `scripts/publish_batch.py`：终审证据、归属、去重和发布门禁。
+- `scripts/publish_batch.py`：终审证据、归属、去重和发布门禁；`--check-only` 只校验不登记。
+- `scripts/history_check.py`：终审前按链接和正文重合检查历史重复。
 - `tests/fixtures/editorial_boundary_cases.json`：可供不同模型回放的匿名正反边界集。
 - `docs/plans/`：历史设计记录，不作为执行依据；现行规则以 `SKILL.md` 与 `references/` 为准。
 - `.local/`、`.config/`、`topics/`：私有状态与运行产物，不提交。

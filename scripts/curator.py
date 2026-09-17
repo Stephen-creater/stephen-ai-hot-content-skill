@@ -27,6 +27,8 @@ SECRET_PATTERNS = (
 )
 
 
+MIGRATION_CONTEXT_RE = re.compile(r"迁移|迁出|离开|告别|替代|取代|弃用|换掉|不再用|转向|迁到|换到")
+
 def contains_term(text: str, term: str) -> bool:
     if re.fullmatch(r"[a-z0-9 .+-]+", term):
         return re.search(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", text) is not None
@@ -159,10 +161,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         penalties.append("大而全的模型与 Token 成本对比，缺少新的可写价值")
     if "workbuddy" in title_summary and any(term in title_summary for term in profile.get("deferred_basic_workbuddy_terms", [])):
         penalties.append("WorkBuddy 常规岗位基础应用暂缓推荐")
+    # Leaving or replacing a retired tool is a different subject from promoting it; keep that reviewable.
+    migration_context = bool(MIGRATION_CONTEXT_RE.search(title_summary))
     if any(term.lower() in title_summary for term in profile.get("disfavored_product_subject_terms", [])):
-        penalties.append("用户当前不认可该产品，不推荐其主体实测或介绍")
+        penalties.append("提到用户暂不认可的产品，需核实主体是否为迁移或替代" if migration_context
+                         else "用户当前不认可该产品，不推荐其主体实测或介绍")
     if any(term.lower() in title_summary for term in profile.get("retired_workflow_platform_subject_terms", [])):
-        penalties.append("传统节点式 Workflow 平台已被用户明确淘汰，不再作为选题主体")
+        penalties.append("提到传统节点式编排平台，需核实主体是否为迁移或现代 Agent 方法" if migration_context
+                         else "传统节点式 Workflow 平台已被用户明确淘汰，不再作为选题主体")
 
     published = parse_datetime(item.get("published") or item.get("article_date"))
     age_days = None

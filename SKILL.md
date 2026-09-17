@@ -1,6 +1,6 @@
 ---
 name: stephen-ai-hot-content-skill
-description: "按 Stephen 的编辑标准发现、全文终审并发布 AI 选题候选批次，导入审核反馈，维护选题信息源；用户说给我选题、找热点、选题审核、导入反馈、优化信息源时使用。不写文章正文，不做每日 AI 资讯简报。"
+description: "按 Stephen 的编辑标准发现、全文终审并发布 AI 选题候选批次，导入选题审核反馈，维护选题信息源；用户说给我选题、找 AI 选题热点、审核或导入选题反馈、优化选题信息源时使用。不写文章正文，不做每日 AI 资讯简报或求职等其他领域的信息整理。"
 ---
 
 # Stephen AI 热点选题
@@ -26,12 +26,9 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 通过机器资格检查和证据化人工终审；
 - 构成满足至少 4 条文章型材料、GitHub 最多 1 条。
 
-数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。** 每轮抓取带上 `--batch <批次ID> --round <轮次>` 自动记账，人工补充检索也用 `discovery_ledger.py record` 记录轮次和时间窗。是否停止以 `.venv/bin/python3 scripts/discovery_ledger.py stop-check --batch <批次ID>` 的 `should_stop` 为准，它同时要求：
+数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。** 每轮抓取带上 `--batch <批次ID> --round <轮次>` 自动记账；人工补充检索用 `discovery_ledger.py record --round <轮次> --eligible-key <规范化链接>` 记录。是否停止以 `.venv/bin/python3 scripts/discovery_ledger.py stop-check --batch <批次ID>` 的 `should_stop` 为准，它同时要求：所有 candidate 且权重 ≥8 的来源族都成功检索过；至少两轮检索；最近两轮没有此前未出现的合格材料（按链接跨轮去重，重复抓到同一批不算新增）。
 
-1. 所有 candidate 且权重 ≥8 的来源族都成功检索过，时间窗扩到画像上限；
-2. 至少两轮扩源，且最近两轮没有新增合格材料。
-
-达标条目 ≥5 条时照常发布并在报告中说明缺口；不足 5 条时不发布，草稿留在 `topics/<批次>`，报告写明已达标条目与各来源的全文数和通过数。用户主动暂停、取消或出现真实权限阻塞时立即停下。长任务在 `.local/work/` 维护可续跑检查点。
+达标条目 ≥5 条时照常发布并在报告中说明缺口；不足 5 条时不发布，草稿留在 `topics/<批次>`，报告写明已达标条目与各来源的全文数和通过数。用户主动暂停、取消或出现真实权限阻塞时立即停下。批次约定：批次 ID 形如 `2026-09-17-main-a`；每轮抓取用 `--output-root .local/work/<批次ID>` 输出；终审通过的条目组装为 `topics/<批次ID>/candidates.json` 与 `run.json`。检查点写在 `.local/work/<批次ID>/checkpoint.json`，至少包含 `batch`、`owner`、`target_count`、`round`、`passed`（id、link、source_sha256）、`rejected_links`、`next_step`。
 
 ## 读取路由
 
@@ -51,12 +48,12 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ### 1. 继承状态
 
 - 读取 `.local/editorial_feedback.jsonl`、已交付批次和当前检查点，不靠对话记忆。
-- **终审前**就用 publish 同款检查去重（`final_reviewed_candidates`、`delivered_candidates`、`canonical_url`、`is_historical_content_duplicate`）：同一访谈常被不同站点换标题转载。
+- **终审前**把待读材料存成 JSON 数组，运行 `.venv/bin/python3 scripts/history_check.py <文件>` 去重：同一访谈常被不同站点换标题转载，链接不同但正文重合。
 - 相似主题只有新增事实、方法或结果才算新材料；换标题、换转载地址不算。
 
 ### 2. 发现与全文恢复
 
-- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次>`；配置了 OpenRouter Key 时会调用模型复排并计费，不需要时加 `--no-ai`，`--no-aigc` 跳过朱雀计费。它每次只输出 `report_candidate_count` 条待终审材料；用户要的数量更多时，从 `discovery.json`、各来源台账和补充检索中继续扩池。来源按分层模型组织：
+- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。模型复排默认关闭，`--ai` 才会调用 OpenRouter 并计费；配置朱雀后默认检测并计费，`--no-aigc` 跳过。它每次只输出 `report_candidate_count` 条待终审材料；用户要的数量更多时，从 `discovery.json`、各来源台账和补充检索中继续扩池。来源按分层模型组织：
   - BestBlogs 与觉醒AI 是中文主入口；
   - 访谈、文字稿公众号和有转录的播客是高命中层；
   - 英文一手雷达只发现选题，命中后去找中文成熟稿；
@@ -109,6 +106,7 @@ AI 味、新闻腔、第一人称、技术词、访谈、图片多、垂直行�
 ### 5. 发布
 
 ```bash
+.venv/bin/python3 scripts/publish_batch.py topics/<批次ID> --owner 主力 --check-only   # 只校验不登记
 .venv/bin/python3 scripts/publish_batch.py topics/<批次ID> --owner 主力
 ```
 
@@ -141,7 +139,7 @@ AI 味、新闻腔、第一人称、技术词、访谈、图片多、垂直行�
 - 不撰写文章正文；选题确认后交给 `stephen-writing-skill`。
 - 不提交 `.local/`、`.config/`、`topics/`、反馈、密钥、Cookie 或登录态。
 - 默认不调用 OpenCLI；只有知乎扩源可按知乎路由读取适配器的能力契约。不为取得 Cookie 启动或接管用户 Chrome。
-- Ego Browser 只在常规来源不足、原文确需动态渲染或已有登录态、或用户指定时按缺口使用。使用隔离空间、同空间串行、用完关闭、遵守路由里的限频；遇到登录、验证码、风控或付费时默认停下换源，只有用户指定或唯一缺口的来源才请用户处理，不索取、不导出 Cookie。浏览器与 CLI 的细则集中在 [Agent Reach 路由](references/agent-reach-discovery.md)。
+- Ego Browser 只在常规来源不足、原文确需动态渲染或已有登录态、或用户指定时按缺口使用。使用隔离空间、同空间串行、用完关闭、遵守路由里的限频；登录态只用于发现与核验，候选原文必须公开可读。遇到登录、验证码、风控或付费时默认停下换源，只有用户指定或唯一缺口的来源才请用户处理，不索取、不导出 Cookie。浏览器与 CLI 的细则集中在 [Agent Reach 路由](references/agent-reach-discovery.md)。
 - 只有用户明确要求时才开启多任务协作。协作时认领不重叠的来源，工作文件分开放；共同批次由一个归属任务发布并导入反馈，不按下载时间猜反馈归属。
 - 朱雀除 `ai ≥ 98%` 硬淘汰外、以及模型复排，都只是辅助证据；未配置或失败表示未知，不能证明由人创作。自动分数 `discovery_score` 只负责排序。
 - 单批反馈不得把读者兴趣、题材偏好、技术难度或二创难度升级为硬失败。只有语言、公开完整性、时效、精确历史状态、来源安全和可核验平台门槛这类事实可以硬拦截。

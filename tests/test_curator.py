@@ -502,7 +502,7 @@ Language: zh
         passed = {"eligibility": {"status": "passed"}}
         items = [{"collected_by": "访谈号", "content_status": "fulltext"}, {"collected_by": "访谈号", "content_status": "summary"},
                  {"collected_by": "访谈号", "content_status": "transcript"}]
-        ranked = [{"collected_by": "访谈号", "content_status": "fulltext", "editorial_decision": passed},
+        ranked = [{"collected_by": "访谈号", "link": "https://mp.weixin.qq.com/s/a", "content_status": "fulltext", "editorial_decision": passed},
                   {"collected_by": "访谈号", "content_status": "summary", "editorial_decision": passed}]
 
         class Args:
@@ -515,7 +515,21 @@ Language: zh
         self.assertEqual(errors, [])
         self.assertEqual([(r["query"], r["status"], r["fulltext_count"], r["eligible_count"]) for r in rows],
                          [("访谈号", "success", 2, 1), ("坏源", "failed", 0, 0)])
+        self.assertEqual(len(rows[0]["eligible_keys"]), 1)
         self.assertTrue(all(r["round"] == 2 and r["max_age_days"] == 45 and r["batch"] == "2026-09-17-x" for r in rows))
+
+    def test_retired_platform_migration_stays_reviewable(self) -> None:
+        base = {**self.items[0], "published": "2026-09-10", "summary": "", "content_status": "fulltext",
+                "content": "作者复盘真实迁移过程、失败和验收方法。" * 160}
+        tutorial = score_item({**base, "title": "n8n 搭建自动化工作流保姆级教程"}, self.profile, now=self.now)
+        migration = score_item({**base, "title": "把 n8n 流程迁移成 Agent 执行闭环"}, self.profile, now=self.now)
+        product_swap = score_item({**base, "title": "从扣子桌面换到本地 Agent 之后"}, self.profile, now=self.now)
+        self.assertIn("传统节点式 Workflow 平台已被用户明确淘汰", tutorial["penalty"])
+        self.assertEqual(tutorial["editorial_decision"]["eligibility"]["status"], "failed")
+        for item in (migration, product_swap):
+            self.assertNotIn("已被用户明确淘汰", item["penalty"])
+            self.assertNotIn("用户当前不认可该产品", item["penalty"])
+            self.assertNotEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
 
     def test_paged_web_index_walks_pages_and_dedupes(self) -> None:
         pages = {

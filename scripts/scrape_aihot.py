@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import quote, urljoin, urlparse
@@ -776,7 +777,12 @@ def normalized_content_shingles(value: str, size: int = 24) -> set[str]:
     normalized = re.sub(r"\W+", "", clean_text(value).lower())[:12000]
     if len(normalized) < 800:
         return set()
-    return {normalized[index : index + size] for index in range(0, len(normalized) - size + 1, 12)}
+    # Anchor shingles on content rather than fixed offsets, so a repost with an extra preface still aligns.
+    return {
+        normalized[index : index + size]
+        for index in range(len(normalized) - size + 1)
+        if zlib.crc32(normalized[index : index + 4].encode("utf-8")) % 12 == 0
+    }
 
 
 def is_historical_content_duplicate(item: dict, reviewed_candidates: list[dict], threshold: float = 0.68) -> bool:
@@ -797,24 +803,28 @@ def record_source_attempts(attempts: list[dict], items: list[dict], ranked: list
     """Write one ledger row per configured source so the stop condition is computed, not remembered."""
     from discovery_ledger import DEFAULT_LEDGER, record_attempt
 
+    import hashlib
+
     fulltext: dict[str, int] = {}
-    eligible: dict[str, int] = {}
+    eligible: dict[str, list[str]] = {}
     for item in items:
         if item.get("content_status") in {"fulltext", "transcript"}:
             fulltext[item.get("collected_by", "")] = fulltext.get(item.get("collected_by", ""), 0) + 1
     for item in ranked:
         if item.get("editorial_decision", {}).get("eligibility", {}).get("status") == "passed" and item.get("content_status") in {"fulltext", "transcript"}:
-            eligible[item.get("collected_by", "")] = eligible.get(item.get("collected_by", ""), 0) + 1
+            key = hashlib.sha1(canonical_url(item.get("link", "")).encode("utf-8")).hexdigest()[:16]
+            eligible.setdefault(item.get("collected_by", ""), []).append(key)
     for attempt in attempts:
         if not attempt.get("family"):
             continue
         name, results = attempt["source"], attempt["result_count"]
         full = min(fulltext.get(name, 0), results)
+        keys = sorted(set(eligible.get(name, [])))[:full]
         try:
             record_attempt(DEFAULT_LEDGER, {
                 "batch": args.batch, "owner": args.owner, "family": attempt["family"], "channel": "scrape_aihot",
                 "query": name, "status": "success" if results and not attempt.get("error") else "failed",
-                "result_count": results, "fulltext_count": full, "eligible_count": min(eligible.get(name, 0), full),
+                "result_count": results, "fulltext_count": full, "eligible_count": len(keys), "eligible_keys": keys,
                 "selected_count": 0, "failure_type": (attempt.get("error") or "")[:120],
                 "purpose": "discovery" if attempt.get("role") != "verification" else "smoke",
                 "operation": "search", "evidence_url": attempt["url"], "round": args.round, "max_age_days": max_age_days,
@@ -829,14 +839,17 @@ def main() -> None:
     parser.add_argument("--inbox", type=Path, default=ROOT / ".local" / "source_inbox.json", help="公众号、B站、播客和本地逐字稿入口")
     parser.add_argument("--include-verification", action="store_true", help="同时抓取英文官方核验来源")
     parser.add_argument("--include-rejected", action="store_true", help="调试时在报告中包含未通过硬门槛的内容")
-    parser.add_argument("--no-ai", action="store_true", help="不调用模型复排")
+    parser.add_argument("--ai", action="store_true", help="调用 OpenRouter 模型复排（会计费，默认关闭）")
+    parser.add_argument("--no-ai", action="store_true", help="兼容旧命令：不调用模型复排（现为默认行为）")
     parser.add_argument("--no-aigc", action="store_true", help="不调用朱雀 AIGC 文本检测")
     parser.add_argument("--model", default="google/gemini-3-flash-preview")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
     parser.add_argument("--batch", help="写入检索账本时使用的批次 ID；不填则不记账")
     parser.add_argument("--owner", choices=["主力", "主力2"], default="主力")
-    parser.add_argument("--round", type=int, default=1, help="本批第几轮扩源")
+    parser.add_argument("--round", type=int, help="本批第几轮检索，从 1 开始；与 --batch 同时使用")
     args = parser.parse_args()
+    if args.batch and (args.round is None or args.round < 1):
+        parser.error("使用 --batch 记账时必须同时提供 --round（从 1 开始）")
 
     source_config = load_json(RESOURCES / "content_curator_sources.json")
     profile = load_json(RESOURCES / "editorial_profile.json")
@@ -958,7 +971,7 @@ def main() -> None:
         include_rejected=args.include_rejected,
         maximum_github=maximum_github_candidates,
     )
-    if not args.no_ai and api_key():
+    if args.ai and not args.no_ai and api_key():
         try:
             candidates = ai_rerank(candidates, profile, args.model)
         except Exception as exc:

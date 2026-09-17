@@ -59,33 +59,40 @@ class SourceCoverageTest(unittest.TestCase):
         empty = [{**base, "operation": "search", "result_count": 0}]
         self.assertEqual(audit_coverage(self.portfolio, {}, self.sources, empty, now=now)["access_coverage"], 0)
 
-    def test_stop_check_requires_coverage_window_and_two_stagnant_rounds(self):
+    def test_stop_check_requires_coverage_and_two_rounds_without_new_material(self):
         required = sorted(row["id"] for row in self.portfolio["families"] if row["role"] == "candidate" and row["weight"] >= 8)
 
-        def row(family, round_no, eligible=0, status="success", window=45, batch="b1", purpose="discovery"):
-            return {"batch": batch, "family": family, "round": round_no, "eligible_count": eligible,
-                    "status": status, "max_age_days": window, "purpose": purpose}
+        def row(family, round_no, keys=None, status="success", batch="b1", purpose="discovery", eligible=None):
+            entry = {"batch": batch, "family": family, "round": round_no, "status": status, "purpose": purpose,
+                     "eligible_count": len(keys) if keys is not None else (eligible or 0)}
+            if keys is not None:
+                entry["eligible_keys"] = keys
+            return entry
 
-        covered = [row(family, 1) for family in required]
-        stopped = stop_check(covered + [row(required[0], 2)], "b1", self.portfolio, 45)
+        covered = [row(family, 1, keys=["a", "b"] if family == required[0] else []) for family in required]
+        # Re-fetching the same feed yields the same eligible items: that is not new material.
+        repeated = covered + [row(required[0], 2, keys=["a", "b"]), row(required[0], 3, keys=["b"])]
+        stopped = stop_check(repeated, "b1", self.portfolio)
         self.assertTrue(stopped["should_stop"])
-        self.assertEqual(stopped["missing_families"], [])
+        self.assertEqual(stopped["new_eligible_by_round"], {1: 2, 2: 0, 3: 0})
 
-        failed_family = [row(f, 1) for f in required[1:]] + [row(required[0], 1, status="failed"), row(required[1], 2)]
-        result = stop_check(failed_family, "b1", self.portfolio, 45)
+        fresh = stop_check(covered + [row(required[0], 2, keys=["a", "c"])], "b1", self.portfolio)
+        self.assertFalse(fresh["should_stop"])
+        self.assertEqual(fresh["recent_rounds_new_eligible"], 3)
+
+        manual_without_keys = stop_check(covered + [row(required[0], 2, eligible=1), row(required[0], 3)], "b1", self.portfolio)
+        self.assertFalse(manual_without_keys["should_stop"])
+
+        failed_family = [row(f, 1, keys=[]) for f in required[1:]] + [row(required[0], 1, keys=[], status="failed"), row(required[1], 2, keys=[])]
+        result = stop_check(failed_family, "b1", self.portfolio)
         self.assertFalse(result["should_stop"])
         self.assertEqual(result["missing_families"], [required[0]])
 
-        narrow = [row(f, 1, window=14) for f in required] + [row(required[0], 2, window=14)]
-        self.assertIn("时间窗", " ".join(stop_check(narrow, "b1", self.portfolio, 45)["continue_reasons"]))
-
-        still_finding = covered + [row(required[0], 2, eligible=1)]
-        self.assertFalse(stop_check(still_finding, "b1", self.portfolio, 45)["should_stop"])
-
-        one_round = stop_check(covered, "b1", self.portfolio, 45)
-        self.assertFalse(one_round["should_stop"])
-        other_batch_and_smoke = [row(f, 1, batch="b2") for f in required] + [row(f, 2, purpose="smoke") for f in required]
-        self.assertEqual(stop_check(other_batch_and_smoke, "b1", self.portfolio, 45)["rounds"], [])
+        self.assertIn("至少需要两轮", " ".join(stop_check(covered, "b1", self.portfolio)["continue_reasons"]))
+        unrounded = covered + [{**row(required[0], None, keys=[]), "round": None}]
+        self.assertEqual(stop_check(unrounded, "b1", self.portfolio)["unrounded_records"], 1)
+        noise = [row(f, 1, batch="b2", keys=[]) for f in required] + [row(f, 2, purpose="smoke", keys=[]) for f in required]
+        self.assertEqual(stop_check(noise, "b1", self.portfolio)["rounds"], [])
 
     def test_ledger_rejects_invalid_round_metadata(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -94,6 +101,8 @@ class SourceCoverageTest(unittest.TestCase):
                     "purpose": "discovery", "operation": "search", "evidence_url": ""}
             with self.assertRaises(ValueError):
                 record_attempt(Path(tmp) / "l.jsonl", {**base, "round": -1})
+            with self.assertRaises(ValueError):
+                record_attempt(Path(tmp) / "l.jsonl", {**base, "eligible_keys": ["a"]})
             record_attempt(Path(tmp) / "l.jsonl", {**base, "round": 2, "max_age_days": 45})
             self.assertEqual(load_entries(Path(tmp) / "l.jsonl")[0]["round"], 2)
 
