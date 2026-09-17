@@ -1,6 +1,6 @@
 # 高质量选题扩源清单
 
-当常规抓取结果不足 `minimum_delivery_count` 时，按下面顺序持续扩源。扩源的目标是找到更多高质量材料，不是降低门槛。
+当合格材料不足本批目标数量时，按下面顺序持续扩源，直到满足 `SKILL.md` 的完成契约或 stop-check 停止条件。扩源的目标是找到更多高质量材料，不是降低门槛。
 
 ## 先量化覆盖，不凭感觉扩源
 
@@ -49,7 +49,7 @@
 
 按顺序取材，前一步拿到就停：
 
-1. 官方或编辑过的文字版（公众号全文、红杉 Training Data、Latent Space 逐字稿）。
+1. 官方或编辑过的中文文字版（公众号全文、节目方发布的文字稿）。
 2. BestBlogs 播客转录：按说话人合并成段落；专名可能错，说话人只有编号，交付前补主持人/嘉宾标签并校对专名。
 3. 本地转写 `scripts/local_transcribe.py`：离线零费用，但没有标点、专名错误多，只在前两步都没有时使用。
 
@@ -58,7 +58,7 @@
 ### 第四层：英文一手雷达（discovery，不进候选）
 
 - follow-builders：X 上 Claude Code、Codex 等团队一线作者的推文。
-- Anthropic Engineering、OpenAI Developers、Cursor 的 RSS 镜像；The Pragmatic Engineer、Latent Space、Lenny、Simon Willison、Hamel Husain、Addy Osmani、Jason Liu、Every AI & I、Training Data、YC Lightcone。
+- Anthropic Engineering、OpenAI Developers、Cursor 的 RSS 镜像；The Pragmatic Engineer、Latent Space、Lenny、Simon Willison、Hamel Husain、Addy Osmani、Jason Liu、Every AI & I、Training Data、YC Lightcone。红杉 Training Data 与 Latent Space 带免费英文逐字稿，可用来核对中文编译稿是否忠实，但英文稿本身不进候选。
 - 雷达命中后依次找中文成熟稿：宝玉、Web3天空之城、瓜哥AI新知、Z Finance、海外独角兽、BestBlogs 关键词 feed。都没有就说明中文材料缺位，标记为高研究成本，交给用户判断是否原创。
 
 ### 第五层：独立博客低频池
@@ -85,9 +85,9 @@
 
 ## 持续搜索循环
 
-1. 优先复用已验证的常规来源和非浏览器后端；能力状态未知或执行报错时再运行 `agent-reach doctor --json`。OpenCLI 默认禁用；只有知乎扩源按 `references/zhihu-cli-ego.md` 使用只读适配器契约。Ego 只作为按需补充，不是每轮必做步骤。
+1. 优先复用已验证的常规来源和非浏览器后端；浏览器、OpenCLI 与知乎例外按 [Agent Reach 路由](agent-reach-discovery.md) 执行。
 2. 运行常规来源与本地 inbox。
-3. 合格候选不足 5 条时，先组合 Exa、公开文章索引、中文 RSS、网页检索与 B站/YouTube 字幕；仍有材料缺口时，知乎可用“CLI 适配器契约 + Ego 登录态”做搜索、作者追踪和全文核验，其他确需交互的原文再按需用 Ego 补查。Twitter、Reddit、V2EX 与 GitHub 只负责发现线索。
+3. 合格候选不足目标数量时，先组合 Exa、公开文章索引、中文 RSS、网页检索与 B站/YouTube 字幕；仍有材料缺口时，知乎可用“CLI 适配器契约 + Ego 登录态”做搜索、作者追踪和全文核验，其他确需交互的原文再按需用 Ego 补查。Twitter、Reddit、V2EX 与 GitHub 只负责发现线索。
 4. 从尚未覆盖的层级选择至少两个渠道继续搜索，不得只重复同一组网页关键词。
 5. GitHub 只负责局部补充，每批最多 1 条；文章、博客、公众号或完整音视频材料至少要有 4 条。
 6. 找到线索后先读取完整正文、字幕或逐字稿，确认没有登录墙、关注墙和正文截断，再写入 `.local/source_inbox.json`。

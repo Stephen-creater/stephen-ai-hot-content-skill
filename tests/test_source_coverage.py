@@ -11,7 +11,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from discovery_ledger import load_entries, record_attempt, summarize
+from discovery_ledger import load_entries, record_attempt, stop_check, summarize
 from source_coverage import audit_coverage
 
 
@@ -58,6 +58,44 @@ class SourceCoverageTest(unittest.TestCase):
         self.assertEqual(report["rolling_attempt_coverage"], 10)
         empty = [{**base, "operation": "search", "result_count": 0}]
         self.assertEqual(audit_coverage(self.portfolio, {}, self.sources, empty, now=now)["access_coverage"], 0)
+
+    def test_stop_check_requires_coverage_window_and_two_stagnant_rounds(self):
+        required = sorted(row["id"] for row in self.portfolio["families"] if row["role"] == "candidate" and row["weight"] >= 8)
+
+        def row(family, round_no, eligible=0, status="success", window=45, batch="b1", purpose="discovery"):
+            return {"batch": batch, "family": family, "round": round_no, "eligible_count": eligible,
+                    "status": status, "max_age_days": window, "purpose": purpose}
+
+        covered = [row(family, 1) for family in required]
+        stopped = stop_check(covered + [row(required[0], 2)], "b1", self.portfolio, 45)
+        self.assertTrue(stopped["should_stop"])
+        self.assertEqual(stopped["missing_families"], [])
+
+        failed_family = [row(f, 1) for f in required[1:]] + [row(required[0], 1, status="failed"), row(required[1], 2)]
+        result = stop_check(failed_family, "b1", self.portfolio, 45)
+        self.assertFalse(result["should_stop"])
+        self.assertEqual(result["missing_families"], [required[0]])
+
+        narrow = [row(f, 1, window=14) for f in required] + [row(required[0], 2, window=14)]
+        self.assertIn("时间窗", " ".join(stop_check(narrow, "b1", self.portfolio, 45)["continue_reasons"]))
+
+        still_finding = covered + [row(required[0], 2, eligible=1)]
+        self.assertFalse(stop_check(still_finding, "b1", self.portfolio, 45)["should_stop"])
+
+        one_round = stop_check(covered, "b1", self.portfolio, 45)
+        self.assertFalse(one_round["should_stop"])
+        other_batch_and_smoke = [row(f, 1, batch="b2") for f in required] + [row(f, 2, purpose="smoke") for f in required]
+        self.assertEqual(stop_check(other_batch_and_smoke, "b1", self.portfolio, 45)["rounds"], [])
+
+    def test_ledger_rejects_invalid_round_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = {"batch": "b", "owner": "主力", "family": "wechat", "channel": "rss", "query": "q", "status": "success",
+                    "result_count": 1, "fulltext_count": 1, "eligible_count": 0, "selected_count": 0,
+                    "purpose": "discovery", "operation": "search", "evidence_url": ""}
+            with self.assertRaises(ValueError):
+                record_attempt(Path(tmp) / "l.jsonl", {**base, "round": -1})
+            record_attempt(Path(tmp) / "l.jsonl", {**base, "round": 2, "max_age_days": 45})
+            self.assertEqual(load_entries(Path(tmp) / "l.jsonl")[0]["round"], 2)
 
     def test_ledger_is_locked_validated_and_reports_yield(self):
         with tempfile.TemporaryDirectory() as tmp:

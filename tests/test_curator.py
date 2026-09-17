@@ -492,6 +492,31 @@ Language: zh
         with patch("scrape_aihot.requests.get", return_value=Response()):
             self.assertEqual(len(fetch_rss({**source, "use_feed_content": False}, {"request_timeout_seconds": 1, "rss_items_per_source": 1})), 3)
 
+    def test_scrape_records_one_ledger_row_per_family_source(self) -> None:
+        import scrape_aihot
+        attempts = [
+            {"source": "访谈号", "url": "https://feed.example/a", "family": "wechat", "role": "candidate", "result_count": 3, "error": None},
+            {"source": "坏源", "url": "https://feed.example/b", "family": "chinese_longform_web", "role": "candidate", "result_count": 0, "error": "timeout"},
+            {"source": "无族来源", "url": "https://feed.example/c", "family": None, "role": "candidate", "result_count": 5, "error": None},
+        ]
+        passed = {"eligibility": {"status": "passed"}}
+        items = [{"collected_by": "访谈号", "content_status": "fulltext"}, {"collected_by": "访谈号", "content_status": "summary"},
+                 {"collected_by": "访谈号", "content_status": "transcript"}]
+        ranked = [{"collected_by": "访谈号", "content_status": "fulltext", "editorial_decision": passed},
+                  {"collected_by": "访谈号", "content_status": "summary", "editorial_decision": passed}]
+
+        class Args:
+            batch, owner, round = "2026-09-17-x", "主力", 2
+
+        with tempfile.TemporaryDirectory() as tmp, patch("discovery_ledger.DEFAULT_LEDGER", Path(tmp) / "ledger.jsonl"):
+            errors: list[str] = []
+            scrape_aihot.record_source_attempts(attempts, items, ranked, Args, 45, errors)
+            rows = [json.loads(line) for line in (Path(tmp) / "ledger.jsonl").read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(errors, [])
+        self.assertEqual([(r["query"], r["status"], r["fulltext_count"], r["eligible_count"]) for r in rows],
+                         [("访谈号", "success", 2, 1), ("坏源", "failed", 0, 0)])
+        self.assertTrue(all(r["round"] == 2 and r["max_age_days"] == 45 and r["batch"] == "2026-09-17-x" for r in rows))
+
     def test_paged_web_index_walks_pages_and_dedupes(self) -> None:
         pages = {
             "https://lib.example/ai/articles/": "<main><a href='/ai/articles/a/'><h3>第一篇中文 AI 实战长文标题</h3></a><a href='/ai/articles/b/'><h3>第二篇中文 AI 实战长文标题</h3></a></main>",

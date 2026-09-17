@@ -433,6 +433,8 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
             rows = fetch_follow_builders(source, settings)
         else:
             rows = fetch_web_index(source, settings)
+        for row in rows:
+            row.setdefault("collected_by", source["name"])
         # wechat_index applies its own exclusion before fetching bodies.
         if source.get("title_exclude_pattern") and source["type"] != "wechat_index":
             exclude = re.compile(source["title_exclude_pattern"])
@@ -791,6 +793,36 @@ def is_historical_content_duplicate(item: dict, reviewed_candidates: list[dict],
     return False
 
 
+def record_source_attempts(attempts: list[dict], items: list[dict], ranked: list[dict], args, max_age_days: int, errors: list[str]) -> None:
+    """Write one ledger row per configured source so the stop condition is computed, not remembered."""
+    from discovery_ledger import DEFAULT_LEDGER, record_attempt
+
+    fulltext: dict[str, int] = {}
+    eligible: dict[str, int] = {}
+    for item in items:
+        if item.get("content_status") in {"fulltext", "transcript"}:
+            fulltext[item.get("collected_by", "")] = fulltext.get(item.get("collected_by", ""), 0) + 1
+    for item in ranked:
+        if item.get("editorial_decision", {}).get("eligibility", {}).get("status") == "passed" and item.get("content_status") in {"fulltext", "transcript"}:
+            eligible[item.get("collected_by", "")] = eligible.get(item.get("collected_by", ""), 0) + 1
+    for attempt in attempts:
+        if not attempt.get("family"):
+            continue
+        name, results = attempt["source"], attempt["result_count"]
+        full = min(fulltext.get(name, 0), results)
+        try:
+            record_attempt(DEFAULT_LEDGER, {
+                "batch": args.batch, "owner": args.owner, "family": attempt["family"], "channel": "scrape_aihot",
+                "query": name, "status": "success" if results and not attempt.get("error") else "failed",
+                "result_count": results, "fulltext_count": full, "eligible_count": min(eligible.get(name, 0), full),
+                "selected_count": 0, "failure_type": (attempt.get("error") or "")[:120],
+                "purpose": "discovery" if attempt.get("role") != "verification" else "smoke",
+                "operation": "search", "evidence_url": attempt["url"], "round": args.round, "max_age_days": max_age_days,
+            })
+        except (OSError, ValueError) as exc:
+            errors.append(f"检索账本写入失败 {name}: {exc}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="为 Stephen 筛选 AI 热点选题")
     parser.add_argument("--fixture", type=Path, help="使用本地 JSON 数据，不联网")
@@ -801,6 +833,9 @@ def main() -> None:
     parser.add_argument("--no-aigc", action="store_true", help="不调用朱雀 AIGC 文本检测")
     parser.add_argument("--model", default="google/gemini-3-flash-preview")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
+    parser.add_argument("--batch", help="写入检索账本时使用的批次 ID；不填则不记账")
+    parser.add_argument("--owner", choices=["主力", "主力2"], default="主力")
+    parser.add_argument("--round", type=int, default=1, help="本批第几轮扩源")
     args = parser.parse_args()
 
     source_config = load_json(RESOURCES / "content_curator_sources.json")
@@ -905,6 +940,9 @@ def main() -> None:
         except Exception as exc:
             aigc_status = "configuration_error"
             errors.append(f"朱雀配置无效，未执行 AIGC 检测: {exc}")
+
+    if args.batch and not args.fixture:
+        record_source_attempts(source_attempts, items, ranked, args, int(profile["max_age_days"]), errors)
 
     rejected_by_gate_count = sum(
         1 for item in ranked
