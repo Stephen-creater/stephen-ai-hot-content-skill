@@ -20,15 +20,16 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ## 完成契约与停止条件
 
-目标数量：用户指定数量（如 20 条）时以用户为准，否则 5 条；发布门槛始终是至少 5 条，用户要的少于 5 条时，先按清单交付，不登记发布。每条都必须未写、未审、未被另一任务预占，并通过机器资格检查和证据化人工终审；整批至少 4 条文章型材料，GitHub 最多 1 条。
+目标数量：用户指定数量（如 20 条）时以用户为准，否则 5 条；发布门槛始终是至少 5 条，用户要的少于 5 条时，先按清单交付，不登记发布。每条都必须未写、未审、未被另一任务预占，并通过机器资格检查和证据化人工终审；整批至少 4 条非 GitHub 材料（文章、播客或视频逐字稿），GitHub 最多 1 条。GitHub 候选需额外附中文文章解读、本地化、配置成本与安全审查，由发布脚本检查。
 
 数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。**
 
 - **轮与合格**：一轮 = 一次抓取加随后的补充检索，终审完这一轮的材料再开下一轮。台账里的「合格」按机器资格门槛（有全文且资格通过）计，人工记录用同一口径。
 - **记账**：抓取带 `--batch <批次ID> --round <轮次>` 自动记账。人工检索用 `.venv/bin/python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 --family <来源族> --channel <渠道> --query <查询> --status success --operation search --round <轮次> --result-count <结果数> --eligible-key <原文链接>`；没有授权或后端的来源族记 `--status blocked --failure-type <原因>`，数量为 0。
 - **停止**：以 `.venv/bin/python3 scripts/discovery_ledger.py stop-check --batch <批次ID>` 的 `should_stop` 为准。它要求：候选且权重 ≥8 的来源族都检索过或记为 blocked，且不能全部 blocked；至少两轮；最近两轮至少有 2 个常规抓取以外、有结果的渠道；最近两轮没有此前未出现的合格材料（按链接跨轮去重）。
+- **兜底**：连续 3 轮人工终审通过数为 0 时，即使 stop-check 未满足也停下，交付缺口报告，由用户决定是否继续。
 - **停止后**：达标 ≥5 条照常发布，并在报告里说明缺口；不足 5 条不发布，报告已达标条目。用户暂停、取消或遇到真实权限阻塞时立即停下。
-- **批次与检查点**：批次 ID 形如 `2026-09-17-main-a`。每轮抓取输出到 `.local/work/<批次ID>`。终审通过的条目按原文链接去重后，组装为 `topics/<批次ID>/candidates.json`（抓取字段加 `manual_editorial_review`）和 `run.json`（至少含 `batch_id`、`requested_count`、`candidate_count`）。检查点 `.local/work/<批次ID>/checkpoint.json` 至少包含 `batch`、`owner`、`target_count`、`round`、`passed`（id、link、source_sha256）、`rejected_links`、`next_step`。
+- **批次与检查点**：批次 ID 形如 `2026-09-17-main-a`。每轮抓取输出到 `.local/work/<批次ID>/<时间戳>/`。终审通过的条目按原文链接去重后，组装为 `topics/<批次ID>/candidates.json`（抓取字段加 `manual_editorial_review`）和 `run.json`（至少含 `batch_id`、`requested_count`、`candidate_count`）。检查点 `.local/work/<批次ID>/checkpoint.json` 至少包含 `batch`、`owner`、`target_count`、`round`、`passed`（id、link、source_sha256）、`rejected_links`、`next_step`。
 
 ## 读取路由
 
@@ -55,7 +56,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 - 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。模型复排默认关闭，`--ai` 才会调用 OpenRouter 并计费；配置朱雀后默认检测并计费，`--no-aigc` 跳过。它每次只输出 `report_candidate_count` 条待终审材料；用户要的数量更多时，从 `discovery.json`、各来源台账和补充检索中继续扩池。来源分层（BestBlogs 与觉醒AI 为主入口，访谈与转录为高命中层，英文一手只作雷达）见来源发现清单。
 - 按原始发布时间从新到旧读。转载时间、网页更新时间、列表日期和重新上榜都不刷新内容年龄；交付前重新检查时效。
-- 聚合页、社区、X、GitHub 和英文官方资料只作线索或核验；回到完整简体中文正文或可读逐字稿后才能成为候选。机器转录须合并段落、校正专名、标注说话人，不能把字幕墙交给用户。
+- 聚合页、社区、X 和英文官方资料只作线索或核验；GitHub 项目只能以附带完整中文解读的形式，作为那至多 1 条补充。补充检索找到的原文必须用 `scripts/add_source.py` 写入 inbox 后重新抓取，由程序做资格检查，禁止手写资格记录。机器转录须合并段落、校正专名、标注说话人，不能把字幕墙交给用户。
 - 检查原始公开页面：登录、关注、验证码或付费后才可见的正文直接淘汰；代理或缓存抓到的隐藏文字不算公开完整。
 - 单个来源失败写入 `run.json` 并继续其他来源；不得把网络、鉴权或解析失败说成“没有好材料”。
 - 每次检索用 `discovery_ledger.py` 记账。`.local/source_coverage.json` 超过 7 天未更新时运行 `source_coverage.py` 检查覆盖缺口。

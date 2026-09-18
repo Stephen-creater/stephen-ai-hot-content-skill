@@ -13,14 +13,7 @@
 
 `verified-channel` 只能填写本轮已经完成非空冒烟测试的渠道。Doctor 的 `warn`、工具安装成功或配置文件存在都不能算真实连通。
 
-每次检索后记录实际产出：
-
-```bash
-.venv/bin/python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 \
-  --family chinese_longform_web --channel exa --query "作者或主题查询" --status success \
-  --operation search --purpose discovery --evidence-url "已读取的搜索结果页URL" \
-  --result-count 10 --fulltext-count 4 --eligible-count 2 --selected-count 1
-```
+每次检索后按 `SKILL.md`「记账」一条的命令记录实际产出，额外可加 `--evidence-url` 留下已读取的搜索结果页。
 
 一周滚动窗口内应覆盖至少 80 分来源族；真实连通能力应达到至少 85 分。覆盖不足时从最高权重缺口开始补，不能用低权重 GitHub 搜索代替公众号、X、播客或中文长文。
 

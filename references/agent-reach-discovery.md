@@ -85,6 +85,8 @@ Twitter、Reddit、V2EX、小红书短笔记和 GitHub 项目页默认只是线�
 
 ## 阅读与字幕
 
+同时拿到平台字幕和发布者文字版时，用 `.venv/bin/python3 scripts/format_captions.py <字幕文件> <文字版> <输出文件>` 生成可读稿：只借文字版的标点和分段，不改字幕原词。只有 ASR 输出时它帮不上忙，仍须人工断句、校正专名。
+
 字幕失败时，先查发布者官网/RSS 的原始音频和文字稿链接。已验证硅谷101官方 RSS 提供单集页面、日期和音频 enclosure，抓取器将其保存为 `audio_url`，不把 Show Notes 当逐字稿。
 
 Apple Silicon 本地已有 MLX Whisper 模型时，可用本地转写兜底：
