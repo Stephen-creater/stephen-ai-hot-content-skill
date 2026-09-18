@@ -74,7 +74,7 @@
       "weight": 10,
       "role": "discovery",
       "doctor_channels": ["twitter"],
-      "automation_types": ["follow_builders"],
+      "automation_types": ["follow_builders", "rss"],
       "minimum_access_fraction": 0,
       "strategy": "按作者时间线、列表和长文追踪产品负责人、研究者与一线Builder；推文只做线索，继续寻找中文成熟材料。",
       "user_action": "常规入口不足且材料值得追踪时，可选用 Ego 现成登录态；不强制浏览器检索，页面要求登录或验证时才请用户处理。"
@@ -85,7 +85,7 @@
       "weight": 6,
       "role": "discovery",
       "doctor_channels": ["youtube", "xiaoyuzhou"],
-      "automation_types": [],
+      "automation_types": ["rss"],
       "minimum_access_fraction": 0,
       "strategy": "优先频道订阅和节目单，不依赖宽泛关键词搜索；字幕用于发现论点，再寻找或制作中文成熟材料。"
     },

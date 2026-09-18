@@ -37,6 +37,31 @@ def contains_term(text: str, term: str) -> bool:
     return term in text
 
 
+# Generic words such as 模型/训练/缓存 also describe databases and ML-free systems,
+# so the body check counts only terms that name AI itself or AI products.
+STRONG_AI_TERMS = (
+    "ai", "aigc", "llm", "agent", "gpt", "chatgpt", "codex", "claude", "openai", "anthropic", "gemini",
+    "deepmind", "deepseek", "qwen", "kimi", "cursor", "copilot", "openclaw", "workbuddy", "qoder", "mcp",
+    "prompt", "人工智能", "智能体", "大模型", "提示词", "豆包", "千问",
+)
+
+
+def ai_subject_in_body(summary: str, content: str) -> bool:
+    """Feeds without a real summary (most WeChat RSS) leave only the title to judge.
+
+    Then the opening paragraphs stand in for the summary, and strong AI terms must
+    keep recurring in the body so a passing mention cannot qualify an unrelated piece.
+    """
+    if len(summary) >= 80 or not content:
+        return False
+    lowered = content.lower()
+    if not any(contains_term(lowered[:600], term) for term in STRONG_AI_TERMS):
+        return False
+    hits = sum(len(re.findall(rf"(?<![a-z0-9]){re.escape(term)}(?![a-z0-9])", lowered)) if re.fullmatch(r"[a-z0-9 .+-]+", term)
+               else lowered.count(term) for term in STRONG_AI_TERMS)
+    return hits >= 8
+
+
 def clean_text(value: str | None) -> str:
     text = html.unescape(value or "")
     text = TAG_RE.sub(" ", text)
@@ -301,7 +326,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if VERSION_ONLY_RE.fullmatch(title.strip()) or PACKAGE_VERSION_RE.fullmatch(title.strip()):
         score -= 90
         penalties.append("只有版本号")
-    if not any(contains_term(title_summary, term) for term in CORE_AI_TERMS):
+    if not any(contains_term(title_summary, term) for term in CORE_AI_TERMS) and not ai_subject_in_body(summary, content):
         score -= 40
         penalties.append("标题与摘要缺少明确 AI 对象")
     if any(word.lower() in haystack for word in ("weekly roundup", "week in review", "本周汇总", "一周回顾")):

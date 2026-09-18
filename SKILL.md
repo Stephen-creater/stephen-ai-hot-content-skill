@@ -54,6 +54,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ### 2. 发现与全文恢复
 
 - 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。模型复排默认关闭，`--ai` 才会调用 OpenRouter 并计费。抓取结果共享缓存 1 小时（文章页 7 天，英文雷达 1 天），并发会话共用；`--no-cache` 强制刷新。默认输出 `report_candidate_count` 条待终审材料，已剔除正文不足 2500 字的文章；要 20 条选题时加 `--pool 40`。来源分层（BestBlogs 与觉醒AI 为主入口，访谈与转录为高命中层，英文一手只作雷达）见来源发现清单。
+- 线索源（播客、YouTube、X、即刻）只进 `discovery.md`：近 14 天、按来源类别分组。命中的线索先找中文全文或文字稿，再用 `add_source.py` 写入 inbox 重新抓取。
 - 按原始发布时间从新到旧读。转载时间、网页更新时间、列表日期和重新上榜都不刷新内容年龄；交付前重新检查时效。
 - 聚合页、社区、X 和英文官方资料只作线索或核验；GitHub 项目只能以附带完整中文解读的形式，作为那至多 1 条补充。补充检索找到的原文必须用 `scripts/add_source.py` 写入 inbox 后重新抓取，由程序做资格检查，禁止手写资格记录。机器转录须合并段落、校正专名、标注说话人，不能把字幕墙交给用户。
 - 检查原始公开页面：登录、关注、验证码或付费后才可见的正文直接淘汰；代理或缓存抓到的隐藏文字不算公开完整。

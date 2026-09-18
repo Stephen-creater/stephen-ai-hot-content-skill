@@ -36,8 +36,8 @@
 公众号源在配置里按 `rss_group` 分组：组内共用 `defaults`（全文、优先级、噪音排除），单个号只写名称、地址和与默认不同的字段；单号的 `title_exclude_pattern` 追加在组规则之后，不会覆盖组规则。
 
 - 访谈与文字稿组：语言即世界（张小珺）、Web3天空之城、Founder Park、十字路口、海外独角兽、晚点AI、晚点再听、深思圈、乱翻书、产品犬舍、AI炼金术、有新Newin、42章经；2026-09 新增非凡产研、极客公园（公众号全文），以及 B 级的 Z Potentials、随机小分队、硅谷101、爱范儿、APPSO、智能涌现、硅星人Pro、51CTO技术栈。
-- 一线实践与方法组：花叔、一泽Eze、范冰、刘言飞语、AI产品黄叔、歸藏、刘小排；新增阿真Irene、小互AI、卡尔的AI沃茨，以及 B 级的 AI产品阿颖、沃垠AI、向阳乔木推荐看、山行AI、土猛的员外、MacTalk、夕小瑶科技说、AI前线、AI科技大本营。
-- 大厂技术团队 Agent 实践组：京东、携程、腾讯云开发者、百度Geek说、字节、阿里、腾讯技术工程、大淘宝、dbaplus、InfoQ。这些号大多写底层基建，组规则用 `title_include_pattern` 只收 Agent 落地、AI Coding、评测方法类标题。
+- 一线实践与方法组：花叔、一泽Eze、范冰、刘言飞语、AI产品黄叔、歸藏、刘小排；新增阿真Irene、小互AI、卡尔的AI沃茨、佳芮的创业笔记、艾逗笔、言午、强少来了，以及 B 级的 AI产品阿颖、沃垠AI、向阳乔木推荐看、山行AI、土猛的员外、MacTalk、夕小瑶科技说、AI前线、AI科技大本营、王建硕、飞哥说AI、二一的笔记、Memm设计知识分享、产品二姐、caoz的梦呓、李继刚、HelloSREAgent。
+- 大厂技术团队 Agent 实践组：京东、携程、腾讯云开发者、百度Geek说、字节、阿里、腾讯技术工程、大淘宝、dbaplus、InfoQ、Qunar技术沙龙、有赞coder、哔哩哔哩技术、转转技术、高可用架构。这些号大多写底层基建，组规则用 `title_include_pattern` 只收 Agent 落地、AI Coding、评测方法类标题。
 - 人人都是产品经理：历史审核 5/36 入选，以普通 RSS 接入并回原页取全文。
 - 公众号作战室索引（`type: wechat_index`）作为补充，只保留访谈、实录、复盘和长期实测标题。
 - 按号判断价值，不按平台：同一个号的访谈可能入选，活动报名和资讯不入选，已用标题排除过滤。
@@ -52,22 +52,32 @@
 
 没有可读文字稿的音频只作线索。
 
+中文播客访谈线索组（discovery）：硅谷101、硅谷早知道、张小珺商业访谈录、十字路口、晚点聊、42章经、二分电台、AI炼金术、What's Next 科技早知道、开始连接 LinkStart、硅基立场、卫诗婕漫谈、此话当真、AI Odyssey、跨国串门儿计划，以及 B 级的牛油果烤面包、津津乐道、剩余价值、三五环、GGV 创业者访谈、乱翻书、屠龙之术、AI每周谈、科技乱炖、硬地骇客、Web Worker。小宇宙节目用公共 RSSHub 的 `/xiaoyuzhou/podcast/<ID>` 订阅，RSS 带约 1500 字节目介绍和音频地址。
+
 ### 第四层：英文一手雷达（discovery，不进候选）
 
 - follow-builders：X 上 Claude Code、Codex 等团队一线作者的推文。
 - Anthropic Engineering、OpenAI Developers、Cursor 的 RSS 镜像；The Pragmatic Engineer、Latent Space、Lenny、Simon Willison、Hamel Husain、Addy Osmani、Jason Liu、Every AI & I、Training Data、YC Lightcone。红杉 Training Data 与 Latent Space 带免费英文逐字稿，可用来核对中文编译稿是否忠实，但英文稿本身不进候选。
-- 2026-09 新增：Ben's Bites、Dwarkesh Patel、Stratechery、LukeW，以及 a16z 的 X 账号（xgo.ing 生成的 RSS）。
+- 2026-09 新增：Ben's Bites、Dwarkesh Patel、Stratechery、LukeW、NN/g、Evil Martians。
+- X 一线作者雷达组：xgo.ing 生成的公开 RSS（只能用已有地址，新建要登录）。Karpathy、Simon Willison、Mike Krieger、Harrison Chase、Jerry Liu，以及 B 级的歸藏、orange.ai、Tw93、Viking、Amjad Masad、Varun Mohan、Andrew Ng、Philipp Schmid、Martin Fowler、Akshay Kothari、Sahil Lavingia、a16z。
+- YouTube 一线实操雷达组：How I AI、AI Engineer、Riley Brown、Matt Pocock。YouTube 官方频道 feed 对这些频道返回 404，统一走 RSSHub `/youtube/channel/<频道ID>`；命中后用 yt-dlp 取字幕。
+- 中文一线短内容线索组：即刻用户（RSSHub `/jike/user/<ID>`）歸藏、AI产品黄叔、卡尔的AI沃茨、橘AI、一泽、花叔、李继刚、空格.space、Kenny、艾逗笔、甲木未来派、Indie-Fox、Barret李靖；Telegram 频道 DPS Build、冰器库、Laisky's Notes。短帖只作线索，命中后找作者长文或访谈。
 - 雷达命中后依次找中文成熟稿：宝玉、Web3天空之城、瓜哥AI新知、Z Finance、海外独角兽、BestBlogs 关键词 feed。都没有就说明中文材料缺位，标记为高研究成本，交给用户判断是否原创。
 
 ### 第五层：独立博客低频池
 
-向阳乔木、最小可读、Tw93、唐巧、Joway、wklken、Sagasu、XINDOO、明立非、谢乾坤、创见思考、imlee-tech。更新慢但多为一线复盘，非 AI 文章由资格门槛过滤。
+`独立博客低频池` 分组：向阳乔木、最小可读、Tw93、唐巧、Joway、wklken、Sagasu、XINDOO、明立非、谢乾坤、创见思考、imlee-tech；2026-09 新增罗磊、bmpi、电波障害、枫言枫语，以及 B 级的 manateelazycat、范叶亮、懒程序员改变世界、Limboy、Reorx、编码记录、蚊BloG、Yubolun、重归混沌、Design Scenes、张可。更新慢但多为一线复盘，非 AI 文章由资格门槛过滤。
+
+### 公共 RSSHub 实例
+
+`rsshub.bestblogs.dev` 为主，`rsshub.imlg.co` 为备（配置里写 `mirror_hosts`，主实例失败时按同一路径切换）；`rsshub.app` 官方实例返回 403。实测可用路由：小宇宙播客、YouTube 频道与用户、即刻用户、Telegram 频道、掘金、少数派、知乎热榜。B 站用户、知乎个人、X、小红书路由需要 Cookie，公共实例返回 503 或超时。知乎专栏可用 `rss.lilydjwg.me/zhihuzhuanlan/<专栏>`，但知乎历史审核 2/43，暂不接入。
 
 ### 不再接入
 
 - 以资讯为主：36氪、虎嗅、少数派、IT之家、Solidot、Readhub、机器之心、新智元。
 - 需要 Cookie 或已不可用：公共 RSSHub 的知乎和 X 路由、nitter/xcancel、搜狗微信、feeddd、wewe-rss。
-- 已停更：OnBoard!。
+- 已停更：OnBoard!、AI局内人、海外独角兽播客。
+- 2026-09 RSS 合集中确认失效：xyzfm 托管的播客地址全部超时；一批 `.cn` 个人博客证书过期（curl 同样失败）。
 - 各层仍用 `discovery_ledger.py` 记账；连续多轮全文通过率为 0 的来源降为 discovery，不凭印象增删。
 
 ## 接入新源的流程

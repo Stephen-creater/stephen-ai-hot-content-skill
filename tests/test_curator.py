@@ -19,7 +19,7 @@ from add_source import append_source
 from curator import canonical_url, deduplicate, rank_candidates, redact_untrusted_secrets, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_bestblogs, http_get, fetch_follow_builders, fetch_rss, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import discovery_digest, render_discovery_markdown, clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_bestblogs, http_get, fetch_follow_builders, fetch_rss, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -243,6 +243,19 @@ class CuratorTest(unittest.TestCase):
         news = score_item({**item, "title": "Anthropic 发布新模型"}, self.profile, now=now)
         self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
         self.assertIn("事件新闻已超过时效窗口", news["penalty"])
+
+    def test_body_lead_stands_in_for_missing_summary_when_judging_ai_subject(self):
+        base = {"title": "14 天，110 次上线", "summary": "", "published": "2026-09-01", "source_name": "公众号", "source_priority": 4,
+                "source_type": "rss", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article",
+                "content_status": "fulltext", "link": "https://example.com/a"}
+        now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+        ai_body = "这两周我让 Agent 接管了发布流程，模型负责写代码，我负责验收。" + "每次上线前智能体先跑测试，再由我检查上下文。" * 80
+        passing_mention = "这两周我们重写了发布流程，顺带一提有同事用 AI 查过资料。" + "每次上线前先跑测试，再人工检查配置。" * 80
+        database = "这次把缓存层重写了，模型字段和训练数据表都迁到新集群。" + "上下文切换减少以后，推理查询的延迟下降了一半，缓存命中率也更稳定。" * 80
+        self.assertNotIn("标题与摘要缺少明确 AI 对象", score_item({**base, "content": ai_body}, self.profile, now=now)["penalty"])
+        self.assertIn("标题与摘要缺少明确 AI 对象", score_item({**base, "content": passing_mention}, self.profile, now=now)["penalty"])
+        self.assertIn("标题与摘要缺少明确 AI 对象", score_item({**base, "content": database}, self.profile, now=now)["penalty"])
+        self.assertIn("标题与摘要缺少明确 AI 对象", score_item({**base, "summary": "一篇关于团队发布节奏和配置检查的复盘文章，讲清楚怎么把一周一次发布改成一天多次发布的过程与代价，以及中间踩过的坑、团队怎么分工、最后保留下来的检查清单和每次发布前必须确认的三件事情。", "content": ai_body}, self.profile, now=now)["penalty"])
 
     def test_long_founder_interview_is_not_expired_event_news(self):
         item = {"title": "对谈快看创始人：漫画编辑怎样和 AI 一起做分镜", "summary": "创始人讲团队怎样发布 AI 功能并调整流程", "content": "我们先让编辑用 AI 做分镜，再看读者反馈调整流程。" * 120, "published": "2026-08-10", "source_name": "中文访谈", "source_priority": 4, "source_type": "rss", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext", "link": "https://example.com/founder"}
@@ -503,6 +516,56 @@ Language: zh
         self.assertNotIn("content", rows[1])
         with patch("scrape_aihot.requests.get", return_value=Response()):
             self.assertEqual(len(fetch_rss({**source, "use_feed_content": False}, {"request_timeout_seconds": 1, "rss_items_per_source": 1})), 3)
+
+    def test_discovery_digest_keeps_recent_leads_newest_first_without_bodies(self) -> None:
+        now = datetime(2026, 9, 18, tzinfo=timezone.utc)
+        items = [
+            {"title": "旧", "link": "https://a/1", "published": "2026-08-01", "source_name": "甲", "source_category": "播客", "content": "长正文"},
+            {"title": "新", "link": "https://a/2", "published": "2026-09-17", "source_name": "乙", "source_category": "播客", "content": "长正文", "summary": "摘要" * 200},
+            {"title": "次新", "link": "https://a/3", "published": "2026-09-10", "source_name": "丙", "source_category": "X"},
+            {"title": "无日期", "link": "https://a/4", "source_name": "丁", "source_category": "X"},
+        ]
+        rows = discovery_digest(items, now, 14)
+        self.assertEqual([r["title"] for r in rows], ["新", "次新", "无日期"])
+        self.assertNotIn("content", rows[0])
+        self.assertEqual(len(rows[0]["summary"]), 200)
+        markdown = render_discovery_markdown(rows)
+        self.assertIn("## 播客（1）", markdown)
+        self.assertIn("- 2026-09-17 [新](https://a/2) · 乙", markdown)
+        self.assertIn("- 日期未知 [无日期](https://a/4) · 丁", markdown)
+
+    def test_rss_falls_back_to_mirror_host_with_same_path(self) -> None:
+        import requests
+
+        class Response:
+            content = "<rss version='2.0'><channel><item><title>单集</title><link>https://x/1</link></item></channel></rss>".encode("utf-8")
+
+            def raise_for_status(self):
+                return None
+
+        calls = []
+
+        def fake_get(url, **kwargs):
+            calls.append(url)
+            if url.startswith("https://rsshub.primary"):
+                raise requests.ConnectionError("down")
+            if url.startswith("https://rsshub.empty"):
+                empty = Response()
+                empty.content = b"<html>Welcome to RSSHub!</html>"
+                return empty
+            return Response()
+
+        source = {"name": "播客", "category": "播客", "priority": 4, "type": "rss",
+                  "url": "https://rsshub.primary/xiaoyuzhou/podcast/abc?limit=5", "mirror_hosts": ["https://rsshub.mirror"]}
+        with patch("scrape_aihot.requests.get", side_effect=fake_get):
+            rows = fetch_rss(source, {"request_timeout_seconds": 1, "rss_items_per_source": 5})
+        self.assertEqual([row["title"] for row in rows], ["单集"])
+        self.assertEqual(calls, ["https://rsshub.primary/xiaoyuzhou/podcast/abc?limit=5", "https://rsshub.mirror/xiaoyuzhou/podcast/abc?limit=5"])
+        calls.clear()
+        with patch("scrape_aihot.requests.get", side_effect=fake_get):
+            rows = fetch_rss({**source, "url": "https://rsshub.empty/xiaoyuzhou/podcast/abc?limit=5"}, {"request_timeout_seconds": 1, "rss_items_per_source": 5})
+        self.assertEqual([row["title"] for row in rows], ["单集"])
+        self.assertEqual(calls[-1], "https://rsshub.mirror/xiaoyuzhou/podcast/abc?limit=5")
 
     def test_scrape_records_one_ledger_row_per_family_source(self) -> None:
         import scrape_aihot

@@ -15,14 +15,14 @@ import time
 import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import quote, urlencode, urljoin, urlparse
+from urllib.parse import quote, urlencode, urljoin, urlparse, urlsplit, urlunsplit
 
 import feedparser
 import requests
 import trafilatura
 from bs4 import BeautifulSoup
 
-from curator import canonical_url, clean_text, rank_candidates
+from curator import canonical_url, clean_text, parse_datetime, rank_candidates
 from source_config import load_sources
 from discovery_history import delivered_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
@@ -153,10 +153,27 @@ def html_to_text(value: str | None) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def mirror_urls(source: dict) -> list[str]:
+    """The source URL, then the same path on each mirror host (public RSSHub instances go down)."""
+    parts = urlsplit(source["url"])
+    mirrors = [urlsplit(host) for host in source.get("mirror_hosts", [])]
+    return [source["url"]] + [urlunsplit((m.scheme, m.netloc, parts.path, parts.query, "")) for m in mirrors]
+
+
 def fetch_rss(source: dict, settings: dict) -> list[dict]:
-    response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
-    response.raise_for_status()
-    feed = parse_feed(response.content)
+    urls = mirror_urls(source)
+    for index, url in enumerate(urls):
+        try:
+            response = http_get(url, settings, ttl=source.get("cache_ttl_seconds"))
+            response.raise_for_status()
+        except requests.RequestException:
+            if index == len(urls) - 1:
+                raise
+            continue
+        feed = parse_feed(response.content)
+        # A broken instance can answer 200 with an error page; try the next mirror.
+        if feed.entries or index == len(urls) - 1:
+            break
     items = []
     for entry in feed.entries[: int(source.get("items_limit", settings["rss_items_per_source"]))]:
         body = html_to_text((entry.get("content") or [{}])[0].get("value")) if source.get("use_feed_content") else ""
@@ -832,6 +849,38 @@ def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
     return ordered
 
 
+DISCOVERY_FIELDS = ("title", "link", "published", "source_name", "source_category", "language", "content_form", "audio_url")
+
+
+def discovery_digest(items: list[dict], now: datetime, max_age_days: int) -> list[dict]:
+    """Recent leads, newest first, without bodies. Undated leads stay, after the dated ones."""
+    rows = []
+    for item in items:
+        published = parse_datetime(item.get("published"))
+        if published and (now - published).days > max_age_days:
+            continue
+        row = {key: item[key] for key in DISCOVERY_FIELDS if item.get(key)}
+        summary = clean_text(item.get("summary"))
+        if summary:
+            row["summary"] = summary[:200]
+        rows.append((published.timestamp() if published else float("-inf"), row))
+    rows.sort(key=lambda pair: pair[0], reverse=True)
+    return [row for _, row in rows]
+
+
+def render_discovery_markdown(rows: list[dict]) -> str:
+    groups: dict[str, list[dict]] = {}
+    for row in rows:
+        groups.setdefault(row.get("source_category") or "其他线索", []).append(row)
+    lines = [f"# 线索（{len(rows)} 条，按来源类别分组，组内从新到旧）"]
+    for category, members in groups.items():
+        lines += ["", f"## {category}（{len(members)}）"]
+        for row in members:
+            day = (parse_datetime(row.get("published")) or None)
+            lines.append(f"- {day.date().isoformat() if day else '日期未知'} [{row.get('title', '')}]({row.get('link', '')}) · {row.get('source_name', '')}")
+    return "\n".join(lines) + "\n"
+
+
 def select_report_candidates(
     ranked: list[dict],
     limit: int,
@@ -1036,8 +1085,13 @@ def main() -> None:
     timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     output_dir = args.output_root / timestamp
     output_dir.mkdir(parents=True, exist_ok=True)
-    discovery_items = [item for item in items if item.get("source_role") == "discovery"]
+    discovery_items = discovery_digest(
+        [item for item in items if item.get("source_role") == "discovery"],
+        datetime.now(timezone.utc),
+        int(profile.get("discovery_max_age_days", 14)),
+    )
     (output_dir / "discovery.json").write_text(json.dumps(discovery_items, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "discovery.md").write_text(render_discovery_markdown(discovery_items), encoding="utf-8")
     (output_dir / "candidates.json").write_text(json.dumps(candidates, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "run.json").write_text(
         json.dumps(

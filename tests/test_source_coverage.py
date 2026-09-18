@@ -186,6 +186,8 @@ class SourceGroupTest(unittest.TestCase):
         rows = load_sources()["sources"]
         urls = [r["url"] for r in rows]
         self.assertEqual(len(urls), len(set(urls)))
+        names = [r["name"] for r in rows]
+        self.assertEqual(len(names), len(set(names)), "来源名用于记账和失败记录，不能重名")
         for row in rows:
             self.assertIn("priority", row, row["name"])
             self.assertIn("category", row, row["name"])
