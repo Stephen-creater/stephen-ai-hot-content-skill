@@ -54,6 +54,8 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - `resources/editorial_profile.schema.json`：配置结构契约。
 - `scripts/editorial_judgment.py`：资格、风险与人工证据契约。
 - `scripts/feedback_audit.py`：反馈覆盖、空备注、重复判断和冲突候选审计，不导出备注原文。
+- `scripts/source_yield.py`：按来源统计审核按钮的入选和否决次数，决定先读哪些来源。
+- `scripts/source_config.py`：读取来源配置，把 `rss_group` 分组展开成单个 RSS 源。
 - `scripts/quality_audit.py`：按公开的 100 分结构质量标准检查反馈保真、泛化、可靠性、可维护性、安全与测试。
 - `resources/content_curator_sources.json`：自动抓取来源配置，按 `family` 与 `role` 标注来源族和用途。
 - `references/source_discovery_playbook.md`：分层来源模型与扩源顺序。

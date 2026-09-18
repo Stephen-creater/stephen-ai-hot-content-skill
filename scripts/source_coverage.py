@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from discovery_ledger import DEFAULT_LEDGER, load_entries
+from source_config import load_sources
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -94,7 +95,7 @@ def main() -> None:
     doctor = json.loads(args.doctor_json.read_text(encoding="utf-8")) if args.doctor_json else doctor_state()
     report = audit_coverage(
         json.loads(args.portfolio.read_text(encoding="utf-8")), doctor,
-        json.loads(args.sources.read_text(encoding="utf-8")), load_entries(args.ledger), set(args.verified_channel),
+        load_sources(args.sources), load_entries(args.ledger), set(args.verified_channel),
     )
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
     if args.write_snapshot:

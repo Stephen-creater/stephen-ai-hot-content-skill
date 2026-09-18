@@ -244,6 +244,16 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
         self.assertIn("事件新闻已超过时效窗口", news["penalty"])
 
+    def test_long_founder_interview_is_not_expired_event_news(self):
+        item = {"title": "对谈快看创始人：漫画编辑怎样和 AI 一起做分镜", "summary": "创始人讲团队怎样发布 AI 功能并调整流程", "content": "我们先让编辑用 AI 做分镜，再看读者反馈调整流程。" * 120, "published": "2026-08-10", "source_name": "中文访谈", "source_priority": 4, "source_type": "rss", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext", "link": "https://example.com/founder"}
+        now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+        interview = score_item(item, self.profile, now=now)
+        short = score_item({**item, "content": "上线了 AI 功能。" * 20}, self.profile, now=now)
+        launch = score_item({**item, "title": "专访：快看 AI 创作工具正式上线"}, self.profile, now=now)
+        self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
+        self.assertIn("事件新闻已超过时效窗口", short["penalty"])
+        self.assertIn("事件新闻已超过时效窗口", launch["penalty"])
+
     def test_saturated_xiaohongshu_layout_is_rejected_despite_complete_material(self) -> None:
         item = {"title": "小红书图文自动排版 Skill 实战", "summary": "亲自实测，有完整过程与明确结果", "content": "作者解释了版式选择和调整过程。" * 250, "published": "2026-09-05", "source_name": "中文创作者", "source_priority": 5, "source_type": "web", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext", "link": "https://example.com/layout"}
         result = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))

@@ -484,7 +484,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if people_terms and not authoritative_interview:
         score -= 30
         penalties.append("纯人物群像，缺少可复用的核心机制")
-    if age_days is not None and time_sensitive_terms and not authoritative_interview and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
+    # A long interview is not event news just because the guest mentions a launch in
+    # passing; if the event word is in the title, the piece is about the event.
+    long_interview = (
+        any(word.lower() in title.lower() for word in interview_terms)
+        and not any(word.lower() in title.lower() for word in time_sensitive_terms)
+        and len(content) >= int(profile.get("minimum_review_chars", 2500))
+    )
+    if age_days is not None and time_sensitive_terms and not (authoritative_interview or long_interview) and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
         score -= 60
         penalties.append("事件新闻已超过时效窗口")
     if reader_distance_terms:

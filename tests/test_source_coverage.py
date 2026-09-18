@@ -160,5 +160,47 @@ class SourceCoverageTest(unittest.TestCase):
                 record_attempt(path, {**entry, "selected_count": 5})
 
 
+class SourceGroupTest(unittest.TestCase):
+    def test_rss_group_expands_with_defaults_and_joined_exclusions(self):
+        from source_config import expand_sources
+
+        config = {"sources": [
+            {"name": "plain", "type": "web", "url": "https://a"},
+            {"name": "组", "type": "rss_group", "family": "wechat",
+             "defaults": {"priority": 4, "role": "candidate", "use_feed_content": True, "title_exclude_pattern": "早报"},
+             "feeds": [{"name": "甲", "url": "https://f/1"},
+                       {"name": "乙", "url": "https://f/2", "priority": 3, "title_exclude_pattern": "招聘"}]},
+        ]}
+        rows = expand_sources(config)
+        self.assertEqual([r["name"] for r in rows], ["plain", "甲", "乙"])
+        first, second = rows[1], rows[2]
+        self.assertEqual((first["type"], first["family"], first["group"], first["priority"]), ("rss", "wechat", "组", 4))
+        self.assertEqual(second["priority"], 3)
+        self.assertRegex("AI 早报", second["title_exclude_pattern"])
+        self.assertRegex("急招聘", second["title_exclude_pattern"])
+        self.assertNotRegex("访谈", second["title_exclude_pattern"])
+
+    def test_configured_sources_expand_to_unique_urls(self):
+        from source_config import load_sources
+
+        rows = load_sources()["sources"]
+        urls = [r["url"] for r in rows]
+        self.assertEqual(len(urls), len(set(urls)))
+        for row in rows:
+            self.assertIn("priority", row, row["name"])
+            self.assertIn("category", row, row["name"])
+
+    def test_tech_group_include_matches_ai_inside_chinese_titles(self):
+        import re
+        from source_config import load_sources
+
+        tech = next(r for r in load_sources()["sources"] if r.get("group") == "大厂技术团队 Agent 实践")
+        include = re.compile(tech["title_include_pattern"], re.I)
+        for title in ("腾讯AI落地实践", "用AI写代码的一年", "Agent 评测方法"):
+            self.assertRegex(title, include)
+        for title in ("MAIL 系统迁移", "OpenAI 发布会", "分布式存储优化"):
+            self.assertNotRegex(title, include)
+
+
 if __name__ == "__main__":
     unittest.main()

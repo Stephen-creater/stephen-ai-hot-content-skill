@@ -80,5 +80,29 @@ class FeedbackAuditTest(unittest.TestCase):
         self.assertEqual(len(report["invalid_records"]), 1)
 
 
+class SourceYieldTest(unittest.TestCase):
+    def test_latest_decision_wins_and_wechat_groups_by_account(self):
+        from source_yield import source_yield
+
+        first = {
+            "generated_at": "b1",
+            "reviews": {"a": {"status": "rejected"}, "b": {"status": "selected"}, "c": {"status": "pending"}},
+            "candidates": [
+                {"id": "a", "title": "A", "link": "https://mp.weixin.qq.com/s/1", "source_name": "Z Finance / 某编译"},
+                {"id": "b", "title": "B", "link": "https://www.zhihu.com/p/1", "source_name": "知乎"},
+                {"id": "c", "title": "C", "link": "https://www.zhihu.com/p/2", "source_name": "知乎"},
+            ],
+        }
+        second = {"generated_at": "b2", "reviews": {"a": {"status": "selected"}}, "candidates": []}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "feedback.jsonl"
+            path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in (first, second)), encoding="utf-8")
+            rows = {row["source"]: row for row in source_yield(path)}
+        self.assertEqual(rows["Z Finance"]["selected"], 1)
+        self.assertEqual(rows["Z Finance"]["rejected"], 0)
+        self.assertEqual(rows["zhihu.com"]["decided"], 1)
+        self.assertEqual(rows["zhihu.com"]["smoothed_rate"], 0.4)
+
+
 if __name__ == "__main__":
     unittest.main()

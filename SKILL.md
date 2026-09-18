@@ -47,7 +47,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 1. 继承状态
 
-- 反馈原文很大，不直接读：用 `feedback_audit.py`、`editorial_outcomes.py` 看反馈结论，读当前检查点续跑，不靠对话记忆。
+- 反馈原文很大，不直接读：用 `feedback_audit.py`、`editorial_outcomes.py` 看反馈结论，读当前检查点续跑，不靠对话记忆。终审排序参考 `.venv/bin/python3 scripts/source_yield.py --min-decided 5`：键是公众号名或网站域名，与配置里的源名或 URL 域名对应；样本不足 5 次的来源不参与排序。
 - **终审前**把待读材料存成 JSON 数组，运行 `.venv/bin/python3 scripts/history_check.py <文件>` 去重：同一访谈常被不同站点换标题转载，链接不同但正文重合。
 - 相似主题只有新增事实、方法或结果才算新材料；换标题、换转载地址不算。
 

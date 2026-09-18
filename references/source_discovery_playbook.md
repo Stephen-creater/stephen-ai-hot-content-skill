@@ -33,8 +33,12 @@
 
 ### 第二层：访谈与文字稿公众号
 
-- 经 wechat2rss 订阅的访谈号：语言即世界（张小珺）、Web3天空之城、Founder Park、十字路口、海外独角兽、晚点AI、晚点再听、深思圈、乱翻书、产品犬舍、AI炼金术、有新Newin、42章经。
-- 实践与方法号：花叔、一泽Eze、范冰、刘言飞语、AI产品黄叔、歸藏、刘小排。
+公众号源在配置里按 `rss_group` 分组：组内共用 `defaults`（全文、优先级、噪音排除），单个号只写名称、地址和与默认不同的字段；单号的 `title_exclude_pattern` 追加在组规则之后，不会覆盖组规则。
+
+- 访谈与文字稿组：语言即世界（张小珺）、Web3天空之城、Founder Park、十字路口、海外独角兽、晚点AI、晚点再听、深思圈、乱翻书、产品犬舍、AI炼金术、有新Newin、42章经；2026-09 新增非凡产研、极客公园（公众号全文），以及 B 级的 Z Potentials、随机小分队、硅谷101、爱范儿、APPSO、智能涌现、硅星人Pro、51CTO技术栈。
+- 一线实践与方法组：花叔、一泽Eze、范冰、刘言飞语、AI产品黄叔、歸藏、刘小排；新增阿真Irene、小互AI、卡尔的AI沃茨，以及 B 级的 AI产品阿颖、沃垠AI、向阳乔木推荐看、山行AI、土猛的员外、MacTalk、夕小瑶科技说、AI前线、AI科技大本营。
+- 大厂技术团队 Agent 实践组：京东、携程、腾讯云开发者、百度Geek说、字节、阿里、腾讯技术工程、大淘宝、dbaplus、InfoQ。这些号大多写底层基建，组规则用 `title_include_pattern` 只收 Agent 落地、AI Coding、评测方法类标题。
+- 人人都是产品经理：历史审核 5/36 入选，以普通 RSS 接入并回原页取全文。
 - 公众号作战室索引（`type: wechat_index`）作为补充，只保留访谈、实录、复盘和长期实测标题。
 - 按号判断价值，不按平台：同一个号的访谈可能入选，活动报名和资讯不入选，已用标题排除过滤。
 
@@ -52,6 +56,7 @@
 
 - follow-builders：X 上 Claude Code、Codex 等团队一线作者的推文。
 - Anthropic Engineering、OpenAI Developers、Cursor 的 RSS 镜像；The Pragmatic Engineer、Latent Space、Lenny、Simon Willison、Hamel Husain、Addy Osmani、Jason Liu、Every AI & I、Training Data、YC Lightcone。红杉 Training Data 与 Latent Space 带免费英文逐字稿，可用来核对中文编译稿是否忠实，但英文稿本身不进候选。
+- 2026-09 新增：Ben's Bites、Dwarkesh Patel、Stratechery、LukeW，以及 a16z 的 X 账号（xgo.ing 生成的 RSS）。
 - 雷达命中后依次找中文成熟稿：宝玉、Web3天空之城、瓜哥AI新知、Z Finance、海外独角兽、BestBlogs 关键词 feed。都没有就说明中文材料缺位，标记为高研究成本，交给用户判断是否原创。
 
 ### 第五层：独立博客低频池
@@ -64,6 +69,17 @@
 - 需要 Cookie 或已不可用：公共 RSSHub 的知乎和 X 路由、nitter/xcancel、搜狗微信、feeddd、wewe-rss。
 - 已停更：OnBoard!。
 - 各层仍用 `discovery_ledger.py` 记账；连续多轮全文通过率为 0 的来源降为 discovery，不凭印象增删。
+
+## 接入新源的流程
+
+用户提供 OPML 或订阅清单时，按实测数据和逐源评级接入，不整包导入：
+
+1. 解析并去掉已接入的地址，丢弃只属于生活、理财、前端、移动端、后端和运维分类的源。
+2. 低并发探测（wechat2rss 在高并发下会超时）：记录是否可用、近 45 天篇数、AI 相关篇数、正文不少于 2500 字的篇数。近 45 天 AI 全文少于 2 篇的源不进入评审。
+3. 按近 45 天标题逐源评级，依据是编辑判断模型和 `source_yield.py` 列出的真实入选、否决样例。A 级（至少 3 篇像会入选的）按组默认值接入；B 级（1 到 2 篇）用 priority 3，items_limit 低于组默认值；C 级只作线索或不接；X 级不接。
+4. 排除规则只写可以反复出现的噪音栏目或事件类型，例如早报、报名、大会、招聘；不要拿某一篇具体标题里的字眼当规则，否则以后的好文章会被误伤。标题党和炒作用语放进编辑画像的 `hype_or_gossip_terms`，对所有来源统一生效。
+5. 用 `--pool 40` 试抓一轮，比较新旧来源各占多少待终审名额，并逐条看新来源带进来的噪音；噪音集中在某一类标题时，回到第 4 步补规则。
+
 
 ## 搜索组合
 

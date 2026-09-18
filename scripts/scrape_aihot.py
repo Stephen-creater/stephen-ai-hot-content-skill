@@ -23,6 +23,7 @@ import trafilatura
 from bs4 import BeautifulSoup
 
 from curator import canonical_url, clean_text, rank_candidates
+from source_config import load_sources
 from discovery_history import delivered_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
@@ -511,6 +512,9 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
         if source.get("title_exclude_pattern") and source["type"] != "wechat_index":
             exclude = re.compile(source["title_exclude_pattern"])
             rows = [row for row in rows if not exclude.search(row.get("title", ""))]
+        if source.get("title_include_pattern") and source["type"] != "wechat_index":
+            include = re.compile(source["title_include_pattern"], re.I)
+            rows = [row for row in rows if include.search(row.get("title", ""))]
         return rows, None if rows else f"{source['name']}: 未发现条目"
     except Exception as exc:
         return [], f"{source['name']}: {exc}"
@@ -948,7 +952,7 @@ def main() -> None:
     if args.batch and (args.round is None or args.round < 1):
         parser.error("使用 --batch 记账时必须同时提供 --round（从 1 开始）")
 
-    source_config = load_json(RESOURCES / "content_curator_sources.json")
+    source_config = load_sources(RESOURCES / "content_curator_sources.json")
     profile = load_json(RESOURCES / "editorial_profile.json")
     settings = dict(source_config["fetch"])
     if not args.fixture and not args.no_cache:
