@@ -24,7 +24,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 数量不足时继续扩源、读全文、筛选；单轮 0 条是正常中间状态。**不得降标、拿线索凑数，也不得让用户反复催“继续”。**
 
-- **轮与合格**：一轮 = 一次抓取加随后的补充检索，终审完这一轮的材料再开下一轮。台账里的「合格」按机器资格门槛（有全文且资格通过）计，人工记录用同一口径。
+- **轮与合格**：第 1 轮是一次完整抓取；第 2 轮起是 Agent 按缺口定向扩源（换渠道、换作者、换查询），新材料经 `add_source.py` 写入 inbox 后带 `--round <n>` 重跑抓取，共享缓存会让未变化的来源秒回，不要为凑轮次重复完整抓取。终审完这一轮的材料再开下一轮。台账里的「合格」按机器资格门槛（有全文且资格通过）计，人工记录用同一口径。
 - **记账**：抓取带 `--batch <批次ID> --round <轮次>` 自动记账。人工检索用 `.venv/bin/python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 --family <来源族> --channel <渠道> --query <查询> --status success --operation search --round <轮次> --result-count <结果数> --eligible-key <原文链接>`；没有授权或后端的来源族记 `--status blocked --failure-type <原因>`，数量为 0。
 - **停止**：以 `.venv/bin/python3 scripts/discovery_ledger.py stop-check --batch <批次ID>` 的 `should_stop` 为准。它要求：候选且权重 ≥8 的来源族都检索过或记为 blocked，且不能全部 blocked；至少两轮；最近两轮至少有 2 个常规抓取以外、有结果的渠道；最近两轮没有此前未出现的合格材料（按链接跨轮去重）。
 - **兜底**：连续 3 轮人工终审通过数为 0 时，即使 stop-check 未满足也停下，交付缺口报告，由用户决定是否继续。
@@ -53,7 +53,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 2. 发现与全文恢复
 
-- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。模型复排默认关闭，`--ai` 才会调用 OpenRouter 并计费。它每次只输出 `report_candidate_count` 条待终审材料；用户要的数量更多时，从 `discovery.json`、各来源台账和补充检索中继续扩池。来源分层（BestBlogs 与觉醒AI 为主入口，访谈与转录为高命中层，英文一手只作雷达）见来源发现清单。
+- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。模型复排默认关闭，`--ai` 才会调用 OpenRouter 并计费。抓取结果共享缓存 1 小时（文章页 7 天，英文雷达 1 天），并发会话共用；`--no-cache` 强制刷新。默认输出 `report_candidate_count` 条待终审材料，已剔除正文不足 2500 字的文章；要 20 条选题时加 `--pool 40`。来源分层（BestBlogs 与觉醒AI 为主入口，访谈与转录为高命中层，英文一手只作雷达）见来源发现清单。
 - 按原始发布时间从新到旧读。转载时间、网页更新时间、列表日期和重新上榜都不刷新内容年龄；交付前重新检查时效。
 - 聚合页、社区、X 和英文官方资料只作线索或核验；GitHub 项目只能以附带完整中文解读的形式，作为那至多 1 条补充。补充检索找到的原文必须用 `scripts/add_source.py` 写入 inbox 后重新抓取，由程序做资格检查，禁止手写资格记录。机器转录须合并段落、校正专名、标注说话人，不能把字幕墙交给用户。
 - 检查原始公开页面：登录、关注、验证码或付费后才可见的正文直接淘汰；代理或缓存抓到的隐藏文字不算公开完整。
@@ -76,7 +76,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 先用原文标题三态预筛：明显错位、值得读、信息不足。正向标题只换来全文阅读优先级。原页面标题存入 `source_title`，自拟切口存入 `editorial_angle`；不能用改题掩盖原文题材和受众。
 
-按顺序判断五维：选题吸引力、读者改变、材料增量、二创独立性、长期价值。后项优点不能补救前项失败；“勉强能过”按不通过处理。每维的判定标准见[编辑判断模型](references/editorial-judgment.md)。
+按顺序判断五维：选题吸引力、读者改变、材料增量、二创独立性、长期价值。后项优点不能补救前项失败；“勉强能过”按不通过处理。每维的判定标准见[编辑判断模型](references/editorial-judgment.md)。待读材料多时，按来源拆给子代理并行读全文、起草五维证据与原句锚点，主任务逐条复核后才放行。
 
 每条通过项写入 `manual_editorial_review`，字段缺失、只写抽象赞美或没有正文证据的，一律不得发布：
 

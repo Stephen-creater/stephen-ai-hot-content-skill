@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import concurrent.futures
 import json
+import requests
+import os
 import sys
 import tempfile
 import unittest
@@ -17,7 +19,7 @@ from add_source import append_source
 from curator import canonical_url, deduplicate, rank_candidates, redact_untrusted_secrets, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_bestblogs, fetch_follow_builders, fetch_rss, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_bestblogs, http_get, fetch_follow_builders, fetch_rss, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -530,6 +532,48 @@ Language: zh
             self.assertNotIn("已被用户明确淘汰", item["penalty"])
             self.assertNotIn("用户当前不认可该产品", item["penalty"])
             self.assertNotEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+
+    def test_http_cache_is_shared_until_ttl_and_off_by_default(self) -> None:
+        class Response:
+            content, encoding = b'{"ok": 1}', "utf-8"
+
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return json.loads(self.content)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = {"request_timeout_seconds": 1, "cache_dir": tmp, "cache_ttl_seconds": 3600}
+            with patch("scrape_aihot.requests.get", return_value=Response()) as get:
+                self.assertEqual(http_get("https://feed.example/a", settings, params={"b": 2, "a": 1}).json(), {"ok": 1})
+                self.assertEqual(http_get("https://feed.example/a", settings, params={"a": 1, "b": 2}).json(), {"ok": 1})
+                self.assertEqual(get.call_count, 1)
+                http_get("https://feed.example/a", settings, ttl=0)
+                self.assertEqual(get.call_count, 2)
+            with patch("scrape_aihot.requests.get", return_value=Response()) as get:
+                http_get("https://feed.example/a", {"request_timeout_seconds": 1})
+                http_get("https://feed.example/a", {"request_timeout_seconds": 1})
+                self.assertEqual(get.call_count, 2)
+            self.assertFalse(any(name.endswith(".tmp") for name in os.listdir(tmp)))
+
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = {"request_timeout_seconds": 1, "cache_dir": tmp, "failure_cache_ttl_seconds": 900}
+            with patch("scrape_aihot.requests.get", side_effect=requests.ConnectionError("timed out")) as get:
+                for _ in range(3):
+                    with self.assertRaises(requests.RequestException):
+                        http_get("https://dead.example/feed", settings)
+                self.assertEqual(get.call_count, 1)
+
+    def test_review_pool_skips_articles_too_short_to_publish(self) -> None:
+        shortlisted = {"machine_disposition": "shortlist"}
+        ranked = [
+            {"link": "https://a.example/1", "content_status": "fulltext", "content": "短" * 100, "editorial_decision": shortlisted},
+            {"link": "https://a.example/2", "content_status": "fulltext", "content": "长" * 3000, "editorial_decision": shortlisted},
+            {"link": "https://a.example/3", "content_status": "summary", "content": "", "editorial_decision": shortlisted},
+        ]
+        links = [row["link"] for row in select_report_candidates(ranked, 10, maximum_github=1, min_article_chars=2500)]
+        self.assertEqual(links, ["https://a.example/2", "https://a.example/3"])
 
     def test_paged_web_index_walks_pages_and_dedupes(self) -> None:
         pages = {

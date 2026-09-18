@@ -1,18 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import concurrent.futures
 import functools
+import hashlib
 import json
 import os
 import re
 import shutil
 import subprocess
 import tempfile
+import time
 import zlib
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from urllib.parse import quote, urljoin, urlparse
+from urllib.parse import quote, urlencode, urljoin, urlparse
 
 import feedparser
 import requests
@@ -28,6 +31,81 @@ from report import generate_report
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = ROOT / "resources"
 HEADERS = {"User-Agent": "StephenTopicCurator/1.0 (+https://github.com/Stephen-creater)"}
+
+
+def parse_feed(content: bytes):
+    # Bodies are converted to plain text and escaped in the report, so feedparser's HTML sanitizing is pure cost.
+    return feedparser.parse(content, sanitize_html=False, resolve_relative_uris=False)
+
+
+class CachedResponse:
+    """Minimal stand-in for requests.Response served from the shared on-disk cache."""
+
+    status_code = 200
+
+    def __init__(self, content: bytes, encoding: str | None):
+        self.content, self.encoding = content, encoding
+
+    @property
+    def text(self) -> str:
+        return decode_html(self.content, self.encoding)
+
+    def json(self):
+        return json.loads(self.content)
+
+    def raise_for_status(self) -> None:
+        return None
+
+
+def cache_path(settings: dict, key: str) -> Path | None:
+    directory = settings.get("cache_dir")
+    return Path(directory) / f"{hashlib.sha1(key.encode('utf-8')).hexdigest()}.json" if directory else None
+
+
+def cache_read(settings: dict, key: str, ttl: int) -> dict | None:
+    path = cache_path(settings, key)
+    if not path or ttl <= 0 or not path.exists() or time.time() - path.stat().st_mtime > ttl:
+        return None
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+
+
+def cache_write(settings: dict, key: str, content: bytes, encoding: str | None, **extra) -> None:
+    path = cache_path(settings, key)
+    if not path:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temp = path.with_suffix(f".{os.getpid()}.tmp")
+    # Atomic replace so two concurrent batches can share the cache without torn files.
+    temp.write_text(json.dumps({"body": base64.b64encode(content).decode("ascii"), "encoding": encoding, **extra}), encoding="utf-8")
+    os.replace(temp, path)
+
+
+def http_get(url: str, settings: dict, params: dict | None = None, ttl: int | None = None):
+    """GET through a shared TTL cache; sources update hourly at best, so repeat rounds should not refetch."""
+    ttl = int(settings.get("cache_ttl_seconds", 3600) if ttl is None else ttl)
+    key = url + ("?" + urlencode(sorted(params.items())) if params else "")
+    cached = cache_read(settings, key, ttl)
+    if cached is not None:
+        return CachedResponse(base64.b64decode(cached["body"]), cached.get("encoding"))
+    failure = cache_read(settings, "failed:" + key, int(settings.get("failure_cache_ttl_seconds", 0)))
+    if failure is not None:
+        raise requests.RequestException(f"最近已失败，暂不重试：{failure.get('error', '')}")
+    kwargs = {"headers": HEADERS, "timeout": settings["request_timeout_seconds"]}
+    if params:
+        kwargs["params"] = params
+    try:
+        response = requests.get(url, **kwargs)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        # Remember dead endpoints briefly so repeated rounds do not wait out the same timeouts.
+        cache_write(settings, "failed:" + key, b"", None, error=str(exc)[:200])
+        raise
+    if cache_path(settings, key) and ttl > 0:
+        cache_write(settings, key, response.content, response.encoding)
+    return response
 
 
 def load_json(path: Path) -> dict | list:
@@ -75,9 +153,9 @@ def html_to_text(value: str | None) -> str:
 
 
 def fetch_rss(source: dict, settings: dict) -> list[dict]:
-    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
     response.raise_for_status()
-    feed = feedparser.parse(response.content)
+    feed = parse_feed(response.content)
     items = []
     for entry in feed.entries[: int(source.get("items_limit", settings["rss_items_per_source"]))]:
         body = html_to_text((entry.get("content") or [{}])[0].get("value")) if source.get("use_feed_content") else ""
@@ -129,9 +207,9 @@ def bestblogs_transcript(podcast: dict) -> str:
 
 def fetch_bestblogs(source: dict, settings: dict) -> list[dict]:
     """Use BestBlogs' scored feed for discovery and its resource API to recover the original URL and body."""
-    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
     response.raise_for_status()
-    feed = feedparser.parse(response.content)
+    feed = parse_feed(response.content)
     skip_types = set(source.get("skip_types", ["status", "video"]))
     targets, seen = [], set()
     for entry in feed.entries:
@@ -146,8 +224,7 @@ def fetch_bestblogs(source: dict, settings: dict) -> list[dict]:
     def resolve(target: tuple) -> dict | None:
         kind, resource_id, entry = target
         try:
-            payload = requests.get(source["api_url_template"].format(id=resource_id), headers=HEADERS,
-                                   timeout=settings["request_timeout_seconds"])
+            payload = http_get(source["api_url_template"].format(id=resource_id), settings, ttl=source.get("cache_ttl_seconds"))
             payload.raise_for_status()
             data = payload.json()
             data = data.get("data", data) if isinstance(data, dict) else {}
@@ -185,7 +262,7 @@ def fetch_bestblogs(source: dict, settings: dict) -> list[dict]:
 
 def fetch_follow_builders(source: dict, settings: dict) -> list[dict]:
     """Builder tweets are radar only: they point to a topic, never to deliverable Chinese material."""
-    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
     response.raise_for_status()
     builders = response.json().get("x")
     if not isinstance(builders, list):
@@ -229,13 +306,10 @@ def fetch_wechat_index(source: dict, settings: dict) -> list[dict]:
     """Read a public WeChat article index, keeping interviews and long-horizon practice over news flashes."""
     end = datetime.now()
     start = end - timedelta(days=int(source.get("lookback_days", 5)))
-    response = requests.get(
-        source["url"],
+    response = http_get(
+        source["url"], settings, ttl=source.get("cache_ttl_seconds"),
         params={"start": start.strftime("%Y%m%d"), "end": end.strftime("%Y%m%d"), "limit": int(source.get("index_limit", 2000))},
-        headers=HEADERS,
-        timeout=settings["request_timeout_seconds"],
     )
-    response.raise_for_status()
     articles = response.json().get("articles")
     if not isinstance(articles, list):
         raise ValueError("公众号公开索引数据结构变化：缺少 articles 列表")
@@ -275,11 +349,8 @@ def fetch_wechat_index(source: dict, settings: dict) -> list[dict]:
 
     def attach_body(row: dict) -> dict:
         try:
-            body = requests.get(
-                source["content_url_template"].format(key=quote(row["index_article_key"], safe="")),
-                headers=HEADERS, timeout=settings["request_timeout_seconds"],
-            )
-            body.raise_for_status()
+            body = http_get(source["content_url_template"].format(key=quote(row["index_article_key"], safe="")),
+                            settings, ttl=int(settings.get("page_cache_ttl_seconds", 0)))
             payload = body.json()
             article = payload.get("article", payload) if isinstance(payload, dict) else {}
             content = str(article.get("content") or "").strip()
@@ -295,7 +366,7 @@ def fetch_wechat_index(source: dict, settings: dict) -> list[dict]:
 
 
 def fetch_web_index(source: dict, settings: dict) -> list[dict]:
-    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
     response.raise_for_status()
     soup = BeautifulSoup(decode_html(response.content, response.encoding), "html.parser")
     selectors = "article a[href], main a[href], div.bg-card a[href]"
@@ -341,7 +412,7 @@ def fetch_web_index(source: dict, settings: dict) -> list[dict]:
 
 
 def fetch_aihot(source: dict, settings: dict) -> list[dict]:
-    response = requests.get(source["url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
     response.raise_for_status()
     soup = BeautifulSoup(response.text, "html.parser")
     allowed = set(source.get("allowed_platforms", []))
@@ -384,7 +455,7 @@ def fetch_aihot(source: dict, settings: dict) -> list[dict]:
 
 
 def fetch_learnprompt_radar(source: dict, settings: dict) -> list[dict]:
-    response = requests.get(source["data_url"], headers=HEADERS, timeout=settings["request_timeout_seconds"])
+    response = http_get(source["data_url"], settings, ttl=source.get("cache_ttl_seconds"))
     response.raise_for_status()
     payload = response.json()
     entries = payload.get("items_all") if isinstance(payload, dict) else None
@@ -453,29 +524,50 @@ def hydrate(item: dict, settings: dict) -> dict:
     ):
         return item
     try:
-        with requests.get(
-            item["link"],
-            headers=HEADERS,
-            timeout=settings["request_timeout_seconds"],
-            stream=True,
-        ) as response:
-            response.raise_for_status()
-            chunks = []
-            size = 0
-            truncated = False
-            for chunk in response.iter_content(65536):
-                if not chunk:
-                    continue
-                remaining = settings["max_article_bytes"] - size
-                if remaining <= 0:
-                    truncated = True
-                    break
-                if len(chunk) > remaining:
-                    truncated = True
-                chunks.append(chunk[:remaining])
-                size += min(len(chunk), remaining)
-            raw = b"".join(chunks)
-            text = decode_html(raw, response.encoding)
+        # Article pages rarely change after publication, so they are cached longer than feeds.
+        page_ttl = int(settings.get("page_cache_ttl_seconds", 0))
+        cached = cache_read(settings, item["link"], page_ttl)
+        failure = None if cached is not None else cache_read(settings, "failed:" + item["link"], int(settings.get("failure_cache_ttl_seconds", 0)))
+        if failure is not None:
+            raise requests.RequestException(f"最近已失败，暂不重试：{failure.get('error', '')}")
+        if cached is not None:
+            raw, truncated = base64.b64decode(cached["body"]), bool(cached.get("truncated"))
+            text = decode_html(raw, cached.get("encoding"))
+        else:
+            with requests.get(
+                item["link"],
+                headers=HEADERS,
+                timeout=settings["request_timeout_seconds"],
+                stream=True,
+            ) as response:
+                response.raise_for_status()
+                chunks = []
+                size = 0
+                truncated = False
+                for chunk in response.iter_content(65536):
+                    if not chunk:
+                        continue
+                    remaining = settings["max_article_bytes"] - size
+                    if remaining <= 0:
+                        truncated = True
+                        break
+                    if len(chunk) > remaining:
+                        truncated = True
+                    chunks.append(chunk[:remaining])
+                    size += min(len(chunk), remaining)
+                raw = b"".join(chunks)
+                text = decode_html(raw, response.encoding)
+            if page_ttl > 0:
+                cache_write(settings, item["link"], raw, response.encoding, truncated=truncated)
+    except requests.RequestException as exc:
+        if not str(exc).startswith("最近已失败"):
+            cache_write(settings, "failed:" + item["link"], b"", None, error=str(exc)[:200])
+        item["fetch_error"] = str(exc)
+        return item
+    except Exception as exc:
+        item["fetch_error"] = str(exc)
+        return item
+    try:
         extracted = trafilatura.extract(text, include_comments=False, include_tables=True) or ""
         if extracted:
             item["content"] = extracted.strip()
@@ -741,11 +833,14 @@ def select_report_candidates(
     limit: int,
     include_rejected: bool = False,
     maximum_github: int | None = None,
+    min_article_chars: int = 0,
 ) -> list[dict]:
     eligible = ranked if include_rejected else [
         item for item in ranked
-        if item.get("editorial_decision", {}).get("machine_disposition") in {"shortlist", "review"}
-        or ("editorial_decision" not in item and item.get("recommended"))
+        if (item.get("editorial_decision", {}).get("machine_disposition") in {"shortlist", "review"}
+            or ("editorial_decision" not in item and item.get("recommended")))
+        # Publishing rejects short articles anyway; do not spend reading time on them.
+        and not (min_article_chars and item.get("content_status") == "fulltext" and len(item.get("content", "")) < min_article_chars)
     ]
     if include_rejected or maximum_github is None:
         return eligible[:limit]
@@ -847,13 +942,17 @@ def main() -> None:
     parser.add_argument("--batch", help="写入检索账本时使用的批次 ID；不填则不记账")
     parser.add_argument("--owner", choices=["主力", "主力2"], default="主力")
     parser.add_argument("--round", type=int, help="本批第几轮检索，从 1 开始；与 --batch 同时使用")
+    parser.add_argument("--pool", type=int, help="输出的待终审条数，默认取画像 report_candidate_count；要 20 条选题时可设 40")
+    parser.add_argument("--no-cache", action="store_true", help="忽略共享抓取缓存，全部重新请求")
     args = parser.parse_args()
     if args.batch and (args.round is None or args.round < 1):
         parser.error("使用 --batch 记账时必须同时提供 --round（从 1 开始）")
 
     source_config = load_json(RESOURCES / "content_curator_sources.json")
     profile = load_json(RESOURCES / "editorial_profile.json")
-    settings = source_config["fetch"]
+    settings = dict(source_config["fetch"])
+    if not args.fixture and not args.no_cache:
+        settings["cache_dir"] = str(ROOT / ".local" / "cache" / "http")
     errors = []
     source_attempts = []
     feedback_store = ROOT / ".local" / "editorial_feedback.jsonl"
@@ -888,7 +987,7 @@ def main() -> None:
     ranked = [item for item in ranked if str(item["id"]) not in reviewed_ids]
     skipped_content_duplicate_count = sum(1 for item in ranked if is_historical_content_duplicate(item, reviewed_candidates))
     ranked = [item for item in ranked if not is_historical_content_duplicate(item, reviewed_candidates)]
-    report_count = profile["report_candidate_count"]
+    report_count = args.pool or profile["report_candidate_count"]
     minimum_delivery_count = int(profile.get("minimum_delivery_count", 5))
     minimum_non_github_candidates = int(profile.get("minimum_non_github_candidates", 1))
     maximum_github_candidates = int(profile.get("maximum_github_candidates", 1))
@@ -909,6 +1008,7 @@ def main() -> None:
         report_count,
         include_rejected=args.include_rejected,
         maximum_github=maximum_github_candidates,
+        min_article_chars=0 if args.fixture else int(settings.get("minimum_review_chars", 0)),
     )
     if args.ai and not args.no_ai and api_key():
         try:

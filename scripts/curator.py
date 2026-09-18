@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import functools
+from collections import Counter
 import html
 import re
 from datetime import datetime, timezone
@@ -78,16 +80,39 @@ def parse_datetime(value: str | None) -> datetime | None:
         return None
 
 
+@functools.lru_cache(maxsize=16384)
+def normalized_title(text: str) -> str:
+    return re.sub(r"\W+", "", text.lower())
+
+
 def title_similarity(left: str, right: str) -> float:
-    normalize = lambda text: re.sub(r"\W+", "", text.lower())
-    return SequenceMatcher(None, normalize(left), normalize(right)).ratio()
+    return SequenceMatcher(None, normalized_title(left), normalized_title(right)).ratio()
+
+
+@functools.lru_cache(maxsize=16384)
+def title_char_counts(text: str) -> Counter:
+    return Counter(normalized_title(text))
+
+
+def titles_at_least(left: str, right: str, threshold: float) -> bool:
+    """Same verdict as title_similarity >= threshold, rejecting most pairs by difflib's own upper bounds first."""
+    a, b = normalized_title(left), normalized_title(right)
+    total = len(a) + len(b)
+    if not total:
+        return True
+    # real_quick_ratio and quick_ratio bounds, computed without building a matcher for every pair.
+    if 2.0 * min(len(a), len(b)) / total < threshold:
+        return False
+    if 2.0 * sum((title_char_counts(left) & title_char_counts(right)).values()) / total < threshold:
+        return False
+    return SequenceMatcher(None, a, b).ratio() >= threshold
 
 
 def deduplicate(items: list[dict]) -> list[dict]:
     kept: list[dict] = []
 
     def same_title_content(left: dict, right: dict) -> bool:
-        if title_similarity(left.get("title", ""), right.get("title", "")) < 0.86:
+        if not titles_at_least(left.get("title", ""), right.get("title", ""), 0.86):
             return False
         texts = [re.sub(r"\W+", "", clean_text(row.get("content", "")).lower()) for row in (left, right)]
         if not all(row.get("content_status") in {"fulltext", "transcript"} for row in (left, right)) or min(map(len, texts)) < 400:
@@ -103,22 +128,24 @@ def deduplicate(items: list[dict]) -> list[dict]:
             int(item.get("source_priority", 0)),
         )
 
+    urls: list[str] = []
     for item in items:
         url = canonical_url(item.get("link", ""))
         duplicate_index = next(
             (
                 index
                 for index, old in enumerate(kept)
-                if (url and url == canonical_url(old.get("link", "")))
-                or same_title_content(item, old)
+                if (url and url == urls[index]) or same_title_content(item, old)
             ),
             None,
         )
         if duplicate_index is not None:
             if richness(item) > richness(kept[duplicate_index]):
                 kept[duplicate_index] = item
+                urls[duplicate_index] = url
             continue
         kept.append(item)
+        urls.append(url)
     return kept
 
 
