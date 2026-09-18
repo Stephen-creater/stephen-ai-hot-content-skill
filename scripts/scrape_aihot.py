@@ -22,7 +22,6 @@ from curator import canonical_url, clean_text, rank_candidates
 from discovery_history import delivered_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
-from zhuque_aigc import ZhuqueClient, apply_policy, estimate_text_cost_yuan, load_config
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -839,7 +838,7 @@ def main() -> None:
     parser.add_argument("--include-rejected", action="store_true", help="调试时在报告中包含未通过硬门槛的内容")
     parser.add_argument("--ai", action="store_true", help="调用 OpenRouter 模型复排（会计费，默认关闭）")
     parser.add_argument("--no-ai", action="store_true", help="兼容旧命令：不调用模型复排（现为默认行为）")
-    parser.add_argument("--no-aigc", action="store_true", help="不调用朱雀 AIGC 文本检测")
+    parser.add_argument("--no-aigc", action="store_true", help=argparse.SUPPRESS)  # 朱雀检测已移除，保留以兼容旧命令
     parser.add_argument("--model", default="google/gemini-3-flash-preview")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
     parser.add_argument("--batch", help="写入检索账本时使用的批次 ID；不填则不记账")
@@ -890,67 +889,6 @@ def main() -> None:
     minimum_delivery_count = int(profile.get("minimum_delivery_count", 5))
     minimum_non_github_candidates = int(profile.get("minimum_non_github_candidates", 1))
     maximum_github_candidates = int(profile.get("maximum_github_candidates", 1))
-
-    aigc_status = "disabled" if args.no_aigc or args.fixture else "not_configured"
-    aigc_checked_count = 0
-    aigc_rejected_count = 0
-    aigc_estimated_max_cost_yuan = 0.0
-    if not args.no_aigc and not args.fixture:
-        try:
-            zhuque_config = load_config()
-            if zhuque_config:
-                client = ZhuqueClient(zhuque_config)
-                eligible_items = [
-                    item for item in ranked
-                    if (
-                        item.get("editorial_decision", {}).get("eligibility", {}).get("status") == "passed"
-                        and item.get("content_status") in {"fulltext", "transcript"}
-                        and len(item.get("content", "")) >= 1000
-                    )
-                ]
-                eligible_ids = {id(item) for item in eligible_items}
-                aigc_estimated_max_cost_yuan = round(
-                    sum(
-                        estimate_text_cost_yuan(item["content"])
-                        for item in eligible_items
-                        if not client.has_cached_text(item["content"])
-                    ),
-                    2,
-                )
-                if aigc_estimated_max_cost_yuan > zhuque_config.max_cost_yuan_per_run:
-                    aigc_status = "budget_exceeded"
-                    errors.append(
-                        f"朱雀本轮费用上限保护：最多约 {aigc_estimated_max_cost_yuan:.2f} 元，"
-                        f"超过配置上限 {zhuque_config.max_cost_yuan_per_run:.2f} 元，未发起检测"
-                    )
-                else:
-                    aigc_status = "completed"
-                    updated_ranked = []
-                    for item in ranked:
-                        eligible = id(item) in eligible_ids
-                        if not eligible:
-                            updated_ranked.append(item)
-                            continue
-                        try:
-                            detected = apply_policy(item, client.classify_text(item["content"]), zhuque_config)
-                            aigc_checked_count += 1
-                            aigc_rejected_count += int(detected.get("aigc_policy") == "rejected")
-                            updated_ranked.append(detected)
-                        except Exception as exc:
-                            errors.append(f"朱雀检测失败 {item.get('title', '未知标题')}: {exc}")
-                            updated_ranked.append({**item, "aigc_policy": "unknown"})
-                    ranked = sorted(
-                        updated_ranked,
-                        key=lambda item: (
-                            item.get("machine_shortlisted", item.get("recommended", False)),
-                            item.get("recommended", False),
-                            item.get("score", 0),
-                        ),
-                        reverse=True,
-                    )
-        except Exception as exc:
-            aigc_status = "configuration_error"
-            errors.append(f"朱雀配置无效，未执行 AIGC 检测: {exc}")
 
     if args.batch and not args.fixture:
         record_source_attempts(source_attempts, items, ranked, args, int(profile["max_age_days"]), errors)
@@ -1005,10 +943,6 @@ def main() -> None:
                 "skipped_content_duplicate_count": skipped_content_duplicate_count,
                 "rejected_by_gate_count": rejected_by_gate_count,
                 "held_for_editorial_review_count": held_for_editorial_review_count,
-                "aigc_status": aigc_status,
-                "aigc_checked_count": aigc_checked_count,
-                "aigc_rejected_count": aigc_rejected_count,
-                "aigc_estimated_max_cost_yuan": aigc_estimated_max_cost_yuan,
                 "candidate_count": len(candidates),
                 "minimum_delivery_count": minimum_delivery_count,
                 "minimum_non_github_candidates": minimum_non_github_candidates,

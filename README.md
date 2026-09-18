@@ -71,9 +71,9 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 默认不使用 OpenCLI，避免 Browser Bridge 调试或抢占用户的 Google Chrome；唯一例外是知乎扩源时读取适配器的只读能力契约，见 [知乎路由](references/zhihu-cli-ego.md)。需要浏览器补充时使用 Ego Browser 隔离任务空间；常规检索不要求打开浏览器。
 
-API Key、Cookie、登录态、审核反馈和完整候选正文都不得进入公开仓库。Agent Reach 与朱雀均为可选辅助能力；工具不可用或检测失败时不得伪造结论。
+API Key、Cookie、登录态、审核反馈和完整候选正文都不得进入公开仓库。Agent Reach 为可选辅助能力；工具不可用或检测失败时不得伪造结论。
 
-可选模型复排读取 `OPENROUTER_API_KEY` 或忽略目录中的 `.config/openrouter_api_key.txt`。朱雀读取 `ZHUQUE_GATEWAY`、`ZHUQUE_API_KEY` 或 `.config/zhuque.json`，具体协议见 [朱雀说明](references/zhuque-aigc.md)。
+可选模型复排读取 `OPENROUTER_API_KEY` 或忽略目录中的 `.config/openrouter_api_key.txt`。
 
 离线演示：
 

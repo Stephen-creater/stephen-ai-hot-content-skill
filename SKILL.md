@@ -40,7 +40,6 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 扩源或调整来源：[来源发现清单](references/source_discovery_playbook.md)
 - 跨平台检索：[Agent Reach 路由](references/agent-reach-discovery.md)
 - 知乎：[知乎 CLI 与 Ego 路由](references/zhihu-cli-ego.md)
-- 朱雀检测：[朱雀说明](references/zhuque-aigc.md)
 
 `resources/editorial_profile.json` 与 `resources/content_curator_sources.json` 主要供脚本读取，只在修改画像、修改来源或排查误判时打开。
 
@@ -54,7 +53,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 2. 发现与全文恢复
 
-- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。模型复排默认关闭，`--ai` 才会调用 OpenRouter 并计费；配置朱雀后默认检测并计费，`--no-aigc` 跳过。它每次只输出 `report_candidate_count` 条待终审材料；用户要的数量更多时，从 `discovery.json`、各来源台账和补充检索中继续扩池。来源分层（BestBlogs 与觉醒AI 为主入口，访谈与转录为高命中层，英文一手只作雷达）见来源发现清单。
+- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。模型复排默认关闭，`--ai` 才会调用 OpenRouter 并计费。它每次只输出 `report_candidate_count` 条待终审材料；用户要的数量更多时，从 `discovery.json`、各来源台账和补充检索中继续扩池。来源分层（BestBlogs 与觉醒AI 为主入口，访谈与转录为高命中层，英文一手只作雷达）见来源发现清单。
 - 按原始发布时间从新到旧读。转载时间、网页更新时间、列表日期和重新上榜都不刷新内容年龄；交付前重新检查时效。
 - 聚合页、社区、X 和英文官方资料只作线索或核验；GitHub 项目只能以附带完整中文解读的形式，作为那至多 1 条补充。补充检索找到的原文必须用 `scripts/add_source.py` 写入 inbox 后重新抓取，由程序做资格检查，禁止手写资格记录。机器转录须合并段落、校正专名、标注说话人，不能把字幕墙交给用户。
 - 检查原始公开页面：登录、关注、验证码或付费后才可见的正文直接淘汰；代理或缓存抓到的隐藏文字不算公开完整。
@@ -70,7 +69,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 即时事件不超过 5 天，深度材料遵守画像时间窗；
 - GitHub 实时不少于 100 Star，且近 7 天有实质更新；
 - 不属于屏蔽来源、屏蔽作者或精确主题状态；
-- 文章自己没有披露由 AI 生成；已配置朱雀时，检测 `ai ≥ 98%` 同样硬淘汰（其余区间只作风险提示，见朱雀说明）；
+- 文章自己没有披露由 AI 生成；
 - 关键内容不在缺失的图片里。
 
 ### 4. 五维人工终审
@@ -138,7 +137,7 @@ AI 味、新闻腔、第一人称、技术词、访谈、图片多、垂直行�
 - 默认不调用 OpenCLI；只有知乎扩源可按知乎路由读取适配器的能力契约。不为取得 Cookie 启动或接管用户 Chrome。
 - Ego Browser 只在常规来源不足、原文确需浏览器或用户指定时按缺口使用；登录态只用于发现与核验，候选原文必须公开可读，不索取、不导出 Cookie。空间、限频与验证码处理见 [Agent Reach 路由](references/agent-reach-discovery.md)。
 - 只有用户明确要求时才开启多任务协作。协作时认领不重叠的来源，工作文件分开放；共同批次由一个归属任务发布并导入反馈，不按下载时间猜反馈归属。
-- 朱雀除 `ai ≥ 98%` 硬淘汰外、以及模型复排，都只是辅助证据；未配置或失败表示未知，不能证明由人创作。自动分数 `discovery_score` 只负责排序。
+- 模型复排只是辅助排序；未配置或失败表示未知。自动分数 `discovery_score` 只负责排序。
 - 单批反馈不得把读者兴趣、题材偏好、技术难度或二创难度升级为硬失败。只有语言、公开完整性、时效、精确历史状态、来源安全和可核验平台门槛这类事实可以硬拦截。
 
 ## 修改后的验证
