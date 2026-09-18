@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import concurrent.futures
+import functools
 import json
 import os
 import re
@@ -772,16 +773,18 @@ def delivery_mix_ready(
     return len(candidates) >= minimum_count and non_github_count >= minimum_non_github and github_count <= maximum_github
 
 
-def normalized_content_shingles(value: str, size: int = 24) -> set[str]:
+@functools.lru_cache(maxsize=8192)
+def normalized_content_shingles(value: str, size: int = 24) -> frozenset[str]:
     normalized = re.sub(r"\W+", "", clean_text(value).lower())[:12000]
     if len(normalized) < 800:
-        return set()
+        return frozenset()
     # Anchor shingles on content rather than fixed offsets, so a repost with an extra preface still aligns.
-    return {
+    # Memoized: each history item is compared against every new item, so recomputing dominated run time.
+    return frozenset(
         normalized[index : index + size]
         for index in range(len(normalized) - size + 1)
         if zlib.crc32(normalized[index : index + 4].encode("utf-8")) % 12 == 0
-    }
+    )
 
 
 def is_historical_content_duplicate(item: dict, reviewed_candidates: list[dict], threshold: float = 0.68) -> bool:
