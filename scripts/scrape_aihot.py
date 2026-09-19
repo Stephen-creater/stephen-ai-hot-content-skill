@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import concurrent.futures
+import functools
 import hashlib
 import json
 import os
@@ -866,6 +867,7 @@ def select_report_candidates(
     return selected
 
 
+@functools.lru_cache(maxsize=8192)
 def normalized_content_shingles(value: str, size: int = 24) -> frozenset[str]:
     normalized = re.sub(r"\W+", "", clean_text(value).lower())[:12000]
     if len(normalized) < 800:
