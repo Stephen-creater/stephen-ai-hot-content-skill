@@ -21,12 +21,20 @@
 | `exa_search` | 全网 | 按主题跨站搜长文、博客 | `mcporter call exa.web_search_exa query="<查询>" numResults=10` | 可用，结果中 SEO 内容多，要逐条看 |
 | `github` | GitHub | 搜仓库，核对 Star、最近更新、Release | `gh search repos "<查询>" --sort updated --limit 10` | 可用 |
 | `youtube` | YouTube | 取字幕 | `yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "<URL>"` | 可用 |
-| `bilibili` | B 站 | 搜视频、取字幕 | `bili search "<查询>" --type video -n 10` | 本机网络对 api.bilibili.com 的加密连接失败，暂时不可用 |
+| `bilibili` | B 站 | 搜视频、取字幕 | `bili search "<查询>" --type video -n 10` | 可用 |
 | `twitter` | X | 搜推文、看作者时间线 | `twitter search "<查询>" -n 10`，或走浏览器 | 命令行查询超时；用浏览器 |
 | `v2ex` | V2EX | 热门帖、节点、帖子详情 | `curl -s https://www.v2ex.com/api/topics/hot.json` | 可用 |
 | `zhihu` | 知乎 | 搜索、读回答和专栏、看作者文章 | 见下文“知乎” | 需要浏览器登录态 |
 | `browser` | 需要登录或渲染的页面 | X、小红书、Reddit、知乎的搜索、详情、作者页 | `ego-browser`（隔离浏览器） | 可用 |
 | `local_transcribe` | 播客音频 | 本机离线转文字 | 见下文“音视频转文字” | 需要本地模型 |
+
+## 国内站点的网络
+
+本机代理是全局模式，国内站点（公众号原文、知乎、掘金、InfoQ、B 站、小红书、微博、抖音、百度等）要经本机的 `cn-direct` 直连才打得开。本仓库的会话启动时已自动配好：命令行里的 curl、Python、Node 和 `ego-browser` 都会自动走它，不用加前缀。
+
+- 国内站点报 `SSL`、`WRONG_VERSION_NUMBER` 或 `ERR_SSL_PROTOCOL_ERROR`，是没走上直连，不是网站挂了。命令前加 `cn-direct` 重试，例如 `cn-direct curl -s <URL>`。
+- `ego-browser` 提示 ego lite 缺少国内直连参数时，请你完全退出 ego lite，再重跑一次命令。
+- 海外站点照常走代理，不受影响。
 
 ## 浏览器渠道
 
