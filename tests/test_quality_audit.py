@@ -12,11 +12,10 @@ from quality_audit import audit
 
 
 class QualityAuditTest(unittest.TestCase):
-    def test_enterprise_quality_floor_is_explicit_and_met(self):
+    def test_structure_checks_pass_without_a_score(self):
         report = audit()
-        self.assertEqual(report["possible"], 100)
-        self.assertGreaterEqual(report["score"], 95, report["failed_checks"])
-        self.assertTrue(report["passed"])
+        self.assertTrue(report["passed"], report["failed"])
+        self.assertNotIn("score", report)
 
 
 if __name__ == "__main__":

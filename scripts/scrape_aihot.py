@@ -910,18 +910,6 @@ def select_report_candidates(
     return selected
 
 
-def delivery_mix_ready(
-    candidates: list[dict],
-    minimum_count: int,
-    minimum_non_github: int = 1,
-    maximum_github: int = 1,
-) -> bool:
-    non_github_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() != "github.com")
-    github_count = len(candidates) - non_github_count
-    return len(candidates) >= minimum_count and non_github_count >= minimum_non_github and github_count <= maximum_github
-
-
-@functools.lru_cache(maxsize=8192)
 def normalized_content_shingles(value: str, size: int = 24) -> frozenset[str]:
     normalized = re.sub(r"\W+", "", clean_text(value).lower())[:12000]
     if len(normalized) < 800:
@@ -995,7 +983,7 @@ def main() -> None:
     parser.add_argument("--batch", help="写入检索账本时使用的批次 ID；不填则不记账")
     parser.add_argument("--owner", choices=["主力", "主力2"], default="主力")
     parser.add_argument("--round", type=int, help="本批第几轮检索，从 1 开始；与 --batch 同时使用")
-    parser.add_argument("--pool", type=int, help="输出的待终审条数，默认取画像 report_candidate_count；要 20 条选题时可设 40")
+    parser.add_argument("--pool", type=int, help="输出的待终审条数，默认取画像 report_candidate_count（30，对应默认 10 条选题）；要 20 条时可设 60")
     parser.add_argument("--no-cache", action="store_true", help="忽略共享抓取缓存，全部重新请求")
     args = parser.parse_args()
     if args.batch and (args.round is None or args.round < 1):
@@ -1041,9 +1029,6 @@ def main() -> None:
     skipped_content_duplicate_count = sum(1 for item in ranked if is_historical_content_duplicate(item, reviewed_candidates))
     ranked = [item for item in ranked if not is_historical_content_duplicate(item, reviewed_candidates)]
     report_count = args.pool or profile["report_candidate_count"]
-    minimum_delivery_count = int(profile.get("minimum_delivery_count", 5))
-    minimum_non_github_candidates = int(profile.get("minimum_non_github_candidates", 1))
-    maximum_github_candidates = int(profile.get("maximum_github_candidates", 1))
 
     if args.batch and not args.fixture:
         record_source_attempts(source_attempts, items, ranked, args, int(profile["max_age_days"]), errors)
@@ -1060,7 +1045,6 @@ def main() -> None:
         ranked,
         report_count,
         include_rejected=args.include_rejected,
-        maximum_github=maximum_github_candidates,
         min_article_chars=0 if args.fixture else minimum_article_chars(profile),
     )
     if args.ai and not args.no_ai and api_key():
@@ -1069,18 +1053,7 @@ def main() -> None:
         except Exception as exc:
             errors.append(f"AI 复排失败，已使用确定性排序: {exc}")
 
-    selection_count = profile["selection_count"]
-    for index, item in enumerate(candidates):
-        item["selected_by_default"] = index < selection_count and item.get("machine_shortlisted", item["recommended"])
-
-    non_github_candidate_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() != "github.com")
-    github_candidate_count = len(candidates) - non_github_candidate_count
-    ready_to_deliver = delivery_mix_ready(
-        candidates,
-        minimum_delivery_count,
-        minimum_non_github_candidates,
-        maximum_github_candidates,
-    )
+    github_candidate_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() == "github.com")
 
     timestamp = datetime.now().strftime("%Y-%m-%d-%H%M%S")
     output_dir = args.output_root / timestamp
@@ -1105,12 +1078,8 @@ def main() -> None:
                 "rejected_by_gate_count": rejected_by_gate_count,
                 "held_for_editorial_review_count": held_for_editorial_review_count,
                 "candidate_count": len(candidates),
-                "minimum_delivery_count": minimum_delivery_count,
-                "minimum_non_github_candidates": minimum_non_github_candidates,
-                "maximum_github_candidates": maximum_github_candidates,
-                "non_github_candidate_count": non_github_candidate_count,
+                "default_topic_count": int(profile.get("default_topic_count", 10)),
                 "github_candidate_count": github_candidate_count,
-                "composition_ready": ready_to_deliver,
                 "delivery_ready": False,
                 "include_rejected": args.include_rejected,
                 "errors": errors,
@@ -1122,10 +1091,6 @@ def main() -> None:
     )
     generate_report(candidates, output_dir / "index.html", timestamp)
     print(f"待终审材料 {len(candidates)} 条，输入 {len(items)} 条，资格拒绝 {rejected_by_gate_count} 条；须完成原文终审与发布登记")
-    if len(candidates) < minimum_delivery_count and not args.fixture:
-        print(f"尚未达到交付门槛 {minimum_delivery_count} 条：继续扩源，直到满足完成契约或停止条件；不得用弱题补位")
-    elif non_github_candidate_count < minimum_non_github_candidates and not args.fixture:
-        print("候选全部来自 GitHub：继续补充高质量中文文章、博客或完整音视频材料，不得交付单一来源批次")
     if errors:
         print("抓取告警：")
         for error in errors:

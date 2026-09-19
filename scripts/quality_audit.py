@@ -1,4 +1,8 @@
-"""Transparent structural quality audit for the Skill package."""
+"""仓库结构检查：文件齐不齐、规则有没有写矛盾。
+
+只回答“结构是否完整”，给出通过或不通过，不打分。选题好不好看 Stephen 的
+采纳率（editorial_outcomes.py）和历史回放评测（eval_replay.py）。
+"""
 from __future__ import annotations
 
 import json
@@ -6,23 +10,33 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from editorial_judgment import HARD_FAILURE_MARKERS
-
+from editorial_judgment import DIMENSIONS, HARD_FAILURE_MARKERS
 
 ROOT = Path(__file__).resolve().parents[1]
+# Words that make the Skill unreadable to Stephen; see AGENTS.md 写作规范.
+# AGENTS.md lists these words on purpose, so it is not scanned.
+BANNED_WORDS = ("契约", "求解空间", "口径", "闭环", "Agent Reach", "agent_reach", "OpenCLI 路由")
+HUMAN_DOCS = ("SKILL.md", "README.md", *(str(p.relative_to(ROOT)) for p in sorted((ROOT / "references").glob("*.md"))))
 
 
 @dataclass(frozen=True)
 class Check:
-    category: str
     name: str
-    weight: int
     passed: bool
-    evidence: str
+    detail: str
 
 
 def read(relative: str) -> str:
     return (ROOT / relative).read_text(encoding="utf-8")
+
+
+def broken_links(relative: str) -> list[str]:
+    base = (ROOT / relative).parent
+    missing = []
+    for target in re.findall(r"\]\(([^)#\s]+\.md)\)", read(relative)):
+        if not (base / target).exists():
+            missing.append(f"{relative} -> {target}")
+    return missing
 
 
 def audit() -> dict:
@@ -31,128 +45,52 @@ def audit() -> dict:
     calibration = read("references/editorial-calibration-cases.md")
     protocol = read("references/feedback-learning-protocol.md")
     profile = json.loads(read("resources/editorial_profile.json"))
-    subjective_hard_codes = {
-        "implementation_dominates_article", "specialist_language_dominates", "complex_technical_case",
-        "frontier_lab_safety_topic", "strategic_product_analysis",
-    }
     publisher = read("scripts/publish_batch.py")
     importer = read("scripts/import_feedback.py")
+    curator = read("scripts/curator.py")
     ignore = read(".gitignore")
+    policy = profile.get("review_hint_policy", {})
+    subjective_codes = {
+        "implementation_dominates_article", "specialist_language_dominates", "complex_technical_case",
+        "frontier_lab_safety_topic", "strategic_product_analysis", "visual_evidence_dependency",
+    }
+    banned_hits = [f"{doc}: {word}" for doc in HUMAN_DOCS for word in BANNED_WORDS if word in read(doc)]
+    links = [missing for doc in HUMAN_DOCS for missing in broken_links(doc)]
 
     checks = [
-        Check("feedback_fidelity", "five independent dimensions", 8,
-              all(term in judgment for term in ("选题吸引力", "读者改变", "材料增量", "二创独立性", "长期价值")),
-              "stable judgment model"),
-        Check("feedback_fidelity", "feedback learning types", 6,
-              all(term in protocol for term in ("invariant", "conditional_preference", "case_only", "unexplained_decision", "hypothesis")),
-              "feedback is classified before generalization"),
-        Check("feedback_fidelity", "paired boundary cases", 4,
-              calibration.count("### 可选") >= 5 and calibration.count("### 不选") >= 5,
-              "positive and negative cases share surface traits"),
-
-        Check("generalization", "keywords are not final verdicts", 5,
-              profile["decision_model"].get("keyword_matches_are_risk_signals_not_verdicts") is True,
-              "profile contract"),
-        Check("generalization", "counterexample required", 5,
-              profile["feedback_learning"].get("require_counterexample_before_generalizing") is True,
-              "feedback contract"),
-        Check("generalization", "blank notes never create rules", 4,
-              profile["feedback_learning"].get("blank_note_creates_rule") is False,
-              "unexplained decisions remain unexplained"),
-        Check("generalization", "no dated patch section in core guidance", 4,
-              not re.search(r"^#{1,4} .*20\d{2}-\d{2}-\d{2}", skill + "\n" + judgment, re.M),
-              "core docs are organized by principle"),
-        Check("generalization", "human evidence can override risk only", 5,
-              "validate_manual_review" in publisher and "eligibility.get(\"status\") == \"failed\"" in publisher,
-              "objective failures stay absolute; editorial risks are reviewable"),
-        Check("generalization", "subjective preferences cannot become hard failures", 4,
-              profile["decision_model"].get("objective_hard_failures_only") is True
-              and not (set(HARD_FAILURE_MARKERS.values()) & subjective_hard_codes),
-              "single-batch reader-fit judgments remain reviewable risks"),
-
-        Check("reliability", "five-item article-first gate", 5,
-              profile.get("minimum_delivery_count") == 5 and profile.get("minimum_non_github_candidates") >= 4 and profile.get("maximum_github_candidates") <= 1,
-              "delivery composition"),
-        Check("reliability", "v2 evidence required before publish", 6,
-              "final_decision_record" in publisher and "人工终审证据不完整" in publisher,
-              "publication gate"),
-        Check("reliability", "feedback coverage audit exists", 4,
-              (ROOT / "scripts/feedback_audit.py").exists() and "scripts/feedback_audit.py" in skill,
-              "all feedback records are accounted for"),
-        Check("reliability", "atomic feedback persistence", 3,
-              all(term in importer for term in ("flock", "fsync", "read_bytes", "unlink")),
-              "locked write, readback, guarded cleanup"),
-        Check("reliability", "parallel ownership in execution contract", 2,
-              all(term in skill for term in ("主力2", "批次 ID", "归属")),
-              "parallel lanes cannot guess file ownership"),
-
-        Check("maintainability", "compact core Skill", 3,
-              len(skill.splitlines()) <= 160,
-              f"{len(skill.splitlines())} lines"),
-        Check("maintainability", "compact stable judgment model", 4,
-              len(judgment.splitlines()) <= 160,
-              f"{len(judgment.splitlines())} lines"),
-        Check("maintainability", "progressive disclosure links", 3,
-              all(name in skill for name in ("editorial-judgment.md", "editorial-calibration-cases.md", "feedback-learning-protocol.md")),
-              "core, protocol and cases are separate"),
-        Check("maintainability", "machine-readable profile schema", 3,
-              profile.get("schema_version") == 2 and (ROOT / "resources/editorial_profile.schema.json").exists(),
-              "versioned configuration"),
-        Check("maintainability", "measurable source portfolio and private ledger", 4,
-              all((ROOT / path).exists() for path in (
-                  "resources/source_portfolio.json", "scripts/source_coverage.py", "scripts/discovery_ledger.py"
-              )),
-              "coverage and channel yield are observable rather than claimed"),
-
-        Check("safety", "private paths ignored", 4,
-              all(term in ignore for term in (".config/", ".local/", "topics/", ".env")),
-              "secrets, feedback and artifacts stay local"),
-        Check("safety", "untrusted source credentials are redacted", 1,
-              "redact_untrusted_secrets" in read("scripts/curator.py"),
-              "community posts cannot pass API keys into candidate artifacts"),
-        Check("safety", "browser boundary explicit", 2,
-              "不调用 OpenCLI" in skill and "Ego Browser" in skill,
-              "user Chrome is not commandeered"),
-        Check("safety", "writing scope excluded", 3,
-              "不撰写文章正文" in skill and "stephen-writing-skill" in skill,
-              "selection and writing remain separate"),
-
-        Check("tests", "decision contract tests", 3,
-              (ROOT / "tests/test_editorial_judgment.py").exists(),
-              "eligibility, risk and evidence boundaries"),
-        Check("tests", "feedback audit tests", 2,
-              (ROOT / "tests/test_feedback_audit.py").exists(),
-              "coverage, conflicts and malformed input"),
-        Check("tests", "paired-case test requirement documented", 1,
-              all(term in protocol for term in ("应拦截案例", "反例", "换掉具体名词")),
-              "new rules require counterfactual coverage"),
-        Check("tests", "portable paired boundary fixture", 2,
-              (ROOT / "tests/fixtures/editorial_boundary_cases.json").exists()
-              and (ROOT / "tests/test_editorial_boundary_cases.py").exists(),
-              "same surface feature has consider and reject cases"),
+        Check("判断标准写全六个维度", all(term in judgment for term in ("选题吸引力", "读者改变", "干货含量", "可重写性", "长期价值", "改写成本")), "references/editorial-judgment.md"),
+        Check("打分规则和代码一致", profile["decision_model"].get("dimensions_in_order") == list(DIMENSIONS) and "至少 8 分" in skill and "至少 8 分" in judgment, "六维与总分门槛"),
+        Check("反馈有七种归类", all(term in protocol for term in ("invariant", "conditional_preference", "case_only", "unexplained_decision", "hypothesis")), "feedback-learning-protocol.md"),
+        Check("正反例成对", calibration.count("### 可选") >= 5 and calibration.count("### 不选") >= 5, "editorial-calibration-cases.md"),
+        Check("关键词不是结论", profile["decision_model"].get("keyword_matches_are_risk_signals_not_verdicts") is True, "口味档案"),
+        Check("单批反馈不能造硬规则", profile["feedback_learning"].get("single_batch_can_create_subjective_hard_gate") is False and profile["feedback_learning"].get("blank_note_creates_rule") is False, "口味档案"),
+        Check("一票否决只收客观条件", not (set(HARD_FAILURE_MARKERS.values()) & subjective_codes), "editorial_judgment.py"),
+        Check("降权名单有上限且每项都存在", bool(policy.get("downrank")) and policy.get("max_downrank_points", 999) <= 20 and all(f'"{hint}"' in curator for hint in policy.get("downrank", [])), "review_hint_policy"),
+        Check("核心文档不按日期打补丁", not re.search(r"^#{1,4} .*20\d{2}-\d{2}-\d{2}", skill + "\n" + judgment, re.M), "SKILL.md 与判断标准"),
+        Check("发布前检查终审理由", "validate_manual_review" in publisher and 'eligibility.get("status") == "failed"' in publisher, "publish_batch.py"),
+        Check("有历史回放评测", (ROOT / "scripts/eval_replay.py").exists() and (ROOT / "references/evaluation.md").exists() and "eval_replay.py machine" in skill, "eval_replay.py"),
+        Check("有反馈审计", (ROOT / "scripts/feedback_audit.py").exists() and "feedback_audit.py" in skill, "feedback_audit.py"),
+        Check("反馈写入加锁并回读", all(term in importer for term in ("flock", "fsync", "read_bytes", "unlink")), "import_feedback.py"),
+        Check("并行认领写清楚", all(term in skill for term in ("主力2", "批次 ID", "认领")), "SKILL.md"),
+        Check("SKILL.md 不过长", len(skill.splitlines()) <= 180, f"{len(skill.splitlines())} 行"),
+        Check("文档链接都有效", not links, "；".join(links) or "全部有效"),
+        Check("文档不用禁用词", not banned_hits, "；".join(banned_hits) or "没有命中"),
+        Check("私有目录不提交", all(term in ignore for term in (".config/", ".local/", "topics/", ".env")), ".gitignore"),
+        Check("清洗来源里的密钥", "redact_untrusted_secrets" in curator, "curator.py"),
+        Check("浏览器边界写清楚", "不启动或接管" in skill and "channels.md" in skill, "SKILL.md"),
+        Check("不写文章正文", "不写文章正文" in skill and "stephen-writing-skill" in skill, "SKILL.md"),
+        Check("关键测试存在", all((ROOT / path).exists() for path in ("tests/test_editorial_judgment.py", "tests/test_feedback_audit.py", "tests/test_eval_replay.py", "tests/fixtures/editorial_boundary_cases.json")), "tests/"),
     ]
-    categories: dict[str, dict] = {}
-    for check in checks:
-        bucket = categories.setdefault(check.category, {"earned": 0, "possible": 0})
-        bucket["possible"] += check.weight
-        bucket["earned"] += check.weight if check.passed else 0
-    score = sum(check.weight for check in checks if check.passed)
-    possible = sum(check.weight for check in checks)
+    failed = [check.__dict__ for check in checks if not check.passed]
     return {
-        "scope": "structural_checks_only",
-        "editorial_quality_verified": False,
-        "note": "This score does not measure preference alignment, selection precision, recall or source coverage.",
-        "score": score,
-        "possible": possible,
-        "passed": score >= 95,
-        "categories": categories,
-        "failed_checks": [
-            {"category": check.category, "name": check.name, "weight": check.weight, "evidence": check.evidence}
-            for check in checks if not check.passed
-        ],
+        "scope": "只检查文件和结构，不代表选题质量",
+        "passed": not failed,
+        "failed": failed,
         "checks": [check.__dict__ for check in checks],
     }
 
 
 if __name__ == "__main__":
-    print(json.dumps(audit(), ensure_ascii=False, indent=2))
+    report = audit()
+    print(json.dumps(report, ensure_ascii=False, indent=2))
+    raise SystemExit(0 if report["passed"] else 1)

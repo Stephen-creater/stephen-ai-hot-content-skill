@@ -41,6 +41,8 @@ def audit_feedback(path: Path) -> dict:
     owners: Counter[str] = Counter()
     seen_decisions: dict[str, list[tuple[str, str, str]]] = {}
     unexplained = []
+    implicit_rejections = 0
+    reason_counts: Counter[str] = Counter()
     interpretation_queue = []
     records, invalid_records = load_records(path)
 
@@ -65,11 +67,16 @@ def audit_feedback(path: Path) -> dict:
             review = review if isinstance(review, dict) else {}
             status = str(review.get("status", ""))
             note = str(review.get("note", "")).strip()
+            reasons = [str(reason) for reason in review.get("reasons", []) if str(reason).strip()]
+            reason_counts.update(f"{status}:{reason}" for reason in reasons)
             title = str(candidates.get(str(item_id), ""))
             batch_counts[status] += 1
             status_counts[status] += 1
             seen_decisions.setdefault(str(item_id), []).append((status, batch, note))
-            if status in FINAL_STATUSES and not note:
+            if review.get("implicit"):
+                # "Unmarked counts as rejected" is a label for evaluation, not a missing explanation.
+                implicit_rejections += 1
+            elif status in FINAL_STATUSES and not note and not reasons:
                 unexplained.append({"batch": batch, "id": str(item_id), "status": status, "title": title})
             if status == "selected" and any(phrase in note for phrase in TOPIC_STATE_PHRASES):
                 interpretation_queue.append({
@@ -87,6 +94,7 @@ def audit_feedback(path: Path) -> dict:
                     "title": title,
                     "reason": "selected button with negative note language",
                 })
+        reason_counts.update(f"batch:{reason}" for reason in record.get("batch_reasons", []) if str(reason).strip())
         batches.append({"batch": batch, "owner": owner, "reviews": sum(batch_counts.values()), "statuses": dict(batch_counts)})
 
     repeated = []
@@ -107,6 +115,8 @@ def audit_feedback(path: Path) -> dict:
         "status_counts": dict(status_counts),
         "owner_batch_counts": dict(owners),
         "unexplained_decisions": unexplained,
+        "implicit_rejections": implicit_rejections,
+        "reason_tag_counts": dict(reason_counts.most_common()),
         "interpretation_queue": interpretation_queue,
         "repeated_candidate_decisions": repeated,
         "invalid_records": invalid_records,

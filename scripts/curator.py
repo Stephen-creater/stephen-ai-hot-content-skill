@@ -10,7 +10,7 @@ from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from editorial_judgment import build_decision_contract
+from editorial_judgment import build_decision_contract, is_hard_failure
 
 
 TAG_RE = re.compile(r"<[^>]+>")
@@ -179,6 +179,28 @@ def deduplicate(items: list[dict]) -> list[dict]:
     return kept
 
 
+def review_hint_deduction(point_penalties: list[tuple[str, float]], profile: dict) -> float:
+    """How much the matched rules may lower the reading order.
+
+    Objective failures keep their full weight (they are blocked anyway). Review
+    hints are notes for the reader and cost nothing, except the few listed in
+    review_hint_policy.downrank that never matched a selected item in the
+    historical replay; those cost a small, capped amount.
+    """
+    policy = profile.get("review_hint_policy", {})
+    downrank = set(policy.get("downrank", []))
+    per_hint = float(policy.get("downrank_points", 10))
+    cap = float(policy.get("max_downrank_points", 20))
+    hard = 0.0
+    soft = 0.0
+    for message, points in point_penalties:
+        if is_hard_failure(message):
+            hard += points
+        elif message in downrank:
+            soft += per_hint
+    return hard + min(soft, cap)
+
+
 def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     now = now or datetime.now(timezone.utc)
     title = clean_text(item.get("source_title") or item.get("title"))
@@ -189,6 +211,13 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     title_summary = f"{title} {summary}".lower()
     reasons: list[str] = []
     penalties: list[str] = []
+    point_penalties: list[tuple[str, float]] = []
+
+    def penalize(message: str, points: float) -> None:
+        # Record the rule's original weight; review_hint_deduction decides how much of it counts.
+        penalties.append(message)
+        point_penalties.append((message, points))
+
     language = item.get("language", "unknown")
     maturity = item.get("maturity", "unknown")
     content_status = item.get("content_status", "fulltext" if len(content) >= 500 else "summary")
@@ -273,16 +302,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score += 18
         reasons.append("中文内容")
     elif language == "en":
-        score -= 22
-        penalties.append("英文一手信息，优先用于核验")
+        penalize("英文一手信息，优先用于核验", 22)
     if maturity == profile.get("preferred_maturity"):
         score += 16
         reasons.append("作者已完成二手整合")
     elif maturity == "primary":
         score -= 15
     if source_role == "verification":
-        score -= 80
-        penalties.append("核验来源，不进入默认选题")
+        penalize("核验来源，不进入默认选题", 80)
 
     if content_status == "transcript":
         score += 20
@@ -294,22 +321,18 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score += 8
         reasons.append("已有详细 Show Notes")
     else:
-        score -= 14
-        penalties.append("缺少完整文字材料")
+        penalize("缺少完整文字材料", 14)
     if content_form == "podcast" and content_status != "transcript":
-        score -= 55
-        penalties.append("播客缺少逐字稿，无法低成本二创")
+        penalize("播客缺少逐字稿，无法低成本二创", 55)
     if content_form == "video" and content_status != "transcript":
-        score -= 55
-        penalties.append("视频缺少逐字稿，无法核验完整论证")
+        penalize("视频缺少逐字稿，无法核验完整论证", 55)
     visual_action_count = sum(
         content.count(term)
         for term in ("可以看到", "我们打开", "点击", "我来给大家看", "你看", "演示")
     )
     visual_object_count = sum(content.count(term) for term in ("界面", "画面", "截图", "这个页面"))
     if content_form == "video" and content_status == "transcript" and visual_action_count >= 8 and visual_object_count >= 4:
-        score -= 80
-        penalties.append("关键证据依赖视频画面与操作演示，逐字稿无法独立支撑文章二创")
+        penalize("关键证据依赖视频画面与操作演示，逐字稿无法独立支撑文章二创", 80)
 
     if NUMBER_RE.search(haystack):
         score += 6
@@ -324,41 +347,31 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score += 8
         reasons.append("正文材料充足")
     elif len(summary) < 80:
-        score -= 8
-        penalties.append("材料过少")
+        penalize("材料过少", 8)
     if excluded:
         score -= 60
     if VERSION_ONLY_RE.fullmatch(title.strip()) or PACKAGE_VERSION_RE.fullmatch(title.strip()):
-        score -= 90
-        penalties.append("只有版本号")
+        penalize("只有版本号", 90)
     if not any(contains_term(title_summary, term) for term in CORE_AI_TERMS) and not ai_subject_in_body(summary, content):
-        score -= 40
-        penalties.append("标题与摘要缺少明确 AI 对象")
+        penalize("标题与摘要缺少明确 AI 对象", 40)
     if any(word.lower() in haystack for word in ("weekly roundup", "week in review", "本周汇总", "一周回顾")):
-        score -= 30
-        penalties.append("多事件合集")
+        penalize("多事件合集", 30)
     if title.count("；") >= 2:
-        score -= 40
-        penalties.append("标题包含多个事件")
+        penalize("标题包含多个事件", 40)
     finance_terms = ("funding", "raises $", "valuation", "融资", "估值")
     substance_terms = ("open source", "开源", "api", "workflow", "agent", "product", "产品", "机制", "case study")
     if any(word in haystack for word in finance_terms) and not any(word in haystack for word in substance_terms):
-        score -= 35
-        penalties.append("只有融资或估值")
+        penalize("只有融资或估值", 35)
     title_finance = ("融资", "估值", "收购", "卖了", "亿美元", "连融", "融三轮")
     title_substance = ("开源", "模型发布", "模型上线", "产品发布", "产品上线", "技术", "案例", "工作流", "agent")
     if any(word.lower() in title.lower() for word in title_finance) and not any(word.lower() in title.lower() for word in title_substance):
-        score -= 35
-        penalties.append("标题只有资本事件")
+        penalize("标题只有资本事件", 35)
     if any(word in title for word in ("连融", "融三轮")):
-        score -= 35
-        penalties.append("标题以连续融资制造热度")
+        penalize("标题以连续融资制造热度", 35)
     if any(word in title for word in ("重磅发布", "深度参与", "主论坛", "峰会")):
-        score -= 30
-        penalties.append("疑似会议或商业通稿")
+        penalize("疑似会议或商业通稿", 30)
     if any(word in title for word in ("比赛", "决赛", "奖金")):
-        score -= 25
-        penalties.append("比赛新闻偏离既有文章谱系")
+        penalize("比赛新闻偏离既有文章谱系", 25)
 
     # These terms surface questions for review. They remain conservative
     # machine filters for backward compatibility, but the final publication
@@ -488,32 +501,24 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score += 12
         reasons.append("具备可长期回看的机制切口")
     if hype_terms:
-        score -= 45
-        penalties.append("炒作或猎奇成分过高")
+        penalize("炒作或猎奇成分过高", 45)
     if broad_terms:
-        score -= 30
-        penalties.append("宏大或通稿式表述，缺少具体切口")
+        penalize("宏大或通稿式表述，缺少具体切口", 30)
     if niche_terms:
-        score -= 30
-        penalties.append("科研或医疗垂直题，大众切口偏弱")
+        penalize("科研或医疗垂直题，大众切口偏弱", 30)
     if len(robotics_topic_terms) >= 2:
-        score -= 55
-        penalties.append("具身机器人或在线强化学习过于垂直，普通读者难以使用")
+        penalize("具身机器人或在线强化学习过于垂直，普通读者难以使用", 55)
     if authoritative_interview:
         score += 24
         reasons.insert(0, "核心 AI 团队权威人物访谈，材料完整")
     if interview_terms and (generic_interview_angle_terms or len(interview_biography_terms) >= 2) and not long_horizon_framework:
-        score -= 45
-        penalties.append("访谈角度过宽：人生经历或宏观闲聊占比过高，缺少持续的具体问题")
+        penalize("访谈角度过宽：人生经历或宏观闲聊占比过高，缺少持续的具体问题", 45)
     if release_terms and not major_entities and not any(term in title_summary for term in concept_terms):
-        score -= 35
-        penalties.append("主体知名度或事件级别不足")
+        penalize("主体知名度或事件级别不足", 35)
     if event_terms:
-        score -= 55
-        penalties.append("活动、采购或合作宣传稿")
+        penalize("活动、采购或合作宣传稿", 55)
     if people_terms and not authoritative_interview:
-        score -= 30
-        penalties.append("纯人物群像，缺少可复用的核心机制")
+        penalize("纯人物群像，缺少可复用的核心机制", 30)
     # A long interview is not event news just because the guest mentions a launch in
     # passing; if the event word is in the title, the piece is about the event.
     long_interview = (
@@ -522,47 +527,34 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         and len(content) >= minimum_article_chars(profile)
     )
     if age_days is not None and time_sensitive_terms and not (authoritative_interview or long_interview) and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
-        score -= 60
-        penalties.append("事件新闻已超过时效窗口")
+        penalize("事件新闻已超过时效窗口", 60)
     if reader_distance_terms:
-        score -= 35
-        penalties.append("企业维护或治理议题，距离目标读者过远")
+        penalize("企业维护或治理议题，距离目标读者过远", 35)
     if any(source_domain == domain or source_domain.endswith(f".{domain}") for domain in profile.get("blocked_domains", [])):
-        score -= 80
-        penalties.append("来源为 AI 批量内容站或商业导流站")
+        penalize("来源为 AI 批量内容站或商业导流站", 80)
     if source_domain == "github.com":
         if github_stars is None:
-            score -= 70
-            penalties.append("GitHub Star 数未核验，不能进入候选")
+            penalize("GitHub Star 数未核验，不能进入候选", 70)
         elif int(github_stars) < int(profile.get("minimum_github_stars", 100)):
-            score -= 70
-            penalties.append("GitHub Star 低于 100，不进入候选")
+            penalize("GitHub Star 低于 100，不进入候选", 70)
         else:
             reasons.insert(0, f"GitHub {int(github_stars)} Star，达到入场门槛")
         if age_days is None or age_days > 7:
-            score -= 70
-            penalties.append("GitHub 最近有效发布或更新超过 7 天，不再算当前热点")
+            penalize("GitHub 最近有效发布或更新超过 7 天，不再算当前热点", 70)
     if any(term.lower() in f"{source_name} {title.lower()}" for term in profile.get("blocked_creators", [])):
-        score -= 100
-        penalties.append("作者或个人 IP 已被明确排除")
+        penalize("作者或个人 IP 已被明确排除", 100)
     if generic_comparison_terms:
-        score -= 40
-        penalties.append("泛化工具清单或横评，缺少可提炼的核心结论")
+        penalize("泛化工具清单或横评，缺少可提炼的核心结论", 40)
     if hardware_news_terms:
-        score -= 45
-        penalties.append("纯芯片、显存或硬件性能新闻")
+        penalize("纯芯片、显存或硬件性能新闻", 45)
     if hardware_subject_terms:
-        score -= 60
-        penalties.append("AI 硬件与设备产品成立条件不符合当前内容偏好")
+        penalize("AI 硬件与设备产品成立条件不符合当前内容偏好", 60)
     if unappealing_architecture_topic_terms:
-        score -= 65
-        penalties.append("购物或商家 Agent 的单多智能体架构选择不具备当前选题吸引力")
+        penalize("购物或商家 Agent 的单多智能体架构选择不具备当前选题吸引力", 65)
     if len(brand_promotion_topic_terms) >= 2:
-        score -= 70
-        penalties.append("单一旅行或电商平台的 Agent 案例宣传属性过强")
+        penalize("单一旅行或电商平台的 Agent 案例宣传属性过强", 70)
     if low_value_product_critique_terms:
-        score -= 65
-        penalties.append("产品本身缺少可写价值，负面体验或失败点不能单独支撑选题")
+        penalize("产品本身缺少可写价值，负面体验或失败点不能单独支撑选题", 65)
     document_format = r"(?:Word|Excel|PowerPoint|PPTX?|PDF|Markdown|CSV|JSON|DOCX|XLSX|SVG|TXT)"
     event_title = re.sub(rf"\b{document_format}(?:\s*[、,，]\s*{document_format}){{2,}}\b", "文档格式", title, flags=re.I)
     comparison_metric = r"(?:最|更)?(?:快|准|便宜|省钱|省时|稳定|准确|好用)"
@@ -571,23 +563,17 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "同一任务的比较维度", event_title,
     )
     if event_title.count("、") >= 2:
-        score -= 40
-        penalties.append("标题包含多个事件")
+        penalize("标题包含多个事件", 40)
     if too_technical_terms:
-        score -= 45
-        penalties.append("技术细节过深，目标读者难以理解或使用")
+        penalize("技术细节过深，目标读者难以理解或使用", 45)
     if len(developer_maintenance_terms) >= 3 and any(word in title_summary for word in ("清理", "维护", "缓存", "磁盘", "mole")):
-        score -= 70
-        penalties.append("开发者维护教程依赖多种缓存与包管理术语，超出目标读者门槛")
+        penalize("开发者维护教程依赖多种缓存与包管理术语，超出目标读者门槛", 70)
     if len(implementation_heavy_terms) >= 2:
-        score -= 45
-        penalties.append("系统实现概念过密，普通读者难以理解或复用")
+        penalize("系统实现概念过密，普通读者难以理解或复用", 45)
     if len(code_barrier_terms) >= 4:
-        score -= 45
-        penalties.append("正文工程门槛过高，包含大量代码与基础设施细节")
+        penalize("正文工程门槛过高，包含大量代码与基础设施细节", 45)
     elif len(content) < 2500 and len(code_barrier_terms) >= 2:
-        score -= 45
-        penalties.append("文章偏短且技术术语密集，普通读者难以获得可复用价值")
+        penalize("文章偏短且技术术语密集，普通读者难以获得可复用价值", 45)
     code_line_pattern = re.compile(
         r"(?:=>|===|\?\.|\.(?:get|set|push|map|toJSON|fromJSON|setMeta)\(|"
         r"\b(?:const|let|function|return|import|export)\b|^[\s{}\[\],]+$|"
@@ -595,138 +581,94 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     )
     code_like_lines = [line for line in raw_content.splitlines() if code_line_pattern.search(line.strip())]
     if content_form == "article" and len(code_like_lines) >= 8:
-        score -= 80
-        penalties.append("正文代码或实现片段占比过高，文章载体的普通读者难以独立理解")
+        penalize("正文代码或实现片段占比过高，文章载体的普通读者难以独立理解", 80)
     if len(complex_technical_case_terms) >= 3:
-        score -= 80
-        penalties.append("核心案例同时依赖多种技术环境与实施概念，普通读者难以低成本复用")
+        penalize("核心案例同时依赖多种技术环境与实施概念，普通读者难以低成本复用", 80)
     if len(terminal_cli_terms) >= 3:
-        score -= 70
-        penalties.append("以终端、CLI、Shell 或快捷键为主体，技术门槛超出目标读者")
+        penalize("以终端、CLI、Shell 或快捷键为主体，技术门槛超出目标读者", 70)
     if len(cross_topic_macro_terms) >= 3 and not product_owner_speech_terms:
-        score -= 55
-        penalties.append("多个抽象大词和跨产品话题来回跳转，缺少单一连续的决策链")
+        penalize("多个抽象大词和跨产品话题来回跳转，缺少单一连续的决策链", 55)
     frontier_lab_subject = any(entity in haystack for entity in ("openai", "anthropic", "deepmind", "模型实验室"))
     if frontier_lab_subject and len(frontier_lab_safety_terms) >= 2 and len(concrete_end_user_task_terms) < 2:
-        score -= 80
-        penalties.append("前沿模型实验室的安全、对齐或攻击风险占主体，对目标读者缺少可用价值")
+        penalize("前沿模型实验室的安全、对齐或攻击风险占主体，对目标读者缺少可用价值", 80)
     if len(strategic_product_analysis_terms) >= 3 and len(concrete_practice_terms) < 1 and len(concrete_end_user_task_terms) < 2:
-        score -= 80
-        penalties.append("单一大厂产品演进、生态解读和未来战略预测占主体，缺少可直接复用的当前任务")
+        penalize("单一大厂产品演进、生态解读和未来战略预测占主体，缺少可直接复用的当前任务", 80)
     if len(professional_product_governance_terms) >= 3 and len(concrete_end_user_task_terms) < 2:
-        score -= 65
-        penalties.append("专业 AI 产品治理细节过多，普通读者难以学会或获得收益")
+        penalize("专业 AI 产品治理细节过多，普通读者难以学会或获得收益", 65)
     if generic_product_framework_terms and len(concrete_end_user_task_terms) < 2:
-        score -= 55
-        penalties.append("整齐的产品分层框架多于新事实与可写切口")
+        penalize("整齐的产品分层框架多于新事实与可写切口", 55)
     if len(abstract_business_terms) >= 3:
-        score -= 45
-        penalties.append("理论或商业评论过多，缺少对普通读者的实际价值")
+        penalize("理论或商业评论过多，缺少对普通读者的实际价值", 45)
     if len(formulaic_framework_terms) >= 2 and not long_horizon_framework:
-        score -= 45
-        penalties.append("框架化表达多于扎实证据，信息密度偏低")
+        penalize("框架化表达多于扎实证据，信息密度偏低", 45)
     if benchmark_title_terms or (len(benchmark_article_terms) >= 2 and not authoritative_interview and not concrete_practice_terms):
-        score -= 55
-        penalties.append("以 Benchmark、评测集或跑分为主体，缺少实际使用价值")
+        penalize("以 Benchmark、评测集或跑分为主体，缺少实际使用价值", 55)
     if paper_explainer and (len(deep_paper_metric_terms) >= 2 or len(technical_acronyms) >= 6):
-        score -= 75
-        penalties.append("深论文解读依赖大量专有名词、缩写或实验指标，不适合普通读者")
+        penalize("深论文解读依赖大量专有名词、缩写或实验指标，不适合普通读者", 75)
     if len(technical_acronyms) >= 15 and len(technical_identifiers) >= 80:
-        score -= 80
-        penalties.append("专业缩写、系统名与工程标识密度过高，理解主线需要专业背景")
+        penalize("专业缩写、系统名与工程标识密度过高，理解主线需要专业背景", 80)
     if len(citation_collage_terms) >= 3:
-        score -= 45
-        penalties.append("研究、报告与人物引语堆叠，缺少作者自己的高密度结论")
+        penalize("研究、报告与人物引语堆叠，缺少作者自己的高密度结论", 45)
     if education_topic_terms:
-        score -= 55
-        penalties.append("学生、学校或课堂教育方向不符合当前选题偏好")
+        penalize("学生、学校或课堂教育方向不符合当前选题偏好", 55)
     if feature_inventory_terms and not long_horizon_framework and not concrete_practice_terms:
-        score -= 45
-        penalties.append("以产品功能说明和名词拆解为主，缺少长期回看内涵")
+        penalize("以产品功能说明和名词拆解为主，缺少长期回看内涵", 45)
     if institutional_source and len(institutional_tone_terms) >= 3 and not concrete_practice_terms:
-        score -= 45
-        penalties.append("官方调查与治理表达过重，缺少个人经验和行动价值")
+        penalize("官方调查与治理表达过重，缺少个人经验和行动价值", 45)
     if len(synthetic_official_tone_terms) >= 4 and not concrete_practice_terms:
-        score -= 55
-        penalties.append("AI 式官方包装语言过重，真实作者判断不足")
+        penalize("AI 式官方包装语言过重，真实作者判断不足", 55)
     if len(synthetic_structure_terms) >= 3 and not authoritative_interview and not concrete_practice_terms:
-        score -= 65
-        penalties.append("小标题与清单过度整齐，呈现明显 AI 批量加工结构")
+        penalize("小标题与清单过度整齐，呈现明显 AI 批量加工结构", 65)
     if (nested_outline_count >= 3 or oversized_checklist) and not authoritative_interview:
-        score -= 65
-        penalties.append("十几条大清单并嵌套多级编号，AI 加工痕迹过重")
+        penalize("十几条大清单并嵌套多级编号，AI 加工痕迹过重", 65)
     if self_disclosed_ai_authorship:
-        score -= 100
-        penalties.append("文章主动披露由 AI 生成，不作为 Stephen 二创底稿")
+        penalize("文章主动披露由 AI 生成，不作为 Stephen 二创底稿", 100)
     if news_source and len(news_reporting_terms) >= 2 and not concrete_practice_terms:
-        score -= 45
-        penalties.append("以记者采访和行业报道为主，不适合作为个人写作底稿")
+        penalize("以记者采访和行业报道为主，不适合作为个人写作底稿", 45)
     if promotional_disclosure_terms:
-        score -= 70
-        penalties.append("正文由厂商供稿或授权转载，推广属性过重")
+        penalize("正文由厂商供稿或授权转载，推广属性过重", 70)
     if advertorial_source_terms or len(advertorial_copy_terms) >= 2:
-        score -= 75
-        penalties.append("软件下载推荐站或导购式体验文，广告属性过重")
+        penalize("软件下载推荐站或导购式体验文，广告属性过重", 75)
     if release_subject and len(official_release_copy_terms) >= 3 and not concrete_practice_terms:
-        score -= 65
-        penalties.append("产品官方更新稿小标题和功能说明密集，缺少独立实测与信息密度")
+        penalize("产品官方更新稿小标题和功能说明密集，缺少独立实测与信息密度", 65)
     if peripheral_ai_topic_terms:
-        score -= 60
-        penalties.append("主题只是外围算法或信息流机制，与 Stephen 的主流 AI 文章谱系不符")
+        penalize("主题只是外围算法或信息流机制，与 Stephen 的主流 AI 文章谱系不符", 60)
     if personal_project_story_terms and not transferable_artifact_terms:
-        score -= 55
-        penalties.append("价值依赖作者本人项目经历与体感，难以转换成 Stephen 的写作视角")
+        penalize("价值依赖作者本人项目经历与体感，难以转换成 Stephen 的写作视角", 55)
     if len(personal_workflow_detail_terms) >= 3:
-        score -= 55
-        penalties.append("项目路径与个人操作过程占比过高，难以脱离作者经历进行二创")
+        penalize("项目路径与个人操作过程占比过高，难以脱离作者经历进行二创", 55)
     if len(creator_brand_dependency_terms) >= 3:
-        score -= 70
-        penalties.append("内容依赖作者个人品牌、私有素材或团队资源，无法低成本独立二创")
+        penalize("内容依赖作者个人品牌、私有素材或团队资源，无法低成本独立二创", 70)
     if len(saturated_builder_mvp_terms) >= 4:
-        score -= 65
-        penalties.append("MVP、原型、获客和一人公司等 Builder 主题已经写滥，缺少新的可写切口")
+        penalize("MVP、原型、获客和一人公司等 Builder 主题已经写滥，缺少新的可写切口", 65)
     if len(company_coupled_case_terms) >= 2 and first_person_density >= 3:
-        score -= 65
-        penalties.append("单一公司或岗位案例与原业务耦合过紧，难以抽离为 Stephen 的通用文章")
+        penalize("单一公司或岗位案例与原业务耦合过紧，难以抽离为 Stephen 的通用文章", 65)
     if ai_summary_or_translation_terms:
-        score -= 55
-        penalties.append("AI 总结或机器翻译感明显，不适合直接中文二创")
+        penalize("AI 总结或机器翻译感明显，不适合直接中文二创", 55)
     if saturated_humanizer_terms:
-        score -= 55
-        penalties.append("去 AI 味工具赛道高度同质化，缺少可验证的新突破")
+        penalize("去 AI 味工具赛道高度同质化，缺少可验证的新突破", 55)
     if ("小红书" in title_summary or "xiaohongshu" in title_summary) and ("排版" in title_summary or "layout" in title_summary) and ("skill" in title_summary or "技能" in title_summary):
-        score -= 80
-        penalties.append("小红书图文排版 Skill 已饱和，用户明确不再需要推荐")
+        penalize("小红书图文排版 Skill 已饱和，用户明确不再需要推荐", 80)
     if len(legal_compliance_topic_terms) >= 3:
-        score -= 55
-        penalties.append("法律合规、署名责任或社会争议为主，不符合长期干货调性")
+        penalize("法律合规、署名责任或社会争议为主，不符合长期干货调性", 55)
     if len(coding_agent_only_terms) >= 2:
-        score -= 55
-        penalties.append("围绕 AGENTS.md、CLAUDE.md 等深层配置，普通读者无法使用")
+        penalize("围绕 AGENTS.md、CLAUDE.md 等深层配置，普通读者无法使用", 55)
     if low_audience_vertical_terms:
-        score -= 60
-        penalties.append("数字人或 AI 短剧过于垂直，对当前普通读者缺少实际价值")
+        penalize("数字人或 AI 短剧过于垂直，对当前普通读者缺少实际价值", 60)
     if obsolete_workaround_terms:
-        score -= 60
-        penalties.append("为纯文本模型外挂视觉属于绕路方案，直接使用多模态模型更合适")
+        penalize("为纯文本模型外挂视觉属于绕路方案，直接使用多模态模型更合适", 60)
     if unstable_preview_product_terms:
-        score -= 60
-        penalties.append("产品仍处技术预览或破坏性更新阶段，当前实践缺少长期价值")
+        penalize("产品仍处技术预览或破坏性更新阶段，当前实践缺少长期价值", 60)
     if len(content) >= 2500 and em_dash_density >= 5 and quote_density >= 12:
-        score -= 65
-        penalties.append("破折号与引号密度异常高，呈现明显 AI 写作痕迹")
+        penalize("破折号与引号密度异常高，呈现明显 AI 写作痕迹", 65)
     if locked_content_terms:
-        score -= 70
-        penalties.append("正文被登录、关注或付费墙截断，材料不完整")
+        penalize("正文被登录、关注或付费墙截断，材料不完整", 70)
     if community_question_terms and any(term in source_name for term in ("v2ex", "reddit", "论坛", "社区讨论")):
-        score -= 55
-        penalties.append("社区提问求助帖没有形成可直接改写的完整结论")
+        penalize("社区提问求助帖没有形成可直接改写的完整结论", 55)
     if len(thin_personal_reflection_terms) >= 3:
-        score -= 45
-        penalties.append("只有个人感受与情绪，缺少事实或新机制支撑")
+        penalize("只有个人感受与情绪，缺少事实或新机制支撑", 45)
     if low_reuse_story_terms:
-        score -= 40
-        penalties.append("一次性 AI 奇闻，缺少长期回看价值")
+        penalize("一次性 AI 奇闻，缺少长期回看价值", 40)
     if concrete_practice_terms:
         score += 18
         reasons.insert(0, "持续实践复盘，有流程、结果和调整过程")
@@ -743,9 +685,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         score += 18
         reasons.insert(0, "长期实践沉淀出可复用的方法框架")
     if content_form == "article" and content_status == "fulltext" and len(content) < minimum_article_chars(profile):
-        score -= 55
-        penalties.append("文章正文偏短，不足以支撑高质量二创")
+        penalize("文章正文偏短，不足以支撑高质量二创", 55)
 
+    score -= review_hint_deduction(point_penalties, profile)
     score = round(score, 1)
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:
         adaptation_readiness = "高"
@@ -775,10 +717,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "pillars": matched_pillars,
         "score": score,
         "discovery_score": score,
-        # Compatibility field: legacy callers use this conservative machine
-        # gate. Final publication may override editorial risks only with a full
-        # v2 human evidence record; objective eligibility failures never can.
-        "recommended": score >= profile["minimum_score"] and not excluded and not penalties and source_role == "candidate",
+        # Review hints never remove an item here; only objective failures do.
+        "recommended": score >= profile["minimum_score"] and decision_contract["eligibility"]["status"] == "passed" and source_role == "candidate",
         "machine_shortlisted": decision_contract["machine_disposition"] == "shortlist" and source_role == "candidate",
         "reason": "；".join(reasons[:6]) or "信息不足，等待人工判断",
         "penalty": "；".join(penalties),
@@ -794,5 +734,5 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
 
 def rank_candidates(items: list[dict], profile: dict, now: datetime | None = None) -> list[dict]:
     scored = [score_item(item, profile, now=now) for item in deduplicate(items)]
-    scored.sort(key=lambda item: (item["machine_shortlisted"], item["recommended"], item["score"]), reverse=True)
+    scored.sort(key=lambda item: (item["editorial_decision"]["eligibility"]["status"] == "passed", item["score"]), reverse=True)
     return scored

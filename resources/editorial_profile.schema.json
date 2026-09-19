@@ -9,9 +9,7 @@
     "target_readers",
     "decision_model",
     "feedback_learning",
-    "minimum_delivery_count",
-    "minimum_non_github_candidates",
-    "maximum_github_candidates",
+    "default_topic_count",
     "minimum_score",
     "risk_signal_lexicon"
   ],
@@ -24,7 +22,7 @@
       "required": ["dimensions_in_order", "manual_review_required", "keyword_matches_are_risk_signals_not_verdicts", "objective_hard_failures_only"],
       "properties": {
         "dimensions_in_order": {
-          "const": ["topic_appeal", "reader_change", "material_increment", "re_authorability", "durability"]
+          "const": ["topic_appeal", "reader_change", "material_increment", "re_authorability", "durability", "rewrite_effort"]
         },
         "manual_review_required": {"const": true},
         "keyword_matches_are_risk_signals_not_verdicts": {"const": true},
@@ -43,13 +41,12 @@
       },
       "additionalProperties": true
     },
-    "minimum_delivery_count": {"type": "integer", "minimum": 5},
-    "minimum_non_github_candidates": {"type": "integer", "minimum": 4},
-    "maximum_github_candidates": {"type": "integer", "maximum": 1},
+    "default_topic_count": {"type": "integer", "minimum": 1},
+    "report_candidate_count": {"type": "integer", "minimum": 1},
     "minimum_score": {"type": "number"},
     "risk_signal_lexicon": {
       "type": "object",
-      "description": "Discovery and review prompts only. Exact matches do not constitute a final editorial verdict.",
+      "description": "审稿提示词：只提示读稿人核实，不构成结论。是否影响阅读顺序由 review_hint_policy 决定。",
       "additionalProperties": {"type": "array", "items": {"type": "string"}}
     }
   },

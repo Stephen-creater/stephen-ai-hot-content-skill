@@ -1,8 +1,8 @@
-"""Editorial decision contract for Stephen's hot-topic pipeline.
+"""Eligibility checks and the format check for Agent review cards.
 
-Deterministic code may establish eligibility and surface risks. It must not
-pretend that keyword matches prove audience value, topic appeal, or reuse.
-Those dimensions require evidence from a complete source and a human review.
+Code decides objective eligibility and lists review hints. It must not pretend
+that keyword matches prove audience value, topic appeal, or reuse. Those need
+an Agent that read the whole article, scored six dimensions and quoted it.
 """
 from __future__ import annotations
 
@@ -18,17 +18,23 @@ DIMENSIONS = (
     "material_increment",
     "re_authorability",
     "durability",
+    "rewrite_effort",
 )
 
 REVIEW_FIELD_LABELS = {
     "topic_appeal": "选题吸引力",
     "reader_change": "读者改变",
-    "material_increment": "材料增量",
-    "re_authorability": "二创独立性",
+    "material_increment": "干货含量",
+    "re_authorability": "可重写性",
     "durability": "长期价值",
-    "counterargument": "最强反对理由",
-    "decision_driver": "决定性证据",
+    "rewrite_effort": "改写成本",
+    "counterargument": "最大疑点",
+    "decision_driver": "放行理由",
 }
+
+# Recommend when most requirements are met, not only when every one is.
+PASS_TOTAL = 8  # of 12
+MUST_NOT_BE_ZERO = ("reader_change", "material_increment")
 
 HARD_FAILURE_MARKERS = {
     "正文缺少中文内容": "body_language_mismatch",
@@ -49,7 +55,6 @@ HARD_FAILURE_MARKERS = {
     "命中排除词": "excluded_subject",
     "播客缺少逐字稿": "missing_transcript",
     "视频缺少逐字稿": "missing_transcript",
-    "关键证据依赖视频画面": "visual_evidence_dependency",
     "GitHub Star 数未核验": "github_evidence_missing",
     "GitHub Star 低于": "github_below_threshold",
     "GitHub 最近有效发布或更新超过 7 天": "github_not_recent",
@@ -73,6 +78,10 @@ def unique_text(values: Iterable[str]) -> list[str]:
         if value and value not in result:
             result.append(value)
     return result
+
+
+def is_hard_failure(evidence: str) -> bool:
+    return any(marker in evidence for marker in HARD_FAILURE_MARKERS)
 
 
 def classify_penalties(penalties: Iterable[str]) -> tuple[list[dict], list[dict]]:
@@ -125,16 +134,26 @@ def build_decision_contract(
 def validate_manual_review(review: dict, *, require_v2: bool = True) -> ReviewValidation:
     """Validate evidence required before a candidate may be published."""
     if not isinstance(review, dict):
-        return ReviewValidation(False, ("缺少人工终审",))
+        return ReviewValidation(False, ("缺少终审记录",))
     errors: list[str] = []
     if review.get("status") != "passed":
-        errors.append("人工终审状态不是 passed")
+        errors.append("终审状态不是 passed")
     if not require_v2:
         return ReviewValidation(not errors, tuple(errors))
     for field, label in REVIEW_FIELD_LABELS.items():
         value = review.get(field)
         if not isinstance(value, str) or len(value.strip()) < 12:
             errors.append(f"{label}缺少具体正文证据")
+    scores = review.get("scores")
+    if not isinstance(scores, dict) or any(scores.get(key) not in (0, 1, 2) for key in DIMENSIONS):
+        errors.append("六个维度都要打 0、1 或 2 分")
+    else:
+        total = sum(scores[key] for key in DIMENSIONS)
+        if total < PASS_TOTAL:
+            errors.append(f"六维总分 {total} 低于 {PASS_TOTAL}")
+        for key in MUST_NOT_BE_ZERO:
+            if scores[key] == 0:
+                errors.append(f"{REVIEW_FIELD_LABELS[key]}为 0 分")
     return ReviewValidation(not errors, tuple(errors))
 
 
@@ -165,7 +184,7 @@ def validate_source_anchors(item: dict) -> ReviewValidation:
         else:
             matched.add(dimension)
     if not {"material_increment", "re_authorability"}.issubset(matched):
-        errors.append("材料增量和二创独立性必须各有原文依据")
+        errors.append("干货含量和可重写性必须各有原文引用")
     return ReviewValidation(not errors, tuple(errors))
 
 
@@ -179,6 +198,7 @@ def final_decision_record(item: dict) -> dict:
         "errors": list(validation.errors),
         "decision_driver": str(review.get("decision_driver", "")).strip(),
         "counterargument": str(review.get("counterargument", "")).strip(),
+        "scores": review.get("scores", {}),
         "dimensions": {
             key: {"verdict": "supported", "evidence": str(review.get(key, "")).strip()}
             for key in DIMENSIONS

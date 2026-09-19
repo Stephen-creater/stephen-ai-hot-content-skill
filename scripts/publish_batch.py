@@ -13,7 +13,7 @@ from discovery_history import delivered_candidates
 from editorial_judgment import classify_penalties, final_decision_record, validate_manual_review, validate_source_anchors
 from import_feedback import final_reviewed_candidates
 from report import generate_report
-from scrape_aihot import delivery_mix_ready, is_historical_content_duplicate
+from scrape_aihot import is_historical_content_duplicate
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -32,8 +32,8 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool 
             raise ValueError("不得改写另一个任务的批次")
         rows = json.loads((folder / "candidates.json").read_text(encoding="utf-8"))
         profile = json.loads((root / "resources/editorial_profile.json").read_text(encoding="utf-8"))
-        if not delivery_mix_ready(rows, profile["minimum_delivery_count"], profile["minimum_non_github_candidates"], profile["maximum_github_candidates"]):
-            raise ValueError("数量或来源构成未达交付门槛")
+        if not rows:
+            raise ValueError("批次没有候选")
         if len(deduplicate(rows)) != len(rows):
             raise ValueError("批内重复")
         for row in rows:
@@ -71,10 +71,10 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool 
                 raise ValueError("旧版候选缺少机器资格记录且未通过筛选")
             validation = validate_manual_review(row.get("manual_editorial_review", {}))
             if not validation.ok:
-                raise ValueError(f"人工终审证据不完整：{row.get('title')}：{'；'.join(validation.errors)}")
+                raise ValueError(f"终审理由不完整：{row.get('title')}：{'；'.join(validation.errors)}")
             source_validation = validate_source_anchors(row)
             if not source_validation.ok:
-                raise ValueError(f"原文依据不完整：{row.get('title')}：{'；'.join(source_validation.errors)}")
+                raise ValueError(f"原文引用不完整：{row.get('title')}：{'；'.join(source_validation.errors)}")
             row["editorial_decision"] = {
                 **row.get("editorial_decision", {}),
                 "final": final_decision_record(row),

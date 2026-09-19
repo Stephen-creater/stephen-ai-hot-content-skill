@@ -90,7 +90,7 @@ def summarize(entries: list[dict], batch: str | None = None) -> dict:
 
 
 def stop_check(entries: list[dict], batch: str, portfolio: dict, min_weight: int = 8) -> dict:
-    """Decide the completion contract's stop condition from recorded evidence only."""
+    """Decide from the search log alone whether expanding sources can stop."""
     rows = [row for row in entries if row.get("batch") == batch and row.get("purpose", "discovery") == "discovery"]
     required = sorted(row["id"] for row in portfolio["families"] if row.get("role") == "candidate" and row.get("weight", 0) >= min_weight)
     # Failed attempts do not count; a blocked family (no authorization or no backend) is covered but reported.
@@ -160,7 +160,7 @@ def main() -> None:
     record.add_argument("--max-age-days", type=int, default=0, help="本次检索使用的时间窗（天）")
     report = sub.add_parser("report")
     report.add_argument("--batch")
-    check = sub.add_parser("stop-check", help="按完成契约判断是否应停止扩源并交付缺口报告")
+    check = sub.add_parser("stop-check", help="按交付规则判断能否停止扩源并交付缺口报告")
     check.add_argument("--batch", required=True)
     check.add_argument("--min-weight", type=int, default=8)
     args = parser.parse_args()

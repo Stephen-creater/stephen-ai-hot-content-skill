@@ -30,6 +30,8 @@ def evidence_review(**overrides):
         "durability": "方法不依赖某个短期版本，半年后仍能复用。",
         "counterargument": "案例只有一位作者，结论可能存在样本偏差。",
         "decision_driver": "完整失败链和可回查原文的动作构成决定性证据。",
+        "rewrite_effort": "结构和论证可以沿用，只需去掉作者个人信息并换成 Stephen 的语气。",
+        "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 1, "durability": 1, "rewrite_effort": 2},
     }
     review.update(overrides)
     return review
@@ -98,12 +100,19 @@ class EditorialJudgmentTest(unittest.TestCase):
         self.assertEqual(hard, [])
         self.assertEqual(len(risks), 1)
 
-    def test_manual_review_requires_all_five_dimensions_and_objection(self):
+    def test_manual_review_requires_all_six_dimensions_and_objection(self):
         incomplete = validate_manual_review({"status": "passed", "topic_appeal": "很有意思"})
         self.assertFalse(incomplete.ok)
         self.assertTrue(any("读者改变" in error for error in incomplete.errors))
-        self.assertTrue(any("最强反对理由" in error for error in incomplete.errors))
+        self.assertTrue(any("最大疑点" in error for error in incomplete.errors))
         self.assertTrue(validate_manual_review(evidence_review()).ok)
+        # Most requirements met is enough; a weak dimension does not veto the rest.
+        mixed = {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 0, "durability": 1, "rewrite_effort": 1}
+        self.assertTrue(validate_manual_review(evidence_review(scores=mixed)).ok)
+        low_total = {**mixed, "durability": 0}
+        self.assertFalse(validate_manual_review(evidence_review(scores=low_total)).ok)
+        no_reader_change = {**mixed, "reader_change": 0, "re_authorability": 2}
+        self.assertFalse(validate_manual_review(evidence_review(scores=no_reader_change)).ok)
 
     def test_final_record_is_auditable(self):
         item = {"manual_editorial_review": evidence_review()}

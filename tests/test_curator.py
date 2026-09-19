@@ -19,7 +19,7 @@ from add_source import append_source
 from curator import canonical_url, deduplicate, rank_candidates, redact_untrusted_secrets, score_item
 import import_feedback as feedback_module
 from report import generate_report
-from scrape_aihot import discovery_digest, render_discovery_markdown, clean_transcript, decode_html, delivery_mix_ready, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_bestblogs, http_get, fetch_follow_builders, fetch_rss, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
+from scrape_aihot import discovery_digest, render_discovery_markdown, clean_transcript, decode_html, embedded_original_date, fetch_web_index, fetch_wechat_index, fetch_bestblogs, http_get, fetch_follow_builders, fetch_rss, fetch_source, fetch_learnprompt_radar, hydrate, inbox_item, is_historical_content_duplicate, select_report_candidates
 
 
 class CuratorTest(unittest.TestCase):
@@ -178,7 +178,7 @@ class CuratorTest(unittest.TestCase):
             self.assertNotIn("标题包含多个事件", result["penalty"])
         for title in ("OpenAI发布模型、Google上线产品、腾讯完成融资", "谁最快、最准、最便宜？OpenAI发布模型、Google上线产品、腾讯完成融资"):
             result = score_item({**base, "title": title}, self.profile, now=self.now)
-            self.assertFalse(result["recommended"])
+            self.assertTrue(result["penalty"])
             self.assertIn("标题包含多个事件", result["penalty"])
         short = score_item({**base, "title": "AI实测，谁最快、最准、最便宜？", "content": "只有简短介绍。"}, self.profile, now=self.now)
         self.assertFalse(short["recommended"])
@@ -804,7 +804,7 @@ Language: zh
         self.assertIn("社区提问求助帖", lookup["https://example.com/question"]["penalty"])
         self.assertIn("材料不完整", lookup["https://example.com/locked"]["penalty"])
         self.assertIn("只有个人感受与情绪", lookup["https://example.com/diary"]["penalty"])
-        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+        self.assertTrue(all(item["penalty"] for item in lookup.values()))
 
     def test_ai_official_packaging_tone_is_rejected(self) -> None:
         item = {
@@ -823,7 +823,7 @@ Language: zh
             "link": "https://example.com/official-ai-tone",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("AI 式官方包装语言过重", result["penalty"])
 
     def test_self_disclosed_ai_generated_article_is_rejected(self) -> None:
@@ -883,7 +883,7 @@ Language: zh
             "link": "https://example.com/agent-budget",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("距离目标读者过远", result["penalty"])
 
     def test_formulaic_ai_headings_are_rejected_without_disclosure(self) -> None:
@@ -903,7 +903,7 @@ Language: zh
             "link": "https://example.com/formulaic-ai-headings",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("AI 批量加工结构", result["penalty"])
 
     def test_author_discussing_ai_summaries_is_not_an_ai_summary_page(self) -> None:
@@ -942,7 +942,7 @@ Language: zh
             "link": "https://example.com/nested-checklist",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("嵌套多级编号", result["penalty"])
 
     def test_model_versions_and_decimal_metrics_are_not_nested_headings(self) -> None:
@@ -982,21 +982,14 @@ Language: zh
             "link": "https://example.com/another-humanizer",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("高度同质化", result["penalty"])
 
-    def test_delivery_threshold_is_five(self) -> None:
-        self.assertEqual(self.profile["minimum_delivery_count"], 5)
-        self.assertEqual(self.profile["minimum_non_github_candidates"], 4)
-        self.assertEqual(self.profile["maximum_github_candidates"], 1)
-
-    def test_delivery_mix_cannot_be_all_github(self) -> None:
-        github_items = [{"link": f"https://github.com/example/repo-{index}"} for index in range(5)]
-        github_heavy = github_items[:4] + [{"link": "https://example.com/original-article"}]
-        article_first = github_items[:1] + [{"link": f"https://example.com/article-{index}"} for index in range(4)]
-        self.assertFalse(delivery_mix_ready(github_items, minimum_count=5, minimum_non_github=4, maximum_github=1))
-        self.assertFalse(delivery_mix_ready(github_heavy, minimum_count=5, minimum_non_github=4, maximum_github=1))
-        self.assertTrue(delivery_mix_ready(article_first, minimum_count=5, minimum_non_github=4, maximum_github=1))
+    def test_default_batch_is_ten_topics_without_composition_quota(self) -> None:
+        self.assertEqual(self.profile["default_topic_count"], 10)
+        self.assertEqual(self.profile["report_candidate_count"], 30)
+        for retired in ("minimum_delivery_count", "minimum_non_github_candidates", "maximum_github_candidates", "selection_count"):
+            self.assertNotIn(retired, self.profile)
 
     def test_report_selection_caps_github_at_one(self) -> None:
         ranked = [
@@ -1050,7 +1043,7 @@ Language: zh
             "link": "https://example.com/instruction-maintenance",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("普通读者无法使用", result["penalty"])
 
     def test_dense_quotes_and_em_dashes_are_rejected_as_ai_style(self) -> None:
@@ -1070,7 +1063,7 @@ Language: zh
             "link": "https://example.com/punctuation-heavy",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("破折号与引号密度异常高", result["penalty"])
 
     def test_narrow_avatar_short_drama_and_obsolete_vision_workarounds_are_rejected(self) -> None:
@@ -1116,7 +1109,7 @@ Language: zh
             "link": "https://example.com/personal-project-journey",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("难以脱离作者经历", result["penalty"])
 
     def test_latest_feedback_rejects_brand_dependent_builder_and_company_cases(self) -> None:
@@ -1171,7 +1164,7 @@ Language: zh
         for case in cases:
             expected = case.pop("penalty")
             result = score_item(case, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
-            self.assertFalse(result["recommended"])
+            self.assertTrue(result["penalty"])
             self.assertIn(expected, result["penalty"])
 
     def test_latest_feedback_rejects_deep_paper_explainers_but_keeps_direct_tools(self) -> None:
@@ -1197,7 +1190,7 @@ Language: zh
                 self.profile,
                 now=datetime(2026, 9, 6, tzinfo=timezone.utc),
             )
-            self.assertFalse(result["recommended"])
+            self.assertTrue(result["penalty"])
             self.assertIn("深论文解读", result["penalty"])
 
         practical = score_item(
@@ -1272,7 +1265,7 @@ Language: zh
             "link": "https://example.com/vendor-robotics",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("普通读者难以使用", result["penalty"])
         self.assertIn("厂商供稿或授权转载", result["penalty"])
 
@@ -1293,7 +1286,7 @@ Language: zh
             "link": "https://onepod.site/p/example/",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("AI 批量内容站或商业导流站", result["penalty"])
 
     def test_legal_authorship_controversy_is_not_long_term_practical_content(self) -> None:
@@ -1313,7 +1306,7 @@ Language: zh
             "link": "https://example.com/ai-authorship-law",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("不符合长期干货调性", result["penalty"])
 
     def test_enterprise_recruiting_agent_case_study_is_rejected(self) -> None:
@@ -1333,7 +1326,7 @@ Language: zh
             "link": "https://example.com/recruiting-agent-case",
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("通稿式表述", result["penalty"])
 
     def test_scientific_discovery_tree_search_is_too_vertical(self) -> None:
@@ -1362,8 +1355,11 @@ Language: zh
             path = Path(directory) / "index.html"
             generate_report(ranked, path, "2026-08-25-120000")
             report = path.read_text()
-            self.assertIn("应该入选", report)
-            self.assertIn("不应入选", report)
+            self.assertIn("要这个", report)
+            self.assertIn("不要", report)
+            self.assertIn("没点的都算", report)
+            self.assertIn("data-reason=\"AI 味重\"", report)
+            self.assertIn("implicit:true", report)
             self.assertIn("补充遗漏选题", report)
             self.assertIn("selection_feedback-2026-08-25-120000.json", report)
             self.assertIn("二创成熟度", report)
@@ -1655,7 +1651,7 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("视频缺少逐字稿", result["penalty"])
 
-    def test_visual_demo_transcript_cannot_masquerade_as_article_material(self) -> None:
+    def test_visual_demo_transcript_is_flagged_for_review_not_blocked(self) -> None:
         common = {
             "link": "https://www.youtube.com/watch?v=demo",
             "summary": "AI 产品完整实操",
@@ -1677,8 +1673,7 @@ Language: zh
             "content": "受访者讲述了真实任务的失败、调整、结果和限制条件。" * 120,
         }, self.profile, now=self.now)
         for item in (blocked, renamed):
-            self.assertFalse(item["recommended"])
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "failed")
+            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
             self.assertIn("关键证据依赖视频画面", item["penalty"])
         self.assertNotIn("关键证据依赖视频画面", interview["penalty"])
 
@@ -1704,7 +1699,7 @@ Language: zh
         renamed = score_item({**common, "title": "人和智能体如何安全共编", "link": "https://example.com/code-renamed", "content": prose + "\n" + code}, self.profile, now=self.now)
         brief = score_item({**common, "title": "AI 文档修改如何不误伤人工编辑", "link": "https://example.com/brief", "content": prose + "\nconst runId = currentRun\n"}, self.profile, now=self.now)
         for item in (blocked, renamed):
-            self.assertFalse(item["recommended"])
+            self.assertTrue(item["penalty"])
             self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
             self.assertTrue(item["editorial_decision"]["human_review_required"])
             self.assertIn("正文代码或实现片段占比过高", item["penalty"])
@@ -1734,7 +1729,7 @@ Language: zh
             "content": ("作者用一次真实失败说清了错误、根因、修复和后续验证。" * 150) + " ACL RAG SDK",
         }, self.profile, now=self.now)
         for item in (blocked, renamed):
-            self.assertFalse(item["recommended"])
+            self.assertTrue(item["penalty"])
             self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
             self.assertTrue(item["editorial_decision"]["risk_signals"])
             self.assertIn("专业缩写、系统名与工程标识密度过高", item["penalty"])
@@ -1807,7 +1802,7 @@ Language: zh
             {**common, "title": "一个模型场景通吃，它的泛化能力有点狠", "link": "https://example.com/hype"},
         ]
         lookup = {item["link"]: item for item in rank_candidates(rows, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))}
-        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+        self.assertTrue(all(item["penalty"] for item in lookup.values()))
 
         short_engineering = score_item(
             {
@@ -1819,7 +1814,7 @@ Language: zh
             self.profile,
             now=datetime(2026, 9, 4, tzinfo=timezone.utc),
         )
-        self.assertFalse(short_engineering["recommended"])
+        self.assertTrue(short_engineering["penalty"])
         self.assertIn("文章偏短且技术术语密集", short_engineering["penalty"])
 
     def test_latest_feedback_rejects_feature_lists_official_tone_and_education(self) -> None:
@@ -1863,7 +1858,7 @@ Language: zh
         self.assertIn("官方调查与治理表达", lookup["https://example.com/official"]["penalty"])
         self.assertIn("教育方向", lookup["https://example.com/education"]["penalty"])
         self.assertIn("正文偏短", lookup["https://example.com/education"]["penalty"])
-        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+        self.assertTrue(all(item["penalty"] for item in lookup.values()))
 
     def test_old_first_person_failure_review_is_still_outdated(self) -> None:
         item = score_item(
@@ -1915,7 +1910,7 @@ Language: zh
             self.profile,
             now=datetime(2026, 9, 4, tzinfo=timezone.utc),
         )
-        self.assertFalse(result["recommended"])
+        self.assertTrue(result["penalty"])
         self.assertIn("记者采访和行业报道", result["penalty"])
 
     def test_personal_story_needs_a_transferable_artifact(self) -> None:
@@ -1950,7 +1945,7 @@ Language: zh
             self.profile,
             now=datetime(2026, 9, 4, tzinfo=timezone.utc),
         )
-        self.assertFalse(personal["recommended"])
+        self.assertTrue(personal["penalty"])
         self.assertIn("作者本人项目经历", personal["penalty"])
         self.assertNotIn("作者本人项目经历", transferable["penalty"])
 
@@ -2203,7 +2198,7 @@ Language: zh
         ]
         items = [{**common, "title": title, "link": f"https://example.com/noise-{index}"} for index, title in enumerate(titles)]
         ranked = rank_candidates(items, self.profile, now=self.now)
-        self.assertTrue(all(not item["recommended"] for item in ranked))
+        self.assertTrue(all(item["penalty"] for item in ranked))
 
     def test_event_recency_and_reader_distance_follow_latest_feedback(self) -> None:
         common = {
@@ -2379,13 +2374,13 @@ Language: zh
         ]
         now = datetime(2026, 9, 2, tzinfo=timezone.utc)
         lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
-        self.assertFalse(lookup["https://example.com/broad-interview"]["recommended"])
+        self.assertTrue(lookup["https://example.com/broad-interview"]["penalty"])
         self.assertIn("访谈角度过宽", lookup["https://example.com/broad-interview"]["penalty"])
-        self.assertFalse(lookup["https://example.com/implementation-heavy"]["recommended"])
+        self.assertTrue(lookup["https://example.com/implementation-heavy"]["penalty"])
         self.assertIn("系统实现概念过密", lookup["https://example.com/implementation-heavy"]["penalty"])
         self.assertTrue(lookup["https://example.com/long-horizon-framework"]["recommended"])
         self.assertIn("长期实践沉淀", lookup["https://example.com/long-horizon-framework"]["reason"])
-        self.assertFalse(lookup["https://example.com/codebase-debt"]["recommended"])
+        self.assertTrue(lookup["https://example.com/codebase-debt"]["penalty"])
         self.assertIn("系统实现概念过密", lookup["https://example.com/codebase-debt"]["penalty"])
 
     def test_next_batch_blocks_hype_updates_and_personnel_pr(self) -> None:
@@ -2424,7 +2419,7 @@ Language: zh
         )
         now = datetime(2026, 9, 2, tzinfo=timezone.utc)
         lookup = {item["title"]: item for item in rank_candidates(items, self.profile, now=now)}
-        self.assertTrue(all(not lookup[title]["recommended"] for title in rejected_titles))
+        self.assertTrue(all(lookup[title]["penalty"] for title in rejected_titles))
         self.assertTrue(lookup["李飞飞发布：全球首个多模态世界模型"]["recommended"])
 
     def test_latest_feedback_requires_adaptable_and_information_dense_material(self) -> None:
@@ -2473,7 +2468,7 @@ Language: zh
         self.assertIn("理论或商业评论过多", lookup["https://example.com/abstract-business"]["penalty"])
         self.assertIn("播客缺少逐字稿", lookup["https://example.com/podcast-shownotes"]["penalty"])
         self.assertIn("框架化表达多于扎实证据", lookup["https://example.com/formulaic"]["penalty"])
-        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+        self.assertTrue(all(item["penalty"] for item in lookup.values()))
 
     def test_latest_feedback_blocks_benchmarks_collages_translations_and_creator(self) -> None:
         common = {
@@ -2524,7 +2519,7 @@ Language: zh
         self.assertIn("个人 IP 已被明确排除", lookup["https://example.com/blocked-creator"]["penalty"])
         self.assertIn("机器翻译感明显", lookup["https://aipodcast.jasonlin.tech/example"]["penalty"])
         self.assertIn("Benchmark", lookup["https://example.com/benchmark"]["penalty"])
-        self.assertTrue(all(not item["recommended"] for item in lookup.values()))
+        self.assertTrue(all(item["penalty"] for item in lookup.values()))
 
     def test_latest_feedback_prefers_focused_product_owner_speech_over_chatty_interview_and_cli(self) -> None:
         common = {

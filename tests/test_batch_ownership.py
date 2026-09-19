@@ -24,6 +24,8 @@ def complete_review():
         'durability': '方法不依赖短期版本，热点消失后仍可以复用。',
         'counterargument': '材料来自单一作者，存在经验外推过度的风险。',
         'decision_driver': '决定放行的是完整失败链与可复用的核验动作。',
+        'rewrite_effort': '结构和论证可以沿用，只需去掉作者个人信息并换成 Stephen 的语气。',
+        'scores': {'topic_appeal': 2, 'reader_change': 2, 'material_increment': 2, 're_authorability': 1, 'durability': 1, 'rewrite_effort': 2},
     }
 
 
@@ -101,7 +103,7 @@ class BatchOwnershipTest(unittest.TestCase):
 
     def setup_root(self, root):
         (root / 'resources').mkdir()
-        (root / 'resources/editorial_profile.json').write_text(json.dumps({'minimum_delivery_count':5,'minimum_non_github_candidates':4,'maximum_github_candidates':1}))
+        (root / 'resources/editorial_profile.json').write_text(json.dumps({'default_topic_count':10}))
 
     def test_publish_rechecks_stale_material_risks_and_actual_short_text(self):
         for metadata in (
@@ -216,7 +218,7 @@ class BatchOwnershipTest(unittest.TestCase):
         base={'link':'https://example.org/new','language':'zh','maturity':'secondary','content_status':'fulltext','content_form':'article','summary':'AI公开方法与证据','content':'这份完整材料讨论真实任务的反馈与验证方法。'*160}
         for title in ('新的热点选题助手','AI视频剪辑实操','HyperFrames做动画','ContentOS工作流','18个模型统计108次财报，谁最快、最准、最便宜？'):
             result=score_item({**base,'title':title},profile)
-            self.assertFalse(result['recommended'])
+            self.assertTrue(result['penalty'])
         result=score_item({**base,'title':'Anthropic产品负责人访谈：用真实失败案例改进工作结果'},profile)
         self.assertNotIn('Token 成本对比',result['penalty'])
         self.assertNotIn('主题已写过',result['penalty'])
@@ -226,14 +228,16 @@ class BatchOwnershipTest(unittest.TestCase):
         judgments = (ROOT / 'references/editorial-judgment.md').read_text(encoding='utf-8')
         calibration = (ROOT / 'references/editorial-calibration-cases.md').read_text(encoding='utf-8')
         protocol = (ROOT / 'references/feedback-learning-protocol.md').read_text(encoding='utf-8')
-        self.assertIn('[编辑判断模型]', skill)
-        self.assertIn('[反馈学习协议]', skill)
+        self.assertIn('[编辑判断标准]', skill)
+        self.assertIn('[反馈学习规则]', skill)
+        self.assertIn('[评测方法]', skill)
         for preserved_rule in (
             '选题吸引力',
             '读者改变',
-            '材料增量',
-            '二创独立性',
+            '干货含量',
+            '可重写性',
             '长期价值',
+            '改写成本',
         ):
             self.assertIn(preserved_rule, judgments)
         self.assertIn('“良配”访谈', calibration)

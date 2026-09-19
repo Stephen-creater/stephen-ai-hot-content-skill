@@ -1,97 +1,89 @@
 # Stephen AI Hot Content Skill
 
-这是 Stephen 的个人 AI 选题系统。它持续发现简体中文材料，检查全文、时效、历史与并发状态，再通过证据化编辑终审生成可审核批次。文章写作不在本项目范围内。
+Stephen 的个人 AI 选题系统：找能改写成文章的简体中文 AI 材料，读完全文判断值不值得推荐，交给 Stephen 审核，再从审核结果里学习。文章写作不在这里做。
 
-来源按分层模型组织：BestBlogs 与觉醒AI 是中文主入口，访谈与文字稿公众号、有转录的播客是高命中层，英文一手来源只作雷达，资讯媒体不作候选入口。Ego Browser 只在常规路径不足时补充。执行契约、数量要求与停止条件以 [SKILL.md](SKILL.md) 为准。
+执行步骤、条数和停止条件以 [SKILL.md](SKILL.md) 为准，这里只讲它是怎么工作的。
 
-## 判断系统
+## 它怎么工作
 
-系统明确区分三类职责：
+一批选题分三层分工：
 
-- **确定性程序**：抓取、语言、完整性、时效、GitHub 状态、去重、批次归属和交付顺序。
-- **风险发现**：提示技术门槛、新闻腔、宣传、AI 加工、私人素材依赖等需要核实的问题。
-- **人工终审**：依据完整正文判断选题吸引力、读者改变、材料增量、二创独立性和长期价值。
+- **脚本**：抓取 197 个订阅源和手动登记的文章，做一票否决（语言、全文、时效、写过、Star 等客观条件）、排序和去重。
+- **Agent**：读完全文，按六个维度各打 0 到 2 分（选题吸引力、读者改变、干货含量、可重写性、长期价值、改写成本），总分至少 8 分且读者改变、干货含量都不是 0 分就推荐，每条引用原文。
+- **Stephen**：在审核页点要或不要，原因点标签。没点的默认算不要。
 
-关键词和自动分数只用于发现排序，不能替代最终编辑判断。正式发布的每条候选必须记录五维证据、最强反对理由和决定性证据。
+关键词只做两件事：决定先读谁，以及给读稿的 Agent 一个要核实的提示。它们不会把文章淘汰掉。
 
-## 反馈如何进入系统
+一批的流程：分轮抓取 → 读全文前查重 → 读全文打分 → 组装到 `topics/<批次ID>/` → 发布前检查 → 生成审核页 → 导入审核结果。
 
-原始反馈保存在本地 `.local/editorial_feedback.jsonl`。新反馈会被区分为稳定原则、有条件偏好、执行规范、精确主题状态、单案例判断、无解释结果或待验证假设。
+## 反馈和评测
 
-单一标题、产品名、作者名或技术词不会直接升级为普遍禁令。任何新原则都要先检查历史反例，并通过正反成对测试。
+审核结果存在本机 `.local/editorial_feedback.jsonl`，不上传。新反馈先按 [反馈学习规则](references/feedback-learning-protocol.md) 归类，单个标题、产品名或作者名不会直接变成禁令。
 
-详细规则：
+每次改规则都要用历史审核回放评测，确保 Stephen 选过的文章不会被新规则误伤，见 [评测方法](references/evaluation.md)：
 
-- [编辑判断模型](references/editorial-judgment.md)
-- [正反校准案例](references/editorial-calibration-cases.md)
-- [反馈学习协议](references/feedback-learning-protocol.md)
+```bash
+.venv/bin/python3 scripts/eval_replay.py build     # 冻结一版基准集
+.venv/bin/python3 scripts/eval_replay.py machine   # 程序层回放
+.venv/bin/python3 scripts/eval_replay.py hints     # 每类审稿提示的命中情况
+```
+
+真正衡量效果的指标是 Stephen 的采纳率：`scripts/editorial_outcomes.py` 看历史结果，`scripts/source_yield.py` 看每个来源的采纳情况。
 
 ## 快速开始
 
 ```bash
 python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
-.venv/bin/python3 scripts/agent_reach_runtime.py status    # 先看已安装与缺失渠道
-.venv/bin/python3 scripts/agent_reach_runtime.py install   # 只在 status 显示缺失时运行
+.venv/bin/python3 scripts/channel_check.py --live   # 看今天哪些取材渠道能用
 ```
 
-本机 Homebrew Python 禁止直接 `pip install`（PEP 668），所以统一使用 `.venv`。
+本机 Homebrew Python 不允许直接 `pip install`，所以统一用 `.venv`。
 
-需要一次性补齐 Exa、B站等系统渠道时，只有在明确允许用户级和全局安装后运行：
-
-```bash
-.venv/bin/python3 scripts/agent_reach_runtime.py install --system --channels all
-```
-
-一批选题的流程是：分轮抓取（输出到 `.local/work/<批次ID>/`）→ 终审前去重 → 读全文人工终审 → 组装到 `topics/<批次ID>/` → 发布前只校验 → 发布审核页 → 导入审核反馈。每一步的命令、数量门槛与停止条件以 [SKILL.md](SKILL.md) 为准，这里不重复。
-
-导入反馈会核验批次、任务归属、候选顺序和持久化结果；成功后才删除下载目录中的临时 JSON，失败则保留。
-
-## 目录职责
-
-- `SKILL.md`：Agent 执行契约与门槛。
-- `references/`：稳定判断、校准案例和外部能力说明。
-- `resources/editorial_profile.json`：可执行配置与风险信号词典。
-- `resources/editorial_profile.schema.json`：配置结构契约。
-- `scripts/editorial_judgment.py`：资格、风险与人工证据契约。
-- `scripts/feedback_audit.py`：反馈覆盖、空备注、重复判断和冲突候选审计，不导出备注原文。
-- `scripts/source_yield.py`：按来源统计审核按钮的入选和否决次数，决定先读哪些来源。
-- `scripts/source_config.py`：读取来源配置，把 `rss_group` 分组展开成单个 RSS 源。
-- `scripts/quality_audit.py`：按公开的 100 分结构质量标准检查反馈保真、泛化、可靠性、可维护性、安全与测试。
-- `resources/content_curator_sources.json`：自动抓取来源配置，按 `family` 与 `role` 标注来源族和用途。
-- `references/source_discovery_playbook.md`：分层来源模型与扩源顺序。
-- `resources/source_portfolio.json`：将目标求解空间拆成 12 个加权来源族。
-- `scripts/source_coverage.py`：区分真实连通、已配置自动化和近 7 天实际探索覆盖率。
-- `scripts/discovery_ledger.py`：私有记录每次检索的结果、全文、合格和入选收益；`stop-check` 判定是否达到停止条件。
-- `scripts/curator.py`：确定性发现排序。
-- `scripts/publish_batch.py`：终审证据、归属、去重和发布门禁；`--check-only` 只校验不登记。
-- `scripts/history_check.py`：终审前按链接和正文重合检查历史重复。
-- `tests/fixtures/editorial_boundary_cases.json`：可供不同模型回放的匿名正反边界集。
-- `docs/plans/`：历史设计记录，不作为执行依据；现行规则以 `SKILL.md` 与 `references/` 为准。
-- `.local/`、`.config/`、`topics/`：私有状态与运行产物，不提交。
-
-## 浏览器与隐私
-
-默认不使用 OpenCLI，避免 Browser Bridge 调试或抢占用户的 Google Chrome；唯一例外是知乎扩源时读取适配器的只读能力契约，见 [知乎路由](references/zhihu-cli-ego.md)。需要浏览器补充时使用 Ego Browser 隔离任务空间；常规检索不要求打开浏览器。
-
-API Key、Cookie、登录态、审核反馈和完整候选正文都不得进入公开仓库。Agent Reach 为可选辅助能力；工具不可用或检测失败时不得伪造结论。
-
-可选模型复排读取 `OPENROUTER_API_KEY` 或忽略目录中的 `.config/openrouter_api_key.txt`。
-
-离线演示：
+离线试跑：
 
 ```bash
 .venv/bin/python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --output-root .local/work/fixture
 ```
 
+## 文件地图
+
+给 Agent 读的说明：
+- `SKILL.md`：操作手册，每次必读。
+- `references/editorial-judgment.md`：六维打分标准。
+- `references/editorial-calibration-cases.md`：正反例。
+- `references/feedback-learning-protocol.md`：怎么从反馈里学、什么不能学。
+- `references/evaluation.md`：评测方法。
+- `references/source_discovery_playbook.md`：五层信息源和接新源的流程。
+- `references/channels.md`：Exa、GitHub、YouTube、B 站、X、知乎、浏览器等取材渠道怎么用。
+
+给脚本读的配置：
+- `resources/editorial_profile.json`：口味档案。目标读者、条数、时效、已写主题、屏蔽名单、审稿提示词和降权名单。
+- `resources/editorial_profile.schema.json`：口味档案的格式检查，防止改配置时误删关键开关。
+- `resources/content_curator_sources.json`：订阅清单，按类别和用途（候选源、线索源、核验源）标注。
+- `resources/source_portfolio.json`：12 类取材渠道和权重，用来判断搜得够不够。
+
+脚本（按流程）：
+- `scrape_aihot.py`：抓取总入口；`curator.py`：一票否决、排序和审稿提示。
+- `add_source.py`：登记 Agent 手动找到的文章；`history_check.py`：读全文前查重。
+- `editorial_judgment.py`：推荐理由格式检查（六维打分、原文引用、正文指纹）。
+- `publish_batch.py`：发布前总检查，`--check-only` 只检查不登记；`report.py`：生成审核页。
+- `import_feedback.py`：导入审核结果；`feedback_audit.py`：统计原因标签，找出没给原因或自相矛盾的反馈。
+- `discovery_ledger.py`：搜索记录本和收工检查；`source_coverage.py`：最近 7 天各类渠道搜过没有；`channel_check.py`：渠道能不能用。
+- `eval_replay.py`：历史回放评测；`quality_audit.py`：仓库结构检查，只说明文件齐不齐，不代表选题好不好。
+- `format_captions.py`、`local_transcribe.py`：整理字幕、本机离线转写。
+
+私有目录（不提交）：`.local/`（反馈、评测、搜索记录、缓存、工作文件）、`topics/`（每批审核页）、`.config/`（密钥）。
+
+## 隐私与浏览器
+
+API Key、Cookie、登录态、审核反馈和完整候选正文都不进公开仓库。需要浏览器时只用隔离浏览器的独立任务空间，不操作 Stephen 的 Chrome。可选的模型复排读取 `OPENROUTER_API_KEY` 或 `.config/openrouter_api_key.txt`。
+
 ## 验证
-
-`quality_audit.py` 只检查文件和结构，满分不代表选题达到用户标准。实际效果须用保留的人工反馈、未参与改规则的材料、误放/误杀记录和新批次用户采纳结果评估。`source_coverage.py` 只报告已声明来源组合的操作验证覆盖；不能推断全网份额。
-
-运行 `.venv/bin/python3 scripts/editorial_outcomes.py` 查看真实审核结果。该报告单列入选但已写的记录，未知召回率保持为空；不能凭持续出现少量入选推断市场供给充足或已经枯竭。
 
 ```bash
 .venv/bin/python3 -m unittest discover -s tests -v
+.venv/bin/python3 scripts/eval_replay.py machine
 uv run --with pyyaml python /Users/a1-6/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
-git diff --check
 .venv/bin/python3 scripts/quality_audit.py
+git diff --check
 ```

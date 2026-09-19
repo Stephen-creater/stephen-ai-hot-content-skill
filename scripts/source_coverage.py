@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -16,12 +15,7 @@ PORTFOLIO = ROOT / "resources" / "source_portfolio.json"
 SOURCES = ROOT / "resources" / "content_curator_sources.json"
 
 
-def doctor_state() -> dict:
-    result = subprocess.run(["agent-reach", "doctor", "--json"], capture_output=True, text=True, check=True, timeout=30)
-    return json.loads(result.stdout)
-
-
-def audit_coverage(portfolio: dict, doctor: dict, sources: dict, entries: list[dict], verified: set[str] | None = None, now: datetime | None = None) -> dict:
+def audit_coverage(portfolio: dict, sources: dict, entries: list[dict], verified: set[str] | None = None, now: datetime | None = None) -> dict:
     verified = verified or set()
     now = now or datetime.now(timezone.utc)
     cutoff = now - timedelta(days=int(portfolio["rolling_window_days"]))
@@ -40,7 +34,7 @@ def audit_coverage(portfolio: dict, doctor: dict, sources: dict, entries: list[d
     rows = []
     access_total = configured_total = attempted_total = 0.0
     for family in portfolio["families"]:
-        channels = family.get("doctor_channels", [])
+        channels = family.get("channels", [])
         active = [name for name in channels if name in verified]
         required_operations = ("search", "read", "author")
         evidence = [row for row in entries
@@ -88,13 +82,11 @@ def main() -> None:
     parser.add_argument("--portfolio", type=Path, default=PORTFOLIO)
     parser.add_argument("--sources", type=Path, default=SOURCES)
     parser.add_argument("--ledger", type=Path, default=DEFAULT_LEDGER)
-    parser.add_argument("--doctor-json", type=Path)
-    parser.add_argument("--verified-channel", action="append", default=[])
+    parser.add_argument("--verified-channel", action="append", default=[], help="本轮用 channel_check.py --live 实测可用的渠道")
     parser.add_argument("--write-snapshot", type=Path)
     args = parser.parse_args()
-    doctor = json.loads(args.doctor_json.read_text(encoding="utf-8")) if args.doctor_json else doctor_state()
     report = audit_coverage(
-        json.loads(args.portfolio.read_text(encoding="utf-8")), doctor,
+        json.loads(args.portfolio.read_text(encoding="utf-8")),
         load_sources(args.sources), load_entries(args.ledger), set(args.verified_channel),
     )
     rendered = json.dumps(report, ensure_ascii=False, indent=2)
