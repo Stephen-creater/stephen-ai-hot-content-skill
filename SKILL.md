@@ -44,6 +44,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ### 1. 接上之前的状态
 
 - 反馈原文很大，不直接读。用 `feedback_audit.py` 看入选率、原因标签统计和没给原因的记录，读进度文件续跑，不靠对话记忆。
+- 读本机私有的 `.local/articles/published_topics.md`：Stephen 已经写成文章的全部选题。写过的主题不再推荐（除非有实质新进展），类型和写法以它为参照。有新文章时先跑 `.venv/bin/python3 scripts/sync_articles.py` 从飞书只读同步。
 - 先读哪些来源，参考 `.venv/bin/python3 scripts/source_yield.py --min-decided 5`：键是公众号名或网站域名，审核不足 5 次的来源不参与排序。
 - **读全文之前**把待读材料存成 JSON 数组，运行 `.venv/bin/python3 scripts/history_check.py <文件>` 查重。同一篇访谈常被不同站点换标题转载，链接不同但正文重合。
 - 相似主题只有新事实、新方法或新结果才算新材料。
@@ -51,7 +52,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ### 2. 抓取与找原文
 
 - 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。输出里的 `triage.md` 列出全部合格材料（已过一票否决和查重）的标题、来源、日期、字数和开头，按来源优先级和新鲜度排列；全文在 `eligible.json`。**先通读 `triage.md` 全部标题，自己挑出值得读全文的**，一般是目标条数的 3 倍左右（默认 10 条选题读约 30 篇）。`candidates.json` 只是按顺序截的前 30 篇，不代表推荐。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
-- 线索源（播客、YouTube、X、即刻）只进 `discovery.md`。命中后先找中文全文或文字稿，再登记进来重抓。
+- 线索源（官方发布、播客、YouTube、X、即刻）只进 `discovery.md`，官方发布排在最前面。重大发布是 Stephen 写得最多的一类，当天和第二天的发布要优先找中文首发报道或解读，登记进来重抓。
 - 按原始发布时间从新到旧读。转载、网页更新、重新上榜都不改变文章的真实年龄。
 - 登录、关注、验证码或付费后才能看到的正文直接放弃；代理或缓存抓到的隐藏文字不算公开。
 - 机器转录要合并段落、校正专名、标出说话人，不能把字幕墙交给用户。

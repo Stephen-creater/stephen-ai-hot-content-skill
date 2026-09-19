@@ -52,7 +52,7 @@ class EvalReplayTest(unittest.TestCase):
 
     def test_collect_marks_label_strength_and_judgeability(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            items = {item["id"]: item for item in eval_replay.collect(self.feedback(Path(tmp)))}
+            items = {item["id"]: item for item in eval_replay.collect(self.feedback(Path(tmp)), adoptions={})}
         self.assertEqual(items["keep"]["label_strength"], "strong")
         self.assertEqual(items["drop"]["label_strength"], "weak")
         self.assertEqual(items["thin"]["label_strength"], "weak")
@@ -61,7 +61,7 @@ class EvalReplayTest(unittest.TestCase):
 
     def test_blind_export_hides_labels(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            items = eval_replay.collect(self.feedback(Path(tmp)))
+            items = eval_replay.collect(self.feedback(Path(tmp)), adoptions={})
         rows = eval_replay.export_blind(items, "all", None)
         self.assertEqual({row["id"] for row in rows}, {"keep", "drop"})
         for row in rows:
@@ -70,7 +70,7 @@ class EvalReplayTest(unittest.TestCase):
 
     def test_score_reports_recall_precision_and_misses(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            items = eval_replay.collect(self.feedback(Path(tmp)))
+            items = eval_replay.collect(self.feedback(Path(tmp)), adoptions={})
         result = eval_replay.score_verdicts(items, [
             {"id": "keep", "verdict": "reject", "reason": "太技术"},
             {"id": "drop", "verdict": "reject"},
@@ -92,6 +92,39 @@ class EvalReplayTest(unittest.TestCase):
         entry = {"kind": "machine", "benchmark": "v1", "split": "dev", "metrics": {"selected_kept_rate": 1.0, "ranking_auc": 0.58}}
         self.assertFalse(eval_replay.regression_warnings(entry, history))
         self.assertTrue(eval_replay.regression_warnings({**entry, "metrics": {"selected_kept_rate": 0.9}}, history))
+
+    def test_written_articles_override_review_labels(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self.feedback(Path(tmp))
+            topics = Path(tmp) / "topics"
+            (topics / "batch-2").mkdir(parents=True)
+            body = "一篇后来被写成文章的完整中文材料，讲清了新功能怎么用。" * 40
+            (topics / "batch-2" / "candidates.json").write_text(json.dumps([{"id": "later", "title": "腾讯会议新功能实测", "content": body}], ensure_ascii=False), encoding="utf-8")
+            adoptions = {"drop": {"article": "9.x"}, "later": {"article": "9.16"}}
+            items = {item["id"]: item for item in eval_replay.collect(path, adoptions=adoptions, topics=topics)}
+        self.assertEqual(items["drop"]["label"], "selected")
+        self.assertEqual(items["drop"]["label_strength"], "adopted")
+        self.assertEqual(items["later"]["label"], "selected")
+        self.assertTrue(items["later"]["judgeable"])
+
+    def test_sync_articles_walks_tree_read_only(self) -> None:
+        import sync_articles
+        calls = []
+
+        def fake(args):
+            calls.append(args[:2])
+            if args[1] == "+node-list":
+                parent = args[args.index("--parent-node-token") + 1]
+                nodes = {"root": [{"title": "第一周", "node_token": "w1", "obj_type": "docx", "obj_token": "d1", "has_child": True}],
+                         "w1": [{"title": "9.1 文章", "node_token": "a1", "obj_type": "docx", "obj_token": "d2", "has_child": False}]}
+                return {"data": {"nodes": nodes.get(parent, [])}}
+            return {"data": {"document": {"content": "正文" * 200}}}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            index = sync_articles.sync("space", "root", Path(tmp), fake)
+            self.assertTrue((Path(tmp) / "第一周__9.1 文章.md").exists())
+        self.assertEqual([row["path"] for row in index], [["第一周"], ["第一周", "9.1 文章"]])
+        self.assertTrue(all(call[1] in {"+node-list", "+fetch"} for call in calls))
 
     def test_ranking_auc(self) -> None:
         self.assertEqual(eval_replay.rank_auc([(90, True), (10, False)]), 1.0)

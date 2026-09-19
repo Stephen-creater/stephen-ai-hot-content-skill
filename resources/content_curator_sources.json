@@ -399,41 +399,41 @@
     {"name": "Evil Martians", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://evilmartians.com/chronicles.atom", "items_limit": 4, "priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
     {
       "name": "OpenAI News",
-      "category": "英文官方核验",
+      "category": "官方发布（当天解读的第一手来源）",
       "type": "rss",
       "url": "https://openai.com/news/rss.xml",
       "priority": 5,
-      "role": "verification",
+      "role": "discovery", "cache_ttl_seconds": 3600,
       "language": "en",
       "maturity": "primary"
     },
     {
       "name": "Google DeepMind",
-      "category": "英文官方核验",
+      "category": "官方发布（当天解读的第一手来源）",
       "type": "rss",
       "url": "https://deepmind.google/blog/rss.xml",
       "priority": 5,
-      "role": "verification",
+      "role": "discovery", "cache_ttl_seconds": 3600,
       "language": "en",
       "maturity": "primary"
     },
     {
       "name": "Anthropic News",
-      "category": "英文官方核验",
+      "category": "官方发布（当天解读的第一手来源）",
       "type": "web",
       "url": "https://www.anthropic.com/news",
       "priority": 5,
-      "role": "verification",
+      "role": "discovery", "cache_ttl_seconds": 3600,
       "language": "en",
       "maturity": "primary"
     },
     {
       "name": "GitHub Changelog",
-      "category": "英文官方核验",
+      "category": "官方发布（当天解读的第一手来源）",
       "type": "rss",
       "url": "https://github.blog/changelog/feed/",
       "priority": 4,
-      "role": "verification",
+      "role": "discovery", "cache_ttl_seconds": 3600,
       "language": "en",
       "maturity": "primary"
     }

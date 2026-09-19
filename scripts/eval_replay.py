@@ -48,8 +48,35 @@ def label_strength(review: dict) -> str:
     return "weak"
 
 
-def collect(feedback: Path = FEEDBACK) -> list[dict]:
-    """Last decision per candidate wins; pending is not a label."""
+ADOPTIONS = EVAL_DIR / "adoptions.json"
+TOPICS = ROOT / "topics"
+
+
+def load_adoptions(path: Path = ADOPTIONS) -> dict[str, dict]:
+    """Candidates Stephen turned into published articles. Writing it is the strongest label there is."""
+    if not path.exists():
+        return {}
+    return {str(row["candidate_id"]): row for row in json.loads(path.read_text(encoding="utf-8"))}
+
+
+def delivered_rows(topics: Path = TOPICS) -> dict[str, tuple[dict, str]]:
+    rows: dict[str, tuple[dict, str]] = {}
+    for path in sorted(topics.glob("*/candidates.json")):
+        try:
+            for row in json.loads(path.read_text(encoding="utf-8")):
+                if isinstance(row, dict) and row.get("id"):
+                    rows.setdefault(str(row["id"]), (row, path.parent.name))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return rows
+
+
+def collect(feedback: Path = FEEDBACK, adoptions: dict[str, dict] | None = None, topics: Path = TOPICS) -> list[dict]:
+    """Last decision per candidate wins; pending is not a label.
+
+    A candidate Stephen later wrote up counts as selected with the strongest
+    label, even when the review page said otherwise or was never filled in.
+    """
     candidates: dict[str, tuple[dict, str]] = {}
     decisions: dict[str, tuple[dict, str]] = {}
     for line in feedback.read_text(encoding="utf-8").splitlines():
@@ -64,6 +91,14 @@ def collect(feedback: Path = FEEDBACK) -> list[dict]:
         for item_id, review in record.get("reviews", {}).items():
             if isinstance(review, dict):
                 decisions[str(item_id)] = (review, batch)
+    adoptions = load_adoptions() if adoptions is None else adoptions
+    delivered = delivered_rows(topics) if adoptions else {}
+    for item_id in adoptions:
+        if item_id not in candidates and item_id in delivered:
+            candidates[item_id] = delivered[item_id]
+        if item_id in candidates:
+            decisions[item_id] = ({"status": "selected", "note": "写成了文章：" + adoptions[item_id].get("article", ""), "adopted": True},
+                                  decisions.get(item_id, ({}, candidates[item_id][1]))[1])
     items = []
     for item_id, (review, batch) in decisions.items():
         if review.get("status") not in {"selected", "rejected"} or item_id not in candidates:
@@ -75,7 +110,7 @@ def collect(feedback: Path = FEEDBACK) -> list[dict]:
             "batch": candidate_batch or batch,
             "split": split_for(candidate_batch or batch),
             "label": review["status"],
-            "label_strength": label_strength(review),
+            "label_strength": "adopted" if review.get("adopted") else label_strength(review),
             "reasons": review.get("reasons", []),
             "note": str(review.get("note", "")).strip(),
             "judgeable": len(content) >= MIN_JUDGEABLE_CHARS,
@@ -114,6 +149,7 @@ def build(feedback: Path = FEEDBACK) -> Path:
         "items": len(items),
         "judgeable": sum(item["judgeable"] for item in items),
         "strong_labels": sum(item["label_strength"] == "strong" for item in items),
+        "adopted_labels": sum(item["label_strength"] == "adopted" for item in items),
         "by_split_label": {f"{split}:{label}": count for (split, label), count in sorted(summary.items())},
     }
     path.with_suffix(".manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")

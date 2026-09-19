@@ -809,7 +809,9 @@ def render_discovery_markdown(rows: list[dict]) -> str:
     for row in rows:
         groups.setdefault(row.get("source_category") or "其他线索", []).append(row)
     lines = [f"# 线索（{len(rows)} 条，按来源类别分组，组内从新到旧）"]
-    for category, members in groups.items():
+    # Official launches first: Stephen writes release explainers within a day or two.
+    ordered = sorted(groups.items(), key=lambda pair: not pair[0].startswith("官方发布"))
+    for category, members in ordered:
         lines += ["", f"## {category}（{len(members)}）"]
         for row in members:
             day = (parse_datetime(row.get("published")) or None)
@@ -931,7 +933,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="为 Stephen 筛选 AI 热点选题")
     parser.add_argument("--fixture", type=Path, help="使用本地 JSON 数据，不联网")
     parser.add_argument("--inbox", type=Path, default=ROOT / ".local" / "source_inbox.json", help="公众号、B站、播客和本地逐字稿入口")
-    parser.add_argument("--include-verification", action="store_true", help="同时抓取英文官方核验来源")
     parser.add_argument("--include-rejected", action="store_true", help="调试时在报告中包含未通过硬门槛的内容")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
     parser.add_argument("--batch", help="写入检索账本时使用的批次 ID；不填则不记账")
@@ -960,7 +961,7 @@ def main() -> None:
         items = load_json(args.fixture)
     else:
         items = load_inbox(args.inbox, settings, skip_urls=reviewed_urls)
-        enabled_sources = [source for source in source_config["sources"] if args.include_verification or source.get("role") != "verification"]
+        enabled_sources = [source for source in source_config["sources"] if source.get("role") != "verification"]
         with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
             futures = {executor.submit(fetch_source, source, settings): source for source in enabled_sources}
             for future in concurrent.futures.as_completed(futures):
