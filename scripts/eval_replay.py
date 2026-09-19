@@ -233,6 +233,9 @@ def leak_check(items: list[dict], docs: list[Path]) -> list[dict]:
         # Any 12-character run of the title counts as a quote.
         core = _re.sub(r"\s+", "", title)
         fragments = {core[i:i + 12] for i in range(0, max(1, len(core) - 11))} if len(core) >= 12 else set()
+        # In a Chinese title, a run that is mostly a product name ("ClaudeCode团队") is not a quote.
+        if _re.search(r"[\u4e00-\u9fff]", core):
+            fragments = {f for f in fragments if len(_re.findall(r"[\u4e00-\u9fff]", f)) >= 6}
         for name, text in texts.items():
             flat = _re.sub(r"\s+", "", text)
             if any(fragment in flat for fragment in fragments):

@@ -134,3 +134,17 @@ class EvalReplayTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LeakCheckTest(unittest.TestCase):
+    def test_quoted_holdout_title_leaks_but_a_shared_product_name_does_not(self):
+        import tempfile
+        items = [
+            {"split": "holdout", "label": "rejected", "candidate": {"title": "Claude Code团队讲究啊，这都往外说"}},
+            {"split": "holdout", "label": "selected", "candidate": {"title": "一个开源Skill，让AI学会挑选合适的中文字体"}},
+        ]
+        with tempfile.TemporaryDirectory(dir=ROOT) as directory:
+            doc = Path(directory) / "rules.md"
+            doc.write_text("KiKi、Claude Code 团队、千问办公都是例子。\n例如“让AI学会挑选合适的中文字体”这篇。", encoding="utf-8")
+            leaks = eval_replay.leak_check(items, [doc])
+        self.assertEqual([leak["label"] for leak in leaks], ["selected"])
