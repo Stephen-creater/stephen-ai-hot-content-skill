@@ -84,6 +84,8 @@ class EvalReplayTest(unittest.TestCase):
         entry = {"kind": "judge", "benchmark": "v1", "split": "dev", "metrics": {"selected_recall": 0.8}}
         self.assertTrue(eval_replay.regression_warnings(entry, history))
         self.assertFalse(eval_replay.regression_warnings({**entry, "split": "holdout"}, history))
+        # A baseline run with a different judge label is not a regression of this one.
+        self.assertFalse(eval_replay.regression_warnings({**entry, "judge": "旧标准"}, history))
 
     def test_ranking_auc(self) -> None:
         self.assertEqual(eval_replay.rank_auc([(90, True), (10, False)]), 1.0)

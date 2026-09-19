@@ -275,7 +275,8 @@ def append_history(entry: dict) -> Path:
 def regression_warnings(entry: dict, history: list[dict]) -> list[str]:
     previous = [
         row for row in history
-        if row.get("kind") == entry["kind"] and row.get("benchmark") == entry["benchmark"] and row.get("split") == entry.get("split")
+        if row.get("kind") == entry["kind"] and row.get("benchmark") == entry["benchmark"]
+        and row.get("split") == entry.get("split") and row.get("judge") == entry.get("judge")
     ]
     if not previous:
         return []
