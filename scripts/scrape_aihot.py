@@ -153,6 +153,11 @@ def html_to_text(value: str | None) -> str:
     return "\n".join(line for line in lines if line)
 
 
+def count_images(value: str | None) -> int:
+    """Article images are dropped from the text, so record how many there were for the reader."""
+    return len(BeautifulSoup(value or "", "html.parser").find_all("img"))
+
+
 def mirror_urls(source: dict) -> list[str]:
     """The source URL, then the same path on each mirror host (public RSSHub instances go down)."""
     parts = urlsplit(source["url"])
@@ -176,8 +181,9 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
             break
     items = []
     for entry in feed.entries[: int(source.get("items_limit", settings["rss_items_per_source"]))]:
-        body = html_to_text((entry.get("content") or [{}])[0].get("value")) if source.get("use_feed_content") else ""
-        extra = {"content": body, "content_status": "fulltext", "content_origin": "feed_fulltext"} if len(body) >= 200 else {}
+        raw_body = (entry.get("content") or [{}])[0].get("value") if source.get("use_feed_content") else ""
+        body = html_to_text(raw_body) if raw_body else ""
+        extra = {"content": body, "content_status": "fulltext", "content_origin": "feed_fulltext", "image_count": count_images(raw_body)} if len(body) >= 200 else {}
         items.append(
             {
                 "title": clean_text(entry.get("title")),
@@ -592,6 +598,8 @@ def hydrate(item: dict, settings: dict) -> dict:
         extracted = trafilatura.extract(text, include_comments=False, include_tables=True) or ""
         if extracted:
             item["content"] = extracted.strip()
+            with_images = trafilatura.extract(text, include_comments=False, include_images=True, output_format="xml") or ""
+            item["image_count"] = with_images.count("<graphic")
             item["content_truncated"] = truncated
             item["content_status"] = "partial" if truncated else ("shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext")
             if urlparse(item["link"]).netloc.lower().endswith("jxxy.net"):
@@ -894,7 +902,8 @@ def render_triage_markdown(rows: list[dict]) -> str:
         opening = re.sub(r"\s+", " ", str(row.get("content") or row.get("summary") or ""))[:120]
         lines.append(
             f"{index}. [{row.get('source_title') or row.get('title')}]({row.get('link', '')}) "
-            f"· {row.get('source_name', '')} · {str(row.get('published', ''))[:10]} · {len(row.get('content') or '')} 字 · id {row.get('id')}"
+            f"· {row.get('source_name', '')} · {str(row.get('published', ''))[:10]} · {len(row.get('content') or '')} 字"
+            f"{' · 图 ' + str(row['image_count']) + ' 张' if row.get('image_count') is not None else ''} · id {row.get('id')}"
         )
         if opening:
             lines.append(f"   {opening}")

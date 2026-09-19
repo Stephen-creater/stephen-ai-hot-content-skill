@@ -227,8 +227,18 @@ def export_blind(items: list[dict], split: str, limit: int | None) -> list[dict]
     ]
 
 
-def score_verdicts(items: list[dict], verdicts: list[dict]) -> dict:
-    """Compare Agent verdicts (recommend / reject) with Stephen's labels."""
+def gate_blocked(item: dict, profile: dict) -> bool:
+    """Would the one-vote rules stop this before an Agent reads it? Live GitHub data is not stored, so skip it."""
+    failures = replay(item, profile)["editorial_decision"]["eligibility"]["failures"]
+    return any(not (failure["evidence"].startswith("GitHub") and "github_stars" not in item["candidate"]) for failure in failures)
+
+
+def score_verdicts(items: list[dict], verdicts: list[dict], profile: dict | None = None, base_rate: float = 0.12) -> dict:
+    """Compare Agent verdicts (recommend / reject) with Stephen's labels.
+
+    With a profile, items the one-vote rules would block count as rejected, so the
+    numbers describe the real pipeline rather than the Agent alone.
+    """
     by_id = {item["id"]: item for item in items}
     tp = fp = fn = tn = 0
     misses, false_alarms = [], []
@@ -237,7 +247,7 @@ def score_verdicts(items: list[dict], verdicts: list[dict]) -> dict:
         item = by_id.get(str(verdict.get("id")))
         if not item:
             continue
-        predicted = verdict.get("verdict") == "recommend"
+        predicted = verdict.get("verdict") == "recommend" and not (profile and gate_blocked(item, profile))
         actual = item["label"] == "selected"
         title = item["candidate"].get("title")
         if predicted and actual:
@@ -256,11 +266,19 @@ def score_verdicts(items: list[dict], verdicts: list[dict]) -> dict:
     recall = tp / (tp + fn) if tp + fn else None
     precision = tp / (tp + fp) if tp + fp else None
     specificity = tn / (tn + fp) if tn + fp else None
+    false_rate = fp / (fp + tn) if fp + tn else None
+    # Samples are enriched with selected items; rescale to Stephen's real selection rate.
+    estimated = (
+        recall * base_rate / (recall * base_rate + false_rate * (1 - base_rate))
+        if recall is not None and false_rate is not None and (recall or false_rate) else None
+    )
     return {
         "judged": total,
         "selected_recall": round(recall, 3) if recall is not None else None,
         "recommend_precision": round(precision, 3) if precision is not None else None,
         "balanced_accuracy": round((recall + specificity) / 2, 3) if recall is not None and specificity is not None else None,
+        "estimated_real_precision": round(estimated, 3) if estimated is not None else None,
+        "base_rate": base_rate,
         "accuracy": round((tp + tn) / total, 3) if total else None,
         "confusion": {"agree_selected": tp, "agent_only": fp, "missed_selected": fn, "agree_rejected": tn},
         "strong_label_agreement": dict(strong),
@@ -324,6 +342,7 @@ def main() -> None:
     score_parser.add_argument("verdicts", type=Path)
     score_parser.add_argument("--split", choices=["dev", "holdout", "all"], default="dev")
     score_parser.add_argument("--judge", default="agent", help="谁做的判断，例如 claude-opus-5")
+    score_parser.add_argument("--no-gate", action="store_true", help="只看 Agent 本身，不叠加一票否决")
     sub.add_parser("history")
     args = parser.parse_args()
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
@@ -363,11 +382,11 @@ def main() -> None:
     elif args.command == "score":
         verdicts = json.loads(args.verdicts.read_text(encoding="utf-8"))
         subset = [item for item in items if args.split == "all" or item["split"] == args.split]
-        result = score_verdicts(subset, verdicts)
+        result = score_verdicts(subset, verdicts, None if args.no_gate else profile)
         entry = {
             "at": datetime.now(timezone.utc).isoformat(), "commit": git_head(), "kind": "judge", "judge": args.judge,
             "benchmark": path.name, "split": args.split,
-            "metrics": {k: result[k] for k in ("judged", "selected_recall", "recommend_precision", "balanced_accuracy", "accuracy")},
+            "metrics": {k: result[k] for k in ("judged", "selected_recall", "recommend_precision", "estimated_real_precision", "balanced_accuracy", "accuracy")},
         }
         print(json.dumps(result, ensure_ascii=False, indent=2))
         for warning in regression_warnings(entry, read_history()):

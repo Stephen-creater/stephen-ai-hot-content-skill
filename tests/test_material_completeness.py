@@ -98,5 +98,15 @@ class MaterialCompletenessTest(unittest.TestCase):
         self.assertIn('最后的结论是实验尚未成立', item['content'])
 
 
+class ImageCountTest(unittest.TestCase):
+    def test_feed_images_are_counted_and_listed_for_triage(self):
+        from scrape_aihot import count_images, render_triage_markdown
+        html = "<p>正文</p><img src='a.png'><p>更多</p><img src='b.png'>"
+        self.assertEqual(count_images(html), 2)
+        markdown = render_triage_markdown([{"id": "x", "title": "标题", "link": "https://example.com", "content": "正文", "image_count": 23}])
+        self.assertIn("图 23 张", markdown)
+        self.assertIn("没有用关键词", markdown)
+
+
 if __name__ == '__main__':
     unittest.main()
