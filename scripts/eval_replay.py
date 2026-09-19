@@ -5,7 +5,6 @@
   build    冻结一版基准集（按批次切分出开发集和留出集）
   machine  用当前打分规则回放基准集：你选中的文章有没有被拦下或排到后面
   leak-check  检查规则文档有没有引用留出集的文章
-  hints    每类关键词提示命中了多少入选、多少淘汰（关键词不参与排序和判断，只用来观察）
   export   导出不带结论的盲评材料，交给 Agent 按当前 SKILL 重新判断
   score    把 Agent 的判断和你的结论对比，记录到评测历史
   history  查看历次评测结果，发现退步
@@ -168,29 +167,6 @@ def machine(items: list[dict], profile: dict) -> dict:
     return report
 
 
-def hints(items: list[dict], profile: dict) -> list[dict]:
-    selected: Counter[str] = Counter()
-    rejected: Counter[str] = Counter()
-    batches: dict[str, set[str]] = {}
-    for item in items:
-        if not item["judgeable"]:
-            continue
-        result = replay(item, profile)
-        for signal in result["editorial_decision"]["risk_signals"]:
-            hint = signal["evidence"]
-            (selected if item["label"] == "selected" else rejected)[hint] += 1
-            batches.setdefault(hint, set()).add(item["batch"])
-    rows = []
-    for hint in sorted(set(selected) | set(rejected), key=lambda key: -(selected[key] + rejected[key])):
-        rows.append({
-            "hint": hint,
-            "selected_hits": selected[hint],
-            "rejected_hits": rejected[hint],
-            "batches": len(batches[hint]),
-        })
-    return rows
-
-
 def leak_check(items: list[dict], docs: list[Path]) -> list[dict]:
     """Holdout titles quoted in rules make the holdout useless for catching overfit."""
     import re as _re
@@ -334,7 +310,6 @@ def main() -> None:
     sub.add_parser("build")
     machine_parser = sub.add_parser("machine")
     machine_parser.add_argument("--no-record", action="store_true")
-    sub.add_parser("hints")
     sub.add_parser("leak-check")
     export_parser = sub.add_parser("export")
     export_parser.add_argument("--split", choices=["dev", "holdout", "all"], default="dev")
@@ -375,9 +350,7 @@ def main() -> None:
         leaks = leak_check(items, docs)
         print(json.dumps(leaks, ensure_ascii=False, indent=2))
         sys.exit(1 if leaks else 0)
-    if args.command == "hints":
-        print(json.dumps(hints(items, profile), ensure_ascii=False, indent=2))
-    elif args.command == "export":
+    if args.command == "export":
         rows = export_blind(items, args.split, args.limit)
         args.output.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"已导出 {len(rows)} 条盲评材料（不含你的结论）：{args.output}")

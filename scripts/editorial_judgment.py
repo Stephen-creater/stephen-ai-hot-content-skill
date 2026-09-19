@@ -1,6 +1,6 @@
 """Eligibility checks and the format check for Agent review cards.
 
-Code decides objective eligibility and lists review hints. It must not pretend
+Code decides objective eligibility only. It must not pretend
 that keyword matches prove audience value, topic appeal, or reuse. Those need
 an Agent that read the whole article, scored six dimensions and quoted it.
 """
@@ -104,8 +104,6 @@ def build_decision_contract(
     item: dict,
     *,
     penalties: Iterable[str],
-    score: float,
-    minimum_score: float,
 ) -> dict:
     """Build an auditable machine-stage record without inventing human evidence."""
     failures, risks = classify_penalties(penalties)
@@ -117,7 +115,7 @@ def build_decision_contract(
         }
         for key in DIMENSIONS
     }
-    machine_disposition = "blocked" if failures else ("shortlist" if score >= minimum_score else "review")
+    machine_disposition = "blocked" if failures else "shortlist"
     return {
         "contract_version": 2,
         "eligibility": {

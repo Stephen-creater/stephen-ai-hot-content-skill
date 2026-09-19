@@ -10,11 +10,10 @@ from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from editorial_judgment import build_decision_contract, is_hard_failure
+from editorial_judgment import build_decision_contract
 
 
 TAG_RE = re.compile(r"<[^>]+>")
-NUMBER_RE = re.compile(r"\b\d+(?:[.,]\d+)?%?|\$\d+", re.I)
 VERSION_ONLY_RE = re.compile(r"^(?:[a-z-]+-)?v?\d+\.\d+(?:\.\d+)?(?:[-.][a-z0-9.]+)?$", re.I)
 PACKAGE_VERSION_RE = re.compile(r"^[a-z0-9_.-]+\s+v?\d+\.\d+(?:\.\d+)?(?:[-.][a-z0-9.]+)?$", re.I)
 CORE_AI_TERMS = (
@@ -29,6 +28,7 @@ SECRET_PATTERNS = (
 )
 
 
+TRADITIONAL_MARKERS = set("體學這為與從讓個裡實過開關點臺檔寫讀據動應處別進還題會時發現種選擇轉換價務圖頁製後設產")
 MIGRATION_CONTEXT_RE = re.compile(r"迁移|迁出|离开|告别|替代|取代|弃用|换掉|不再用|转向|迁到|换到")
 
 def contains_term(text: str, term: str) -> bool:
@@ -179,12 +179,11 @@ def deduplicate(items: list[dict]) -> list[dict]:
     return kept
 
 
-def review_hint_deduction(point_penalties: list[tuple[str, float]], profile: dict) -> float:
-    """Only objective failures lower the score. Keyword hints are debug notes and cost nothing."""
-    return sum(points for message, points in point_penalties if is_hard_failure(message))
-
-
 def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
+    """Apply the one-vote rules and compute reading order. No keyword-based judgment.
+
+    Whether a piece is worth writing is decided by an Agent reading the full text.
+    """
     now = now or datetime.now(timezone.utc)
     title = clean_text(item.get("source_title") or item.get("title"))
     summary = clean_text(item.get("summary") or item.get("description"))
@@ -192,14 +191,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     content = clean_text(raw_content)
     haystack = f"{title} {summary} {content}".lower()
     title_summary = f"{title} {summary}".lower()
+    failures: list[str] = []
     reasons: list[str] = []
-    penalties: list[str] = []
-    point_penalties: list[tuple[str, float]] = []
-
-    def penalize(message: str, points: float) -> None:
-        # Record the rule's original weight; review_hint_deduction decides how much of it counts.
-        penalties.append(message)
-        point_penalties.append((message, points))
+    gates = profile.get("gate_terms", {})
 
     language = item.get("language", "unknown")
     maturity = item.get("maturity", "unknown")
@@ -209,58 +203,33 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     source_domain = urlsplit(item.get("link", "")).netloc.lower()
     source_name = clean_text(item.get("source_name")).lower()
     github_stars = item.get("github_stars")
-    if language == "zh" and len(content) >= 400 and len(re.findall(r"[\u4e00-\u9fff]", content)) < 20:
-        penalties.append("正文缺少中文内容，不能按中文标签放行")
 
+    # Language
+    if language == "zh" and len(content) >= 400 and len(re.findall(r"[\u4e00-\u9fff]", content)) < 20:
+        failures.append("正文缺少中文内容，不能按中文标签放行")
     if profile.get("required_chinese_script") == "simplified":
         chinese = re.findall(r"[\u4e00-\u9fff]", content or title)
-        traditional_markers = set("體學這為與從讓個裡實過開關點臺檔寫讀據動應處別進還題會時發現種選擇轉換價務圖頁製後設產")
-        traditional_count = sum(char in traditional_markers for char in chinese)
+        traditional_count = sum(char in TRADITIONAL_MARKERS for char in chinese)
         if traditional_count >= 12 and traditional_count / max(len(chinese), 1) >= 0.02:
-            penalties.append("原文为繁体中文，要求简体中文材料")
-    covered = any(term.lower() in title_summary for term in profile.get("covered_topic_terms", []))
-    karpathy_wiki = any(term in title_summary for term in ("karpathy", "卡帕西", "卡帕斯")) and "知识库" in title_summary
+            failures.append("原文为繁体中文，要求简体中文材料")
+    if language == "en":
+        failures.append("英文一手信息，优先用于核验")
+    if source_role == "verification":
+        failures.append("核验来源，不进入默认选题")
+
+    # Exact topic state: written, deferred, disfavored, retired, excluded, blocked
     covered_pattern = any(re.search(pattern, title_summary, re.I) for pattern in profile.get("covered_topic_patterns", []))
-    if covered or karpathy_wiki or covered_pattern:
-        penalties.append("主题已写过，不重复推荐")
-    broad_model_comparison = bool(re.search(r"(?:\d+|多|多款|各|各家|主流|全部).{0,5}模型", title_summary)) and any(
-        term in title_summary for term in ("横评", "对比", "比较", "最快", "最便宜", "谁更", "性价比")
-    )
-    if broad_model_comparison and any(term in title_summary for term in ("token", "成本", "价格", "便宜", "性价比")):
-        penalties.append("大而全的模型与 Token 成本对比，缺少新的可写价值")
+    karpathy_wiki = any(term in title_summary for term in ("karpathy", "卡帕西", "卡帕斯")) and "知识库" in title_summary
+    if covered_pattern or karpathy_wiki or any(term.lower() in title_summary for term in profile.get("covered_topic_terms", [])):
+        failures.append("主题已写过，不重复推荐")
     if "workbuddy" in title_summary and any(term in title_summary for term in profile.get("deferred_basic_workbuddy_terms", [])):
-        penalties.append("WorkBuddy 常规岗位基础应用暂缓推荐")
-    # Leaving or replacing a retired tool is a different subject from promoting it; keep that reviewable.
+        failures.append("WorkBuddy 常规岗位基础应用暂缓推荐")
+    # Leaving or replacing a retired tool is a different subject from promoting it.
     migration_context = bool(MIGRATION_CONTEXT_RE.search(title_summary))
-    if any(term.lower() in title_summary for term in profile.get("disfavored_product_subject_terms", [])):
-        penalties.append("提到用户暂不认可的产品，需核实主体是否为迁移或替代" if migration_context
-                         else "用户当前不认可该产品，不推荐其主体实测或介绍")
-    if any(term.lower() in title_summary for term in profile.get("retired_workflow_platform_subject_terms", [])):
-        penalties.append("提到传统节点式编排平台，需核实主体是否为迁移或现代 Agent 方法" if migration_context
-                         else "传统节点式 Workflow 平台已被用户明确淘汰，不再作为选题主体")
-
-    published = parse_datetime(item.get("published") or item.get("article_date"))
-    age_days = None
-    if published:
-        age_days = max(0, (now - published).days)
-        if age_days > profile["max_age_days"]:
-            penalties.append("超过时效范围")
-        elif age_days <= profile["priority_days"]:
-            reasons.append("最近一周发布" if age_days <= 7 else "最近两周发布")
-
-    matched_pillars = []
-    pillar_points = 0.0
-    for pillar in profile["topic_pillars"]:
-        matches = [keyword for keyword in pillar["keywords"] if keyword.lower() in haystack]
-        if matches:
-            matched_pillars.append(pillar["name"])
-            pillar_points = max(pillar_points, 22 * float(pillar["weight"]))
-    if matched_pillars:
-        reasons.append("符合" + "、".join(matched_pillars[:2]))
-
-    # Self-controlled activity recall is not surveillance of other people.
-    # Require the subject, useful task and opt-in controls together; an incidental
-    # product mention must never exempt employee/partner monitoring articles.
+    if not migration_context and any(term.lower() in title_summary for term in profile.get("disfavored_product_subject_terms", [])):
+        failures.append("用户当前不认可该产品，不推荐其主体实测或介绍")
+    if not migration_context and any(term.lower() in title_summary for term in profile.get("retired_workflow_platform_subject_terms", [])):
+        failures.append("传统节点式 Workflow 平台已被用户明确淘汰，不再作为选题主体")
     personal_activity_recall = (
         any(term in haystack for term in ("computer history", "个人电脑活动回忆", "个人工作记忆"))
         and any(term in haystack for term in ("找回工作", "恢复工作", "工作上下文", "工作状态"))
@@ -268,431 +237,101 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         and "暂停" in haystack
         and not any(term in title_summary for term in ("员工", "监视", "偷窥", "伴侣", "孩子", "他人", "考勤"))
     )
-    excluded = [word for word in profile["exclude_keywords"] if word.lower() in title_summary
+    excluded = [word for word in profile.get("exclude_keywords", []) if word.lower() in title_summary
                 and not (word == "监控" and personal_activity_recall)]
     if excluded:
-        penalties.append("命中排除词" + "、".join(excluded[:2]))
+        failures.append("命中排除词" + "、".join(excluded[:2]))
+    if any(source_domain == domain or source_domain.endswith(f".{domain}") for domain in profile.get("blocked_domains", [])):
+        failures.append("来源域名已被明确排除")
+    if any(term.lower() in f"{source_name} {title.lower()}" for term in profile.get("blocked_creators", [])):
+        failures.append("作者或个人 IP 已被明确排除")
 
-    score = pillar_points
-    priority = int(item.get("source_priority", 3))
-    score += priority * 2
+    # Age
+    published = parse_datetime(item.get("published") or item.get("article_date"))
+    age_days = max(0, (now - published).days) if published else None
     if age_days is not None:
-        score += max(0, 18 - age_days)
-    elif item.get("source_type") == "web":
-        score -= 6
-
-    if language == profile.get("preferred_language"):
-        score += 18
-        reasons.append("中文内容")
-    elif language == "en":
-        penalize("英文一手信息，优先用于核验", 22)
-    if maturity == profile.get("preferred_maturity"):
-        score += 16
-        reasons.append("作者已完成二手整合")
-    elif maturity == "primary":
-        score -= 15
-    if source_role == "verification":
-        penalize("核验来源，不进入默认选题", 80)
-
-    if content_status == "transcript":
-        score += 20
-        reasons.append("已有逐字稿")
-    elif content_status == "fulltext":
-        score += 15
-        reasons.append("已有完整正文")
-    elif content_status == "shownotes":
-        score += 8
-        reasons.append("已有详细 Show Notes")
-    else:
-        penalize("缺少完整文字材料", 14)
-    # Reading order uses only objective signals: source priority, freshness, language,
-    # an already-edited secondary source and available full text. No keyword counts here.
-    reading_order = round(score - pillar_points, 1)
-    if content_form == "podcast" and content_status != "transcript":
-        penalize("播客缺少逐字稿，无法低成本二创", 55)
-    if content_form == "video" and content_status != "transcript":
-        penalize("视频缺少逐字稿，无法核验完整论证", 55)
-    visual_action_count = sum(
-        content.count(term)
-        for term in ("可以看到", "我们打开", "点击", "我来给大家看", "你看", "演示")
-    )
-    visual_object_count = sum(content.count(term) for term in ("界面", "画面", "截图", "这个页面"))
-    if content_form == "video" and content_status == "transcript" and visual_action_count >= 8 and visual_object_count >= 4:
-        penalize("关键证据依赖视频画面与操作演示，逐字稿无法独立支撑文章二创", 80)
-
-    if NUMBER_RE.search(haystack):
-        score += 6
-        reasons.append("包含明确数字")
-    if any(word in haystack for word in ("github", "api", "open source", "开源", "case study", "案例")):
-        score += 7
-        reasons.append("具备产品或案例抓手")
-    if any(word in haystack for word in ("how", "guide", "workflow", "skill", "方法", "实践", "为什么")):
-        score += 5
-        reasons.append("可形成机制解释")
-    if len(content) >= 500:
-        score += 8
-        reasons.append("正文材料充足")
-    elif len(summary) < 80:
-        penalize("材料过少", 8)
-    if excluded:
-        score -= 60
-    if VERSION_ONLY_RE.fullmatch(title.strip()) or PACKAGE_VERSION_RE.fullmatch(title.strip()):
-        penalize("只有版本号", 90)
-    if not any(contains_term(title_summary, term) for term in CORE_AI_TERMS) and not ai_subject_in_body(summary, content):
-        penalize("标题与摘要缺少明确 AI 对象", 40)
-    if any(word.lower() in haystack for word in ("weekly roundup", "week in review", "本周汇总", "一周回顾")):
-        penalize("多事件合集", 30)
-    if title.count("；") >= 2:
-        penalize("标题包含多个事件", 40)
-    finance_terms = ("funding", "raises $", "valuation", "融资", "估值")
-    substance_terms = ("open source", "开源", "api", "workflow", "agent", "product", "产品", "机制", "case study")
-    if any(word in haystack for word in finance_terms) and not any(word in haystack for word in substance_terms):
-        penalize("只有融资或估值", 35)
-    title_finance = ("融资", "估值", "收购", "卖了", "亿美元", "连融", "融三轮")
-    title_substance = ("开源", "模型发布", "模型上线", "产品发布", "产品上线", "技术", "案例", "工作流", "agent")
-    if any(word.lower() in title.lower() for word in title_finance) and not any(word.lower() in title.lower() for word in title_substance):
-        penalize("标题只有资本事件", 35)
-    if any(word in title for word in ("连融", "融三轮")):
-        penalize("标题以连续融资制造热度", 35)
-    if any(word in title for word in ("重磅发布", "深度参与", "主论坛", "峰会")):
-        penalize("疑似会议或商业通稿", 30)
-    if any(word in title for word in ("比赛", "决赛", "奖金")):
-        penalize("比赛新闻偏离既有文章谱系", 25)
-
-    # These terms surface questions for review. They remain conservative
-    # machine filters for backward compatibility, but the final publication
-    # decision is made from the evidence contract, never from a term alone.
-    editorial_fit = profile.get("risk_signal_lexicon", profile.get("editorial_fit", {}))
-    evergreen_terms = [word for word in editorial_fit.get("evergreen_angle_terms", []) if word.lower() in haystack]
-    hype_terms = [word for word in editorial_fit.get("hype_or_gossip_terms", []) if word.lower() in title_summary]
-    broad_terms = [word for word in editorial_fit.get("broad_or_pr_terms", []) if word.lower() in title_summary]
-    niche_terms = [word for word in editorial_fit.get("niche_professional_terms", []) if word.lower() in title_summary]
-    robotics_topic_terms = [word for word in editorial_fit.get("robotics_topic_terms", []) if word.lower() in title_summary]
-    major_entities = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in title.lower()]
-    major_entities_in_content = [word for word in editorial_fit.get("major_ai_entities", []) if word.lower() in haystack]
-    release_terms = [word for word in editorial_fit.get("release_terms", []) if word.lower() in title_summary]
-    interview_terms = [word for word in editorial_fit.get("authoritative_interview_terms", []) if word.lower() in title_summary]
-    event_terms = [word for word in editorial_fit.get("event_or_ad_terms", []) if word.lower() in title_summary]
-    people_terms = [word for word in editorial_fit.get("people_profile_terms", []) if word.lower() in title_summary]
+        if age_days > profile["max_age_days"]:
+            failures.append("超过时效范围")
+        elif age_days <= profile["priority_days"]:
+            reasons.append("最近一周发布" if age_days <= 7 else "最近两周发布")
     product_update = bool(re.search(r"(?:版本|模型|产品|功能|软件|系统).{0,8}更新|更新.{0,8}(?:版本|模型|产品|功能|软件|系统)", title_summary))
-    product_withdrawal = bool(
-        re.search(
-            r"(?:版本|模型|产品|功能|软件|系统|服务|发布|上线|公告).{0,8}撤回|"
-            r"撤回.{0,8}(?:版本|模型|产品|功能|软件|系统|服务|发布|上线|公告)",
-            title_summary,
-        )
-    )
-    time_sensitive_terms = [
-        word for word in editorial_fit.get("time_sensitive_event_terms", [])
-        if word.lower() in title_summary
-        and (word != "更新" or product_update)
-        and (word != "撤回" or product_withdrawal)
+    product_withdrawal = bool(re.search(
+        r"(?:版本|模型|产品|功能|软件|系统|服务|发布|上线|公告).{0,8}撤回|撤回.{0,8}(?:版本|模型|产品|功能|软件|系统|服务|发布|上线|公告)",
+        title_summary,
+    ))
+    event_words = [
+        word for word in gates.get("time_sensitive_event_terms", [])
+        if word.lower() in title_summary and (word != "更新" or product_update) and (word != "撤回" or product_withdrawal)
     ]
-    reader_distance_terms = [word for word in editorial_fit.get("reader_distance_terms", []) if word.lower() in title_summary]
-    personal_workflow_detail_terms = [word for word in editorial_fit.get("personal_workflow_detail_terms", []) if word.lower() in haystack]
-    creator_brand_dependency_terms = [word for word in editorial_fit.get("creator_brand_dependency_terms", []) if word.lower() in haystack]
-    saturated_builder_mvp_terms = [word for word in editorial_fit.get("saturated_builder_mvp_terms", []) if word.lower() in haystack]
-    company_coupled_case_terms = [word for word in editorial_fit.get("company_coupled_case_terms", []) if word.lower() in haystack]
-    generic_comparison_terms = [word for word in editorial_fit.get("generic_comparison_terms", []) if word.lower() in title_summary]
-    hardware_news_terms = [word for word in editorial_fit.get("hardware_news_terms", []) if word.lower() in title_summary]
-    too_technical_terms = [word for word in editorial_fit.get("too_technical_for_readers_terms", []) if word.lower() in title_summary]
-    implementation_heavy_terms = [word for word in editorial_fit.get("implementation_heavy_terms", []) if word.lower() in title_summary]
-    code_barrier_terms = [word for word in editorial_fit.get("code_barrier_terms", []) if word.lower() in haystack]
-    complex_technical_case_terms = [word for word in editorial_fit.get("complex_technical_case_terms", []) if word.lower() in haystack]
-    frontier_lab_safety_terms = [word for word in editorial_fit.get("frontier_lab_safety_terms", []) if word.lower() in haystack]
-    strategic_product_analysis_terms = [word for word in editorial_fit.get("strategic_product_analysis_terms", []) if word.lower() in haystack]
-    developer_maintenance_terms = [word for word in editorial_fit.get("developer_maintenance_terms", []) if word.lower() in haystack]
-    abstract_business_terms = [word for word in editorial_fit.get("abstract_business_terms", []) if word.lower() in haystack]
-    formulaic_framework_terms = [word for word in editorial_fit.get("formulaic_framework_terms", []) if word.lower() in haystack]
-    benchmark_article_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in haystack]
-    benchmark_title_terms = [word for word in editorial_fit.get("benchmark_article_terms", []) if word.lower() in title_summary]
-    deep_paper_metric_terms = [word for word in editorial_fit.get("deep_paper_metric_terms", []) if word.lower() in haystack]
-    citation_collage_terms = [word for word in editorial_fit.get("citation_collage_terms", []) if word.lower() in haystack]
-    education_topic_terms = [word for word in editorial_fit.get("education_topic_terms", []) if word.lower() in title_summary]
-    feature_inventory_terms = [word for word in editorial_fit.get("feature_inventory_terms", []) if word.lower() in title_summary]
-    institutional_tone_terms = [word for word in editorial_fit.get("institutional_tone_terms", []) if word.lower() in haystack]
-    synthetic_official_tone_terms = [word for word in editorial_fit.get("synthetic_official_tone_terms", []) if word.lower() in haystack]
-    synthetic_structure_terms = [word for word in editorial_fit.get("synthetic_structure_terms", []) if word.lower() in haystack]
-    nested_outline_count = len(re.findall(r"(?<!\d)(?:1[0-9]|2[0-9])\.(?:[1-9]\d?)(?:[.、\s]|$)", content))
-    paper_surface = f"{title_summary} {source_name}"
-    paper_signal_count = sum(haystack.count(term) for term in ("论文", "arxiv", "paperbench", "学术论文"))
-    paper_surface_match = any(term in paper_surface for term in ("论文", "arxiv", "paperbench", "学术论文"))
-    paper_explainer = paper_surface_match or (paper_signal_count >= 4 and len(deep_paper_metric_terms) >= 2)
-    technical_acronyms = {
-        token for token in re.findall(r"(?<![A-Za-z0-9])[A-Z][A-Z0-9-]{1,9}(?![A-Za-z0-9])", content)
-        if token not in {"AI", "API", "URL", "PDF", "LLM", "GPT"}
-    }
-    technical_identifiers = {
-        token.lower()
-        for token in re.findall(r"(?<![A-Za-z0-9_])[A-Za-z][A-Za-z0-9_-]{3,}(?![A-Za-z0-9_])", content)
-    }
-    oversized_checklist = bool(re.search(r"(?:1[2-9]|2\d)(?:条|个)(?:实战经验|经验|方法|原则|技巧)", title_summary))
-    self_disclosed_ai_authorship = bool(
-        re.search(
-            r"(?:本文|本篇内容).{0,24}(?:由|使用).{0,40}(?:ai|codex|豆包|claude|gpt).{0,24}(?:生成|完成|创作)",
-            haystack[:1200],
-            flags=re.I,
-        )
-    )
-    institutional_source = any(word.lower() in source_name for word in editorial_fit.get("institutional_sources", []))
-    news_reporting_terms = [word for word in editorial_fit.get("news_reporting_terms", []) if word.lower() in haystack]
-    news_source = any(word.lower() in source_name for word in editorial_fit.get("news_sources", []))
-    promotional_disclosure_terms = [word for word in editorial_fit.get("promotional_disclosure_terms", []) if word.lower() in haystack]
-    advertorial_source_terms = [word for word in editorial_fit.get("advertorial_source_terms", []) if word.lower() in source_name]
-    advertorial_copy_terms = [word for word in editorial_fit.get("advertorial_copy_terms", []) if word.lower() in haystack]
-    official_release_copy_terms = [word for word in editorial_fit.get("official_release_copy_terms", []) if word.lower() in haystack]
-    release_subject = bool(
-        re.search(r"版本发布|更新日志|更新内容|新版本|全新版本|release notes|changelog|(?<!\w)v?\d+\.\d+(?:\.\d+)?", title_summary)
-        or len(re.findall(r"(?m)^#{1,6}\s+[^\n]*(?:新增|优化|修复|更新内容)", item.get("content") or "")) >= 3
-    )
-    peripheral_ai_topic_terms = [word for word in editorial_fit.get("peripheral_ai_topic_terms", []) if word.lower() in title_summary]
-    personal_project_story_terms = [word for word in editorial_fit.get("personal_project_story_terms", []) if word.lower() in title.lower()]
-    transferable_artifact_terms = [word for word in editorial_fit.get("transferable_artifact_terms", []) if word.lower() in title_summary]
-    ai_summary_surface = f"{title_summary} {source_name}"
-    ai_summary_or_translation_terms = [word for word in editorial_fit.get("ai_summary_or_translation_terms", []) if word.lower() in ai_summary_surface]
-    saturated_humanizer_terms = [word for word in editorial_fit.get("saturated_humanizer_terms", []) if word.lower() in title_summary]
-    legal_compliance_topic_terms = [word for word in editorial_fit.get("legal_compliance_topic_terms", []) if word.lower() in haystack]
-    coding_agent_only_terms = [word for word in editorial_fit.get("coding_agent_only_terms", []) if word.lower() in haystack]
-    low_audience_vertical_terms = [word for word in editorial_fit.get("low_audience_vertical_terms", []) if word.lower() in title_summary]
-    obsolete_workaround_terms = [word for word in editorial_fit.get("obsolete_workaround_terms", []) if word.lower() in title_summary]
-    unstable_preview_product_terms = [word for word in editorial_fit.get("unstable_preview_product_terms", []) if word.lower() in title_summary]
-    punctuation_length = max(len(content), 1)
-    em_dash_density = content.count("—") * 1000 / punctuation_length
-    quote_density = sum(content.count(mark) for mark in "“”‘’") * 1000 / punctuation_length
-    first_person_density = (content.count("我") + content.count("我们")) * 1000 / punctuation_length
-    locked_content_terms = [word for word in editorial_fit.get("locked_content_terms", []) if word.lower() in haystack]
-    community_question_terms = [word for word in editorial_fit.get("community_question_terms", []) if word.lower() in haystack]
-    thin_personal_reflection_terms = [word for word in editorial_fit.get("thin_personal_reflection_terms", []) if word.lower() in haystack]
-    generic_interview_angle_terms = [word for word in editorial_fit.get("generic_interview_angle_terms", []) if word.lower() in title_summary]
-    interview_biography_terms = [word for word in editorial_fit.get("interview_biography_terms", []) if word.lower() in haystack]
-    cross_topic_macro_terms = [word for word in editorial_fit.get("cross_topic_macro_terms", []) if word.lower() in haystack]
-    terminal_cli_terms = [word for word in editorial_fit.get("terminal_cli_terms", []) if word.lower() in haystack]
-    product_owner_speech_terms = [word for word in editorial_fit.get("product_owner_speech_terms", []) if word.lower() in haystack]
-    hardware_subject_terms = [word for word in editorial_fit.get("hardware_subject_terms", []) if word.lower() in title_summary]
-    professional_product_governance_terms = [word for word in editorial_fit.get("professional_product_governance_terms", []) if word.lower() in haystack]
-    generic_product_framework_terms = [word for word in editorial_fit.get("generic_product_framework_terms", []) if word.lower() in haystack]
-    concrete_end_user_task_terms = [word for word in editorial_fit.get("concrete_end_user_task_terms", []) if word.lower() in haystack]
-    unappealing_architecture_topic_terms = [word for word in editorial_fit.get("unappealing_architecture_topic_terms", []) if word.lower() in title_summary]
-    brand_promotion_topic_terms = [word for word in editorial_fit.get("brand_promotion_topic_terms", []) if word.lower() in haystack]
-    low_value_product_critique_terms = [word for word in editorial_fit.get("low_value_product_critique_terms", []) if word.lower() in title_summary]
-    direct_use_artifact_terms = [word for word in editorial_fit.get("direct_use_artifact_terms", []) if word.lower() in haystack]
-    long_horizon_practice_terms = [word for word in editorial_fit.get("long_horizon_practice_terms", []) if word.lower() in title_summary]
-    reusable_framework_terms = [word for word in editorial_fit.get("reusable_framework_terms", []) if word.lower() in title_summary]
-    low_reuse_story_terms = [word for word in editorial_fit.get("low_reuse_story_terms", []) if word.lower() in title_summary]
-    concrete_practice_terms = [word for word in editorial_fit.get("concrete_practice_terms", []) if word.lower() in title_summary]
-    concept_terms = ("harness", "skill", "mcp", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理")
-    authoritative_interview = bool(interview_terms and major_entities_in_content)
-    long_horizon_framework = bool(long_horizon_practice_terms and reusable_framework_terms)
-    if evergreen_terms:
-        score += 12
-        reasons.append("具备可长期回看的机制切口")
-    if hype_terms:
-        penalize("炒作或猎奇成分过高", 45)
-    if broad_terms:
-        penalize("宏大或通稿式表述，缺少具体切口", 30)
-    if niche_terms:
-        penalize("科研或医疗垂直题，大众切口偏弱", 30)
-    if len(robotics_topic_terms) >= 2:
-        penalize("具身机器人或在线强化学习过于垂直，普通读者难以使用", 55)
-    if authoritative_interview:
-        score += 24
-        reasons.insert(0, "核心 AI 团队权威人物访谈，材料完整")
-    if interview_terms and (generic_interview_angle_terms or len(interview_biography_terms) >= 2) and not long_horizon_framework:
-        penalize("访谈角度过宽：人生经历或宏观闲聊占比过高，缺少持续的具体问题", 45)
-    if release_terms and not major_entities and not any(term in title_summary for term in concept_terms):
-        penalize("主体知名度或事件级别不足", 35)
-    if event_terms:
-        penalize("活动、采购或合作宣传稿", 55)
-    if people_terms and not authoritative_interview:
-        penalize("纯人物群像，缺少可复用的核心机制", 30)
-    # A long interview is not event news just because the guest mentions a launch in
-    # passing; if the event word is in the title, the piece is about the event.
+    # An interview is not event news just because a launch is mentioned in passing.
+    interview_words = gates.get("interview_terms", [])
+    core_team_interview = any(word.lower() in title_summary for word in interview_words) and any(
+        entity.lower() in haystack for entity in gates.get("major_ai_entities", []))
     long_interview = (
-        any(word.lower() in title.lower() for word in interview_terms)
-        and not any(word.lower() in title.lower() for word in time_sensitive_terms)
+        any(word.lower() in title.lower() for word in interview_words)
+        and not any(word.lower() in title.lower() for word in event_words)
         and len(content) >= minimum_article_chars(profile)
     )
-    if age_days is not None and time_sensitive_terms and not (authoritative_interview or long_interview) and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
-        penalize("事件新闻已超过时效窗口", 60)
-    if reader_distance_terms:
-        penalize("企业维护或治理议题，距离目标读者过远", 35)
-    if any(source_domain == domain or source_domain.endswith(f".{domain}") for domain in profile.get("blocked_domains", [])):
-        penalize("来源为 AI 批量内容站或商业导流站", 80)
+    if age_days is not None and event_words and not (core_team_interview or long_interview) and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
+        failures.append("事件新闻已超过时效窗口")
+
+    # Complete, public text
+    if content_status == "transcript":
+        reasons.append("已有逐字稿")
+    elif content_status == "fulltext":
+        reasons.append("已有完整正文")
+    elif content_status == "shownotes":
+        reasons.append("已有详细 Show Notes")
+    else:
+        failures.append("缺少完整文字材料")
+    if content_form == "podcast" and content_status != "transcript":
+        failures.append("播客缺少逐字稿，无法低成本二创")
+    if content_form == "video" and content_status != "transcript":
+        failures.append("视频缺少逐字稿，无法核验完整论证")
+    if len(content) < 500 and len(summary) < 80:
+        failures.append("材料过少")
+    if content_form == "article" and content_status == "fulltext" and len(content) < minimum_article_chars(profile):
+        failures.append("文章正文偏短，不足以支撑高质量二创")
+    if any(word.lower() in haystack for word in gates.get("locked_content_terms", [])):
+        failures.append("正文被登录、关注或付费墙截断，材料不完整")
+    if VERSION_ONLY_RE.fullmatch(title.strip()) or PACKAGE_VERSION_RE.fullmatch(title.strip()):
+        failures.append("只有版本号")
+    if not any(contains_term(title_summary, term) for term in CORE_AI_TERMS) and not ai_subject_in_body(summary, content):
+        failures.append("标题与摘要缺少明确 AI 对象")
+    if re.search(r"(?:本文|本篇内容).{0,24}(?:由|使用).{0,40}(?:ai|codex|豆包|claude|gpt).{0,24}(?:生成|完成|创作)", haystack[:1200], flags=re.I):
+        failures.append("文章主动披露由 AI 生成，不作为 Stephen 二创底稿")
+
+    # GitHub
     if source_domain == "github.com":
         if github_stars is None:
-            penalize("GitHub Star 数未核验，不能进入候选", 70)
+            failures.append("GitHub Star 数未核验，不能进入候选")
         elif int(github_stars) < int(profile.get("minimum_github_stars", 100)):
-            penalize("GitHub Star 低于 100，不进入候选", 70)
+            failures.append("GitHub Star 低于 100，不进入候选")
         else:
             reasons.insert(0, f"GitHub {int(github_stars)} Star，达到入场门槛")
         if age_days is None or age_days > 7:
-            penalize("GitHub 最近有效发布或更新超过 7 天，不再算当前热点", 70)
-    if any(term.lower() in f"{source_name} {title.lower()}" for term in profile.get("blocked_creators", [])):
-        penalize("作者或个人 IP 已被明确排除", 100)
-    if generic_comparison_terms:
-        penalize("泛化工具清单或横评，缺少可提炼的核心结论", 40)
-    if hardware_news_terms:
-        penalize("纯芯片、显存或硬件性能新闻", 45)
-    if hardware_subject_terms:
-        penalize("AI 硬件与设备产品成立条件不符合当前内容偏好", 60)
-    if unappealing_architecture_topic_terms:
-        penalize("购物或商家 Agent 的单多智能体架构选择不具备当前选题吸引力", 65)
-    if len(brand_promotion_topic_terms) >= 2:
-        penalize("单一旅行或电商平台的 Agent 案例宣传属性过强", 70)
-    if low_value_product_critique_terms:
-        penalize("产品本身缺少可写价值，负面体验或失败点不能单独支撑选题", 65)
-    document_format = r"(?:Word|Excel|PowerPoint|PPTX?|PDF|Markdown|CSV|JSON|DOCX|XLSX|SVG|TXT)"
-    event_title = re.sub(rf"\b{document_format}(?:\s*[、,，]\s*{document_format}){{2,}}\b", "文档格式", title, flags=re.I)
-    comparison_metric = r"(?:最|更)?(?:快|准|便宜|省钱|省时|稳定|准确|好用)"
-    event_title = re.sub(
-        rf"(?:谁|哪个|哪款|哪家){comparison_metric}(?:\s*、\s*{comparison_metric}){{2,}}(?=[？?！!：:，,。]|$)",
-        "同一任务的比较维度", event_title,
-    )
-    if event_title.count("、") >= 2:
-        penalize("标题包含多个事件", 40)
-    if too_technical_terms:
-        penalize("技术细节过深，目标读者难以理解或使用", 45)
-    if len(developer_maintenance_terms) >= 3 and any(word in title_summary for word in ("清理", "维护", "缓存", "磁盘", "mole")):
-        penalize("开发者维护教程依赖多种缓存与包管理术语，超出目标读者门槛", 70)
-    if len(implementation_heavy_terms) >= 2:
-        penalize("系统实现概念过密，普通读者难以理解或复用", 45)
-    if len(code_barrier_terms) >= 4:
-        penalize("正文工程门槛过高，包含大量代码与基础设施细节", 45)
-    elif len(content) < 2500 and len(code_barrier_terms) >= 2:
-        penalize("文章偏短且技术术语密集，普通读者难以获得可复用价值", 45)
-    code_line_pattern = re.compile(
-        r"(?:=>|===|\?\.|\.(?:get|set|push|map|toJSON|fromJSON|setMeta)\(|"
-        r"\b(?:const|let|function|return|import|export)\b|^[\s{}\[\],]+$|"
-        r"^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*\s*[:=])"
-    )
-    code_like_lines = [line for line in raw_content.splitlines() if code_line_pattern.search(line.strip())]
-    if content_form == "article" and len(code_like_lines) >= 8:
-        penalize("正文代码或实现片段占比过高，文章载体的普通读者难以独立理解", 80)
-    if len(complex_technical_case_terms) >= 3:
-        penalize("核心案例同时依赖多种技术环境与实施概念，普通读者难以低成本复用", 80)
-    if len(terminal_cli_terms) >= 3:
-        penalize("以终端、CLI、Shell 或快捷键为主体，技术门槛超出目标读者", 70)
-    if len(cross_topic_macro_terms) >= 3 and not product_owner_speech_terms:
-        penalize("多个抽象大词和跨产品话题来回跳转，缺少单一连续的决策链", 55)
-    frontier_lab_subject = any(entity in haystack for entity in ("openai", "anthropic", "deepmind", "模型实验室"))
-    if frontier_lab_subject and len(frontier_lab_safety_terms) >= 2 and len(concrete_end_user_task_terms) < 2:
-        penalize("前沿模型实验室的安全、对齐或攻击风险占主体，对目标读者缺少可用价值", 80)
-    if len(strategic_product_analysis_terms) >= 3 and len(concrete_practice_terms) < 1 and len(concrete_end_user_task_terms) < 2:
-        penalize("单一大厂产品演进、生态解读和未来战略预测占主体，缺少可直接复用的当前任务", 80)
-    if len(professional_product_governance_terms) >= 3 and len(concrete_end_user_task_terms) < 2:
-        penalize("专业 AI 产品治理细节过多，普通读者难以学会或获得收益", 65)
-    if generic_product_framework_terms and len(concrete_end_user_task_terms) < 2:
-        penalize("整齐的产品分层框架多于新事实与可写切口", 55)
-    if len(abstract_business_terms) >= 3:
-        penalize("理论或商业评论过多，缺少对普通读者的实际价值", 45)
-    if len(formulaic_framework_terms) >= 2 and not long_horizon_framework:
-        penalize("框架化表达多于扎实证据，信息密度偏低", 45)
-    if benchmark_title_terms or (len(benchmark_article_terms) >= 2 and not authoritative_interview and not concrete_practice_terms):
-        penalize("以 Benchmark、评测集或跑分为主体，缺少实际使用价值", 55)
-    if paper_explainer and (len(deep_paper_metric_terms) >= 2 or len(technical_acronyms) >= 6):
-        penalize("深论文解读依赖大量专有名词、缩写或实验指标，不适合普通读者", 75)
-    if len(technical_acronyms) >= 15 and len(technical_identifiers) >= 80:
-        penalize("专业缩写、系统名与工程标识密度过高，理解主线需要专业背景", 80)
-    if len(citation_collage_terms) >= 3:
-        penalize("研究、报告与人物引语堆叠，缺少作者自己的高密度结论", 45)
-    if education_topic_terms:
-        penalize("学生、学校或课堂教育方向不符合当前选题偏好", 55)
-    if feature_inventory_terms and not long_horizon_framework and not concrete_practice_terms:
-        penalize("以产品功能说明和名词拆解为主，缺少长期回看内涵", 45)
-    if institutional_source and len(institutional_tone_terms) >= 3 and not concrete_practice_terms:
-        penalize("官方调查与治理表达过重，缺少个人经验和行动价值", 45)
-    if len(synthetic_official_tone_terms) >= 4 and not concrete_practice_terms:
-        penalize("AI 式官方包装语言过重，真实作者判断不足", 55)
-    if len(synthetic_structure_terms) >= 3 and not authoritative_interview and not concrete_practice_terms:
-        penalize("小标题与清单过度整齐，呈现明显 AI 批量加工结构", 65)
-    if (nested_outline_count >= 3 or oversized_checklist) and not authoritative_interview:
-        penalize("十几条大清单并嵌套多级编号，AI 加工痕迹过重", 65)
-    if self_disclosed_ai_authorship:
-        penalize("文章主动披露由 AI 生成，不作为 Stephen 二创底稿", 100)
-    if news_source and len(news_reporting_terms) >= 2 and not concrete_practice_terms:
-        penalize("以记者采访和行业报道为主，不适合作为个人写作底稿", 45)
-    if promotional_disclosure_terms:
-        penalize("正文由厂商供稿或授权转载，推广属性过重", 70)
-    if advertorial_source_terms or len(advertorial_copy_terms) >= 2:
-        penalize("软件下载推荐站或导购式体验文，广告属性过重", 75)
-    if release_subject and len(official_release_copy_terms) >= 3 and not concrete_practice_terms:
-        penalize("产品官方更新稿小标题和功能说明密集，缺少独立实测与信息密度", 65)
-    if peripheral_ai_topic_terms:
-        penalize("主题只是外围算法或信息流机制，与 Stephen 的主流 AI 文章谱系不符", 60)
-    if personal_project_story_terms and not transferable_artifact_terms:
-        penalize("价值依赖作者本人项目经历与体感，难以转换成 Stephen 的写作视角", 55)
-    if len(personal_workflow_detail_terms) >= 3:
-        penalize("项目路径与个人操作过程占比过高，难以脱离作者经历进行二创", 55)
-    if len(creator_brand_dependency_terms) >= 3:
-        penalize("内容依赖作者个人品牌、私有素材或团队资源，无法低成本独立二创", 70)
-    if len(saturated_builder_mvp_terms) >= 4:
-        penalize("MVP、原型、获客和一人公司等 Builder 主题已经写滥，缺少新的可写切口", 65)
-    if len(company_coupled_case_terms) >= 2 and first_person_density >= 3:
-        penalize("单一公司或岗位案例与原业务耦合过紧，难以抽离为 Stephen 的通用文章", 65)
-    if ai_summary_or_translation_terms:
-        penalize("AI 总结或机器翻译感明显，不适合直接中文二创", 55)
-    if saturated_humanizer_terms:
-        penalize("去 AI 味工具赛道高度同质化，缺少可验证的新突破", 55)
-    if ("小红书" in title_summary or "xiaohongshu" in title_summary) and ("排版" in title_summary or "layout" in title_summary) and ("skill" in title_summary or "技能" in title_summary):
-        penalize("小红书图文排版 Skill 已饱和，用户明确不再需要推荐", 80)
-    if len(legal_compliance_topic_terms) >= 3:
-        penalize("法律合规、署名责任或社会争议为主，不符合长期干货调性", 55)
-    if len(coding_agent_only_terms) >= 2:
-        penalize("围绕 AGENTS.md、CLAUDE.md 等深层配置，普通读者无法使用", 55)
-    if low_audience_vertical_terms:
-        penalize("数字人或 AI 短剧过于垂直，对当前普通读者缺少实际价值", 60)
-    if obsolete_workaround_terms:
-        penalize("为纯文本模型外挂视觉属于绕路方案，直接使用多模态模型更合适", 60)
-    if unstable_preview_product_terms:
-        penalize("产品仍处技术预览或破坏性更新阶段，当前实践缺少长期价值", 60)
-    if len(content) >= 2500 and em_dash_density >= 5 and quote_density >= 12:
-        penalize("破折号与引号密度异常高，呈现明显 AI 写作痕迹", 65)
-    if locked_content_terms:
-        penalize("正文被登录、关注或付费墙截断，材料不完整", 70)
-    if community_question_terms and any(term in source_name for term in ("v2ex", "reddit", "论坛", "社区讨论")):
-        penalize("社区提问求助帖没有形成可直接改写的完整结论", 55)
-    if len(thin_personal_reflection_terms) >= 3:
-        penalize("只有个人感受与情绪，缺少事实或新机制支撑", 45)
-    if low_reuse_story_terms:
-        penalize("一次性 AI 奇闻，缺少长期回看价值", 40)
-    if concrete_practice_terms:
-        score += 18
-        reasons.insert(0, "持续实践复盘，有流程、结果和调整过程")
-    if len(product_owner_speech_terms) >= 3:
-        score += 20
-        reasons.insert(0, "产品负责人围绕单一产品复盘用户目标与历史取舍")
-    if len(concrete_end_user_task_terms) >= 2:
-        score += 22
-        reasons.insert(0, "围绕普通读者可直接理解的终端任务展开")
-    if len(direct_use_artifact_terms) >= 3:
-        score += 22
-        reasons.insert(0, "提供可直接试用、可保存且能回查原文的完整产物")
-    if long_horizon_framework:
-        score += 18
-        reasons.insert(0, "长期实践沉淀出可复用的方法框架")
-    if content_form == "article" and content_status == "fulltext" and len(content) < minimum_article_chars(profile):
-        penalize("文章正文偏短，不足以支撑高质量二创", 55)
+            failures.append("GitHub 最近有效发布或更新超过 7 天，不再算当前热点")
 
-    score -= review_hint_deduction(point_penalties, profile)
-    score = round(score, 1)
+    if language == profile.get("preferred_language"):
+        reasons.append("中文内容")
+    if maturity == profile.get("preferred_maturity"):
+        reasons.append("作者已完成二手整合")
+
+    # Reading order: source priority, freshness, Chinese, edited secondary source, full text.
+    reading_order = int(item.get("source_priority", 3)) * 2
+    reading_order += max(0, 18 - age_days) if age_days is not None else 0
+    reading_order += 18 if language == profile.get("preferred_language") else 0
+    reading_order += 16 if maturity == profile.get("preferred_maturity") else (-15 if maturity == "primary" else 0)
+    reading_order += {"transcript": 20, "fulltext": 15, "shownotes": 8}.get(content_status, 0)
+
     if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:
-        adaptation_readiness = "高"
-        research_cost = "低"
+        adaptation_readiness, research_cost = "高", "低"
     elif content_status in {"shownotes", "fulltext", "transcript"} and len(content) >= 400:
-        adaptation_readiness = "中"
-        research_cost = "中"
+        adaptation_readiness, research_cost = "中", "中"
     else:
-        adaptation_readiness = "低"
-        research_cost = "高"
-    if len(personal_workflow_detail_terms) >= 3:
-        adaptation_readiness = "中"
-        research_cost = "中"
-    decision_contract = build_decision_contract(
-        item,
-        penalties=penalties,
-        score=score,
-        minimum_score=float(profile["minimum_score"]),
-    )
+        adaptation_readiness, research_cost = "低", "高"
+    decision_contract = build_decision_contract(item, penalties=failures)
+    eligible = decision_contract["eligibility"]["status"] == "passed"
     return {
         **item,
         "id": item.get("id") or hashlib.sha1(f"{title}|{item.get('link', '')}".encode()).hexdigest()[:10],
@@ -700,15 +339,12 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "summary": summary,
         "content": raw_content,
         "age_days": age_days,
-        "pillars": matched_pillars,
-        "score": score,
-        "discovery_score": score,
+        "score": reading_order,
         "reading_order": reading_order,
-        # Review hints never remove an item here; only objective failures do.
-        "recommended": score >= profile["minimum_score"] and decision_contract["eligibility"]["status"] == "passed" and source_role == "candidate",
-        "machine_shortlisted": decision_contract["machine_disposition"] == "shortlist" and source_role == "candidate",
+        "recommended": eligible and source_role == "candidate",
+        "machine_shortlisted": eligible and source_role == "candidate",
         "reason": "；".join(reasons[:6]) or "信息不足，等待人工判断",
-        "penalty": "；".join(penalties),
+        "penalty": "；".join(failures),
         "language": language,
         "maturity": maturity,
         "content_status": content_status,

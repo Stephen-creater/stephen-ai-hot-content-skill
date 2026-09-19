@@ -4,7 +4,6 @@ import json
 import sys
 import tempfile
 import unittest
-from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -12,10 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from discovery_ledger import eligible_key, load_entries, record_attempt, stop_check, summarize
-from source_coverage import audit_coverage
 
 
-class SourceCoverageTest(unittest.TestCase):
+class DiscoveryLedgerTest(unittest.TestCase):
     def setUp(self):
         self.portfolio = json.loads((ROOT / "resources/source_portfolio.json").read_text(encoding="utf-8"))
         self.sources = json.loads((ROOT / "resources/content_curator_sources.json").read_text(encoding="utf-8"))
@@ -23,33 +21,6 @@ class SourceCoverageTest(unittest.TestCase):
     def test_portfolio_weights_sum_to_one_hundred(self):
         self.assertEqual(sum(row["weight"] for row in self.portfolio["families"]), 100)
         self.assertEqual(len({row["id"] for row in self.portfolio["families"]}), len(self.portfolio["families"]))
-
-    def test_coverage_distinguishes_connection_configuration_and_attempt(self):
-        now = datetime(2026, 9, 8, tzinfo=timezone.utc)
-        entries = [{"recorded_at": now.isoformat(), "family": "twitter_builder_graph", "status": "blocked"}]
-        report = audit_coverage(self.portfolio, self.sources, entries, {"exa_search", "github"}, now)
-        self.assertLess(report["access_coverage"], report["access_target"])
-        self.assertEqual(report["access_coverage"], 0)
-        self.assertEqual(report["rolling_attempt_coverage"], 0)
-        twitter = next(row for row in report["families"] if row["id"] == "twitter_builder_graph")
-        self.assertEqual(twitter["access_fraction"], 0)
-        self.assertTrue(twitter["attempted_in_window"])
-        self.assertFalse(twitter["successful_in_window"])
-
-    def test_only_fresh_nonempty_operation_evidence_counts(self):
-        now = datetime(2026, 9, 8, tzinfo=timezone.utc)
-        base = {"recorded_at": now.isoformat(), "family": "twitter_builder_graph",
-                "status": "success", "result_count": 2, "channel": "ego-browser",
-                "purpose": "smoke", "evidence_url": "https://x.com/search?q=AI"}
-        entries = [{**base, "operation": op} for op in ("search", "read", "author")]
-        report = audit_coverage(self.portfolio, self.sources, entries, now=now)
-        self.assertEqual(report["access_coverage"], 10)
-        self.assertEqual(report["rolling_attempt_coverage"], 0)
-        entries.append({**base, "purpose": "discovery", "operation": "search"})
-        report = audit_coverage(self.portfolio, self.sources, entries, now=now)
-        self.assertEqual(report["rolling_attempt_coverage"], 10)
-        empty = [{**base, "operation": "search", "result_count": 0}]
-        self.assertEqual(audit_coverage(self.portfolio, self.sources, empty, now=now)["access_coverage"], 0)
 
     def test_stop_check_requires_coverage_and_two_rounds_without_new_material(self):
         required = sorted(row["id"] for row in self.portfolio["families"] if row["role"] == "candidate" and row["weight"] >= 8)

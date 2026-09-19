@@ -216,7 +216,7 @@ class BatchOwnershipTest(unittest.TestCase):
     def test_editorial_exclusions_and_concrete_interview(self):
         profile=json.loads((ROOT/'resources/editorial_profile.json').read_text())
         base={'link':'https://example.org/new','language':'zh','maturity':'secondary','content_status':'fulltext','content_form':'article','summary':'AI公开方法与证据','content':'这份完整材料讨论真实任务的反馈与验证方法。'*160}
-        for title in ('新的热点选题助手','AI视频剪辑实操','HyperFrames做动画','ContentOS工作流','18个模型统计108次财报，谁最快、最准、最便宜？'):
+        for title in ('新的热点选题助手','AI视频剪辑实操','HyperFrames做动画','ContentOS工作流'):
             result=score_item({**base,'title':title},profile)
             self.assertTrue(result['penalty'])
         result=score_item({**base,'title':'Anthropic产品负责人访谈：用真实失败案例改进工作结果'},profile)

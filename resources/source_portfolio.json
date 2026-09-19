@@ -1,135 +1,18 @@
 {
   "schema_version": 1,
-  "target_weighted_access_coverage": 85,
-  "target_rolling_attempt_coverage": 80,
-  "rolling_window_days": 7,
-  "principle": "覆盖率按高价值来源族权重计算，不按安装命令或平台数量计算；海外社媒主要发现线索，正式候选仍需完整简体中文材料。",
+  "principle": "12 类取材渠道和权重。收工检查要求权重不低于 8 的候选渠道类别都搜过或记为搜不了。权重是估计，不代表互联网内容份额。",
   "families": [
-    {
-      "id": "chinese_longform_web",
-      "label": "中文独立长文与RSS",
-      "weight": 18,
-      "role": "candidate",
-      "channels": ["web_reader", "rss", "exa_search"],
-      "automation_types": ["web_reader", "paged_web", "rss", "aihot", "learnprompt_radar", "bestblogs"],
-      "minimum_access_fraction": 0,
-      "strategy": "按作者、专题和引用链追踪独立博客、newsletter、产品复盘与深度媒体，不只搜热点关键词。"
-    },
-    {
-      "id": "wechat",
-      "label": "微信公众号作者图谱",
-      "weight": 18,
-      "role": "candidate",
-      "channels": [],
-      "automation_types": ["wechat_index", "rss"],
-      "minimum_access_fraction": 0.35,
-      "strategy": "公开文章索引负责发现，逐篇回到原文核验；建立高命中作者订阅，而不是只依赖聚合站。",
-      "user_action": "若公开索引覆盖不足，再评估只读公众号搜索服务；不得上传私人 Cookie 到未知服务。"
-    },
-    {
-      "id": "chinese_product_interviews",
-      "label": "中文产品与人物深度访谈",
-      "weight": 10,
-      "role": "candidate",
-      "channels": ["web_reader", "exa_search"],
-      "automation_types": ["web_reader", "rss"],
-      "minimum_access_fraction": 0,
-      "strategy": "跟踪产品负责人、核心团队、Founder Park、极客公园、硅谷101等围绕具体产品决策的完整材料。"
-    },
-    {
-      "id": "zhihu",
-      "label": "知乎长回答与专栏",
-      "weight": 6,
-      "role": "candidate",
-      "channels": ["zhihu", "browser", "exa_search"],
-      "automation_types": [],
-      "minimum_access_fraction": 0.25,
-      "maximum_access_fraction": 0.5,
-      "strategy": "只找有完整论证、真实经历和结果的长回答；搜索摘要不能成为候选。"
-    },
-    {
-      "id": "bilibili",
-      "label": "B站深度视频与访谈",
-      "weight": 8,
-      "role": "candidate",
-      "channels": ["bilibili", "local_transcribe"],
-      "automation_types": [],
-      "minimum_access_fraction": 0,
-      "strategy": "使用创作者白名单和栏目追踪；搜索、视频详情与字幕/转写必须分别验证。"
-    },
-    {
-      "id": "chinese_podcasts",
-      "label": "中文播客与完整逐字稿",
-      "weight": 8,
-      "role": "candidate",
-      "channels": ["local_transcribe"],
-      "automation_types": ["rss", "bestblogs"],
-      "minimum_access_fraction": 0,
-      "strategy": "跟踪硅谷101、科技早知道、十字路口、Founder Park等节目；没有可读逐字稿不进入候选。",
-      "user_action": "配置 Groq API Key 后才能稳定转录无字幕节目。"
-    },
-    {
-      "id": "twitter_builder_graph",
-      "label": "Twitter/X 高信号作者图谱",
-      "weight": 10,
-      "role": "discovery",
-      "channels": ["twitter", "browser"],
-      "automation_types": ["follow_builders", "rss"],
-      "minimum_access_fraction": 0,
-      "strategy": "按作者时间线、列表和长文追踪产品负责人、研究者与一线Builder；推文只做线索，继续寻找中文成熟材料。",
-      "user_action": "常规入口不足且材料值得追踪时，可选用 浏览器里已有的登录态；不强制浏览器检索，页面要求登录或验证时才请用户处理。"
-    },
-    {
-      "id": "youtube_global",
-      "label": "YouTube全球深度访谈",
-      "weight": 6,
-      "role": "discovery",
-      "channels": ["youtube", "local_transcribe"],
-      "automation_types": ["rss"],
-      "minimum_access_fraction": 0,
-      "strategy": "优先频道订阅和节目单，不依赖宽泛关键词搜索；字幕用于发现论点，再寻找或制作中文成熟材料。"
-    },
-    {
-      "id": "communities",
-      "label": "Reddit、Hacker News与V2EX",
-      "weight": 6,
-      "role": "discovery",
-      "channels": ["browser", "v2ex"],
-      "automation_types": [],
-      "minimum_access_fraction": 0.2,
-      "strategy": "用于发现失败案例、真实争议和原作者；原始社区热帖默认不直接交付。",
-      "user_action": "优先可用公开接口或常规来源；Reddit 确有补读需求时可选 浏览器里已有的登录态，不强制逐平台浏览。"
-    },
-    {
-      "id": "global_newsletters",
-      "label": "海外独立博客与newsletter",
-      "weight": 5,
-      "role": "discovery",
-      "channels": ["web_reader", "rss"],
-      "automation_types": ["rss", "web_reader"],
-      "minimum_access_fraction": 0,
-      "strategy": "跟踪 Simon Willison、Latent Space、One Useful Thing、Every、Lenny等完整长文和RSS。"
-    },
-    {
-      "id": "github",
-      "label": "GitHub发布与实践仓库",
-      "weight": 3,
-      "role": "discovery",
-      "channels": ["github"],
-      "automation_types": [],
-      "minimum_access_fraction": 0,
-      "strategy": "只做小比例线索补充；实时核验Star、更新时间、Release和文档完整性。"
-    },
-    {
-      "id": "xiaohongshu",
-      "label": "小红书真实使用场景",
-      "weight": 2,
-      "role": "discovery",
-      "channels": ["browser"],
-      "automation_types": [],
-      "minimum_access_fraction": 0,
-      "strategy": "发现普通用户痛点和产品使用语言，短笔记与图片笔记默认只作线索。",
-      "user_action": "常规来源不足时可用浏览器补查笔记和作者主页，不是每轮必做；页面要求用户验证时才请求介入。"
-    }
+    {"id": "chinese_longform_web", "label": "中文独立长文与RSS", "weight": 18, "role": "candidate", "channels": ["web_reader", "rss", "exa_search"], "strategy": "按作者、专题和引用链追踪独立博客、newsletter、产品复盘与深度媒体，不只搜热点关键词。"},
+    {"id": "wechat", "label": "微信公众号作者图谱", "weight": 18, "role": "candidate", "channels": [], "strategy": "公开文章索引负责发现，逐篇回到原文核验；建立高命中作者订阅，而不是只依赖聚合站。", "user_action": "若公开索引覆盖不足，再评估只读公众号搜索服务；不得上传私人 Cookie 到未知服务。"},
+    {"id": "chinese_product_interviews", "label": "中文产品与人物深度访谈", "weight": 10, "role": "candidate", "channels": ["web_reader", "exa_search"], "strategy": "跟踪产品负责人、核心团队、Founder Park、极客公园、硅谷101等围绕具体产品决策的完整材料。"},
+    {"id": "zhihu", "label": "知乎长回答与专栏", "weight": 6, "role": "candidate", "channels": ["zhihu", "browser", "exa_search"], "strategy": "只找有完整论证、真实经历和结果的长回答；搜索摘要不能成为候选。"},
+    {"id": "bilibili", "label": "B站深度视频与访谈", "weight": 8, "role": "candidate", "channels": ["bilibili", "local_transcribe"], "strategy": "使用创作者白名单和栏目追踪；搜索、视频详情与字幕/转写必须分别验证。"},
+    {"id": "chinese_podcasts", "label": "中文播客与完整逐字稿", "weight": 8, "role": "candidate", "channels": ["local_transcribe"], "strategy": "跟踪硅谷101、科技早知道、十字路口、Founder Park等节目；没有可读逐字稿不进入候选。", "user_action": "配置 Groq API Key 后才能稳定转录无字幕节目。"},
+    {"id": "twitter_builder_graph", "label": "Twitter/X 高信号作者图谱", "weight": 10, "role": "discovery", "channels": ["twitter", "browser"], "strategy": "按作者时间线、列表和长文追踪产品负责人、研究者与一线Builder；推文只做线索，继续寻找中文成熟材料。", "user_action": "常规入口不足且材料值得追踪时，可选用 浏览器里已有的登录态；不强制浏览器检索，页面要求登录或验证时才请用户处理。"},
+    {"id": "youtube_global", "label": "YouTube全球深度访谈", "weight": 6, "role": "discovery", "channels": ["youtube", "local_transcribe"], "strategy": "优先频道订阅和节目单，不依赖宽泛关键词搜索；字幕用于发现论点，再寻找或制作中文成熟材料。"},
+    {"id": "communities", "label": "Reddit、Hacker News与V2EX", "weight": 6, "role": "discovery", "channels": ["browser", "v2ex"], "strategy": "用于发现失败案例、真实争议和原作者；原始社区热帖默认不直接交付。", "user_action": "优先可用公开接口或常规来源；Reddit 确有补读需求时可选 浏览器里已有的登录态，不强制逐平台浏览。"},
+    {"id": "global_newsletters", "label": "海外独立博客与newsletter", "weight": 5, "role": "discovery", "channels": ["web_reader", "rss"], "strategy": "跟踪 Simon Willison、Latent Space、One Useful Thing、Every、Lenny等完整长文和RSS。"},
+    {"id": "github", "label": "GitHub发布与实践仓库", "weight": 3, "role": "discovery", "channels": ["github"], "strategy": "只做小比例线索补充；实时核验Star、更新时间、Release和文档完整性。"},
+    {"id": "xiaohongshu", "label": "小红书真实使用场景", "weight": 2, "role": "discovery", "channels": ["browser"], "strategy": "发现普通用户痛点和产品使用语言，短笔记与图片笔记默认只作线索。", "user_action": "常规来源不足时可用浏览器补查笔记和作者主页，不是每轮必做；页面要求用户验证时才请求介入。"}
   ]
 }

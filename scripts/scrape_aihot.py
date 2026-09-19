@@ -3,7 +3,6 @@ from __future__ import annotations
 import argparse
 import base64
 import concurrent.futures
-import functools
 import hashlib
 import json
 import os
@@ -134,14 +133,6 @@ def embedded_original_date(text: str) -> str:
         return datetime(year, month, day).strftime("%Y-%m-%d")
     except ValueError:
         return ""
-
-
-def api_key() -> str:
-    value = os.getenv("OPENROUTER_API_KEY", "").strip()
-    if value:
-        return value
-    local_file = ROOT / ".config" / "openrouter_api_key.txt"
-    return local_file.read_text(encoding="utf-8").strip() if local_file.exists() else ""
 
 
 def html_to_text(value: str | None) -> str:
@@ -793,70 +784,6 @@ def load_inbox(path: Path | None, settings: dict, skip_urls: set[str] | None = N
     return [inbox_item(row, settings) for row in rows if canonical_url(row.get("url", "")) not in skipped]
 
 
-def ai_rerank(candidates: list[dict], profile: dict, model: str) -> list[dict]:
-    key = api_key()
-    if not key:
-        return candidates
-    compact = [
-        {
-            "id": item["id"],
-            "title": item["title"],
-            "summary": item.get("summary") or item.get("content", "")[:500],
-            "score": item["score"],
-            "pillars": item["pillars"],
-        }
-        for item in candidates
-    ]
-    prompt = {
-        "task": "只按正文证据辅助排序 Stephen 的候选材料；不得用关键词、名气或自动分数代替编辑判断",
-        "target_readers": profile["target_readers"],
-        "decision_model": profile["decision_model"],
-        "requirements": [
-            "只返回 JSON 对象，顶层字段为 items",
-            "items 是数组",
-            "每项包含 id、title_zh、reason",
-            "依次评估选题吸引力、读者改变、材料增量、二创独立性和长期价值",
-            "reason 必须指出正文中的决定性事实和最强反对理由，不能只写深度、权威、热门或有启发",
-            "访谈、第一人称、技术词、新闻来源、清单结构和图片数量都只是风险信号，不是类别禁令",
-            "去掉作者身份、私人截图、企业数据和品牌素材后论证仍成立，才算可独立二创",
-            "高质量文章如果题目无吸引力、读者无具体改变或需要大量专业背景，仍应降级",
-            "长逐字稿、数字和案例数量不等于信息密度；必须存在新的事实、因果链或有条件取舍",
-            "不得为了多样性保留弱选题",
-        ],
-        "candidates": compact,
-    }
-    response = requests.post(
-        "https://openrouter.ai/api/v1/chat/completions",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": "你是 Stephen 的 AI 热点选题编辑。"},
-                {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
-            ],
-            "temperature": 0.2,
-            "response_format": {"type": "json_object"},
-        },
-        timeout=120,
-    )
-    response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    parsed = json.loads(re.sub(r"^```json|```$", "", content.strip(), flags=re.M))
-    rows = parsed.get("items", parsed) if isinstance(parsed, dict) else parsed
-    if not isinstance(rows, list):
-        return candidates
-    lookup = {item["id"]: item for item in candidates}
-    ordered = []
-    for row in rows:
-        item = lookup.get(str(row.get("id"))) or lookup.get(row.get("id"))
-        if not item:
-            continue
-        ordered.append({**item, "title_zh": row.get("title_zh", item["title"]), "ai_reason": row.get("reason", "")})
-    ordered_ids = {item["id"] for item in ordered}
-    ordered.extend(item for item in candidates if item["id"] not in ordered_ids)
-    return ordered
-
-
 DISCOVERY_FIELDS = ("title", "link", "published", "source_name", "source_category", "language", "content_form", "audio_url")
 
 
@@ -1004,10 +931,6 @@ def main() -> None:
     parser.add_argument("--inbox", type=Path, default=ROOT / ".local" / "source_inbox.json", help="公众号、B站、播客和本地逐字稿入口")
     parser.add_argument("--include-verification", action="store_true", help="同时抓取英文官方核验来源")
     parser.add_argument("--include-rejected", action="store_true", help="调试时在报告中包含未通过硬门槛的内容")
-    parser.add_argument("--ai", action="store_true", help="调用 OpenRouter 模型复排（会计费，默认关闭）")
-    parser.add_argument("--no-ai", action="store_true", help="兼容旧命令：不调用模型复排（现为默认行为）")
-    parser.add_argument("--no-aigc", action="store_true", help=argparse.SUPPRESS)  # 朱雀检测已移除，保留以兼容旧命令
-    parser.add_argument("--model", default="google/gemini-3-flash-preview")
     parser.add_argument("--output-root", type=Path, default=ROOT / "topics")
     parser.add_argument("--batch", help="写入检索账本时使用的批次 ID；不填则不记账")
     parser.add_argument("--owner", choices=["主力", "主力2"], default="主力")
@@ -1076,11 +999,6 @@ def main() -> None:
         include_rejected=args.include_rejected,
         min_article_chars=0 if args.fixture else minimum_article_chars(profile),
     )
-    if args.ai and not args.no_ai and api_key():
-        try:
-            candidates = ai_rerank(candidates, profile, args.model)
-        except Exception as exc:
-            errors.append(f"AI 复排失败，已使用确定性排序: {exc}")
 
     github_candidate_count = sum(1 for item in candidates if urlparse(item.get("link", "")).netloc.lower() == "github.com")
 

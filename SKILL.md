@@ -43,20 +43,20 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 1. 接上之前的状态
 
-- 反馈原文很大，不直接读。用 `feedback_audit.py`、`editorial_outcomes.py` 看结论和原因标签统计，读进度文件续跑，不靠对话记忆。
+- 反馈原文很大，不直接读。用 `feedback_audit.py` 看入选率、原因标签统计和没给原因的记录，读进度文件续跑，不靠对话记忆。
 - 先读哪些来源，参考 `.venv/bin/python3 scripts/source_yield.py --min-decided 5`：键是公众号名或网站域名，审核不足 5 次的来源不参与排序。
 - **读全文之前**把待读材料存成 JSON 数组，运行 `.venv/bin/python3 scripts/history_check.py <文件>` 查重。同一篇访谈常被不同站点换标题转载，链接不同但正文重合。
 - 相似主题只有新事实、新方法或新结果才算新材料。
 
 ### 2. 抓取与找原文
 
-- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。输出里的 `triage.md` 列出全部合格材料（已过一票否决和查重）的标题、来源、日期、字数和开头，按来源优先级和新鲜度排列；全文在 `eligible.json`。**先通读 `triage.md` 全部标题，自己挑出值得读全文的**，一般是目标条数的 3 倍左右（默认 10 条选题读约 30 篇）。`candidates.json` 只是按顺序截的前 30 篇，不代表推荐。模型复排默认关闭，`--ai` 才调用 OpenRouter 并计费。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
+- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。输出里的 `triage.md` 列出全部合格材料（已过一票否决和查重）的标题、来源、日期、字数和开头，按来源优先级和新鲜度排列；全文在 `eligible.json`。**先通读 `triage.md` 全部标题，自己挑出值得读全文的**，一般是目标条数的 3 倍左右（默认 10 条选题读约 30 篇）。`candidates.json` 只是按顺序截的前 30 篇，不代表推荐。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
 - 线索源（播客、YouTube、X、即刻）只进 `discovery.md`。命中后先找中文全文或文字稿，再登记进来重抓。
 - 按原始发布时间从新到旧读。转载、网页更新、重新上榜都不改变文章的真实年龄。
 - 登录、关注、验证码或付费后才能看到的正文直接放弃；代理或缓存抓到的隐藏文字不算公开。
 - 机器转录要合并段落、校正专名、标出说话人，不能把字幕墙交给用户。
 - 单个来源失败写进 `run.json`，继续其他来源。不能把网络、登录或解析失败说成“没有好材料”。
-- `.local/source_coverage.json` 超过 7 天没更新时，先跑 `channel_check.py --live`，再跑 `source_coverage.py`。
+- 开始扩源前先跑 `channel_check.py --live`，看今天哪些渠道能用。
 
 ### 3. 一票否决
 
@@ -69,9 +69,9 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 屏蔽的来源、作者或已写主题；
 - 文章自己说明由 AI 生成；关键内容在缺失的图片里。
 
-### 4. 关键词提示不参与判断
+### 4. 判断只来自读全文
 
-抓取结果里的 `risk_signals` 是按关键词匹配出来的提示，只用于调试和观察，重要性很低：不扣分，不影响排序，挑稿和打分时不要参考。判断一律来自读全文。
+程序不做任何“好不好”的判断：没有关键词打分，也没有关键词提示。挑稿看标题清单，推荐看读完全文后的六维打分。
 
 ### 5. 六维终审
 
@@ -153,7 +153,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 不提交 `.local/`、`.config/`、`topics/`、反馈、密钥、Cookie 或登录态。
 - 浏览器只用隔离的任务空间，不启动或接管 Stephen 的 Chrome，不导出 Cookie，不替他登录。何时用、怎么限频见 [取材渠道手册](references/channels.md)。
 - 只有用户明确要求时才开多个窗口并行。并行时各认领不重叠的来源，工作文件分开放；同一批次由认领它的窗口发布和导入反馈。
-- 阅读顺序 `reading_order` 只看来源优先级、新鲜度和有没有全文，Agent 还要自己通读全部标题。模型复排只是辅助；没配置或失败时视为未知。
+- 阅读顺序 `reading_order` 只看来源优先级、新鲜度和有没有全文，Agent 还要自己通读全部标题。
 - 单批反馈不能把读者兴趣、题材偏好、技术难度或改写难度变成一票否决。只有语言、公开完整、时效、写过或审过的精确记录、来源安全、GitHub 可核验门槛这类事实可以一票否决。
 
 ## 修改后的验证

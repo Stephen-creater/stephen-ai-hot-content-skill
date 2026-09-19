@@ -52,9 +52,9 @@ class EditorialJudgmentTest(unittest.TestCase):
         self.assertEqual(profile["schema_version"], 2)
         self.assertEqual(tuple(profile["decision_model"]["dimensions_in_order"]), DIMENSIONS)
         self.assertTrue(profile["decision_model"]["manual_review_required"])
-        self.assertTrue(profile["decision_model"]["keyword_matches_are_risk_signals_not_verdicts"])
+        self.assertFalse(profile["decision_model"]["keywords_affect_judgment"])
         self.assertFalse(profile["feedback_learning"]["blank_note_creates_rule"])
-        self.assertIn("risk_signal_lexicon", profile)
+        self.assertNotIn("risk_signal_lexicon", profile)
         self.assertNotIn("editorial_fit", profile)
 
     def test_objective_failures_are_separate_from_editorial_risks(self):
@@ -67,22 +67,17 @@ class EditorialJudgmentTest(unittest.TestCase):
 
     def test_risk_signal_does_not_claim_a_human_verdict(self):
         contract = build_decision_contract(
-            {}, penalties=["技术细节过深，目标读者难以理解或使用"], score=80, minimum_score=48
+            {}, penalties=["技术细节过深，目标读者难以理解或使用"]
         )
         self.assertEqual(contract["eligibility"]["status"], "passed")
         self.assertEqual(contract["machine_disposition"], "shortlist")
         self.assertTrue(contract["human_review_required"])
         self.assertTrue(all(row["verdict"] == "unassessed" for row in contract["editorial_dimensions"].values()))
 
-        low_score = build_decision_contract(
-            {}, penalties=["文章包含较多个人经历"], score=-20, minimum_score=48
-        )
-        self.assertEqual(low_score["machine_disposition"], "review")
-        self.assertEqual(low_score["eligibility"]["status"], "passed")
 
     def test_hard_failure_blocks_before_editorial_judgment(self):
         contract = build_decision_contract(
-            {}, penalties=["主题已写过，不重复推荐"], score=120, minimum_score=48
+            {}, penalties=["主题已写过，不重复推荐"]
         )
         self.assertEqual(contract["eligibility"]["status"], "failed")
         self.assertEqual(contract["machine_disposition"], "blocked")
@@ -92,7 +87,7 @@ class EditorialJudgmentTest(unittest.TestCase):
         for warning in ["文章正文偏短，不足以支撑高质量二创", "访谈摘要不足以支撑高质量二创"]:
             contract = build_decision_contract(
                 {"manual_editorial_review": evidence_review()},
-                penalties=[warning], score=120, minimum_score=48,
+                penalties=[warning],
             )
             self.assertEqual(contract["machine_disposition"], "blocked")
             self.assertEqual(contract["eligibility"]["failures"][0]["code"], "insufficient_source_material")
@@ -128,16 +123,12 @@ class EditorialJudgmentTest(unittest.TestCase):
         contract = build_decision_contract(
             {"title": "某创始人的真实第一人称访谈"},
             penalties=[],
-            score=100,
-            minimum_score=48,
         )
         self.assertEqual(contract["machine_disposition"], "shortlist")
         self.assertEqual(contract["editorial_dimensions"]["re_authorability"]["verdict"], "unassessed")
         reviewed = build_decision_contract(
             {"manual_editorial_review": evidence_review()},
             penalties=[],
-            score=100,
-            minimum_score=48,
         )
         self.assertEqual(reviewed["editorial_dimensions"]["re_authorability"]["verdict"], "supported")
 

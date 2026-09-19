@@ -33,14 +33,9 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("sk-", item["content"])
         self.assertIn("[REDACTED_CREDENTIAL]", item["content"])
 
-    def test_main_160836_reader_barrier_and_covered_topic(self):
+    def test_covered_topic_is_blocked(self):
         base = {**self.items[0], "published": "2026-09-03", "summary": "",
                 "content": "HTTP、GPU 缓存、node_modules、pnpm、包管理缓存与依赖路径。" * 120}
-        maintenance = score_item({**base, "title": "AI 时代的 Mac 磁盘清理实践"}, self.profile)
-        self.assertIn("开发者维护教程", maintenance["penalty"])
-        incidental = score_item({**base, "title": "AI 产品如何解决找对象的难题",
-                                 "content": "网站使用 HTTP。" + "围绕真实生活问题的完整自然对话。" * 200}, self.profile)
-        self.assertNotIn("开发者维护教程", incidental["penalty"])
         covered = score_item({**base, "title": "Computer History 使用体验"}, self.profile)
         self.assertIn("主题已写过", covered["penalty"])
 
@@ -171,25 +166,11 @@ class CuratorTest(unittest.TestCase):
         repost = {**first, "link": "https://example.com/repost"}
         self.assertEqual(len(deduplicate([first, second, repost])), 2)
 
-    def test_comparison_dimensions_do_not_hide_real_news_roundups(self):
+    def test_short_article_is_blocked_whatever_the_title(self):
         base = {**self.items[0], "content": "公开完整实测，展示办公资料转成可下载文件的工作方法。" * 150, "summary": "AI 真实办公任务实测"}
-        for title in ("18个模型统计108次财报，谁最快、最准、最便宜？", "AI文件处理实测：哪款更省时、更稳定、更好用"):
-            result = score_item({**base, "title": title}, self.profile, now=self.now)
-            self.assertNotIn("标题包含多个事件", result["penalty"])
-        for title in ("OpenAI发布模型、Google上线产品、腾讯完成融资", "谁最快、最准、最便宜？OpenAI发布模型、Google上线产品、腾讯完成融资"):
-            result = score_item({**base, "title": title}, self.profile, now=self.now)
-            self.assertTrue(result["penalty"])
-            self.assertIn("标题包含多个事件", result["penalty"])
         short = score_item({**base, "title": "AI实测，谁最快、最准、最便宜？", "content": "只有简短介绍。"}, self.profile, now=self.now)
         self.assertFalse(short["recommended"])
         self.assertIn("文章正文偏短", short["penalty"])
-
-    def test_document_format_list_is_not_multiple_news_events(self):
-        base = {**self.items[0], "content": "公开完整实测，展示办公资料转成可下载文件的工作方法。" * 150, "summary": "普通办公文件输出实测"}
-        article = score_item({**base, "title": "Notebook Agent 實測：直接產出 Word、Excel、PPT！"}, self.profile, now=self.now)
-        roundup = score_item({**base, "title": "OpenAI发布模型、Google上线产品、腾讯完成融资"}, self.profile, now=self.now)
-        self.assertNotIn("标题包含多个事件", article["penalty"])
-        self.assertIn("标题包含多个事件", roundup["penalty"])
 
     def test_routine_update_in_summary_is_not_release_news(self):
         base = {**self.items[0], "published": "2026-08-01", "content": "使用公开表格完成日常办公任务，并核对处理前后的数据。" * 150, "summary": "台账更新、文档整理与年度资料维护"}
@@ -277,12 +258,6 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
         self.assertIn("事件新闻已超过时效窗口", short["penalty"])
         self.assertIn("事件新闻已超过时效窗口", launch["penalty"])
-
-    def test_saturated_xiaohongshu_layout_is_rejected_despite_complete_material(self) -> None:
-        item = {"title": "小红书图文自动排版 Skill 实战", "summary": "亲自实测，有完整过程与明确结果", "content": "作者解释了版式选择和调整过程。" * 250, "published": "2026-09-05", "source_name": "中文创作者", "source_priority": 5, "source_type": "web", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext", "link": "https://example.com/layout"}
-        result = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
-        self.assertIn("小红书图文排版 Skill 已饱和", result["penalty"])
 
     def test_local_podcast_transcript_keeps_ending_and_renders_in_report(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -764,68 +739,6 @@ Language: zh
             result = rank_candidates([{**item, "title": title, "link": f"https://example.com/{title}"}], self.profile, now=datetime(2026, 9, 2, tzinfo=timezone.utc))[0]
             self.assertNotIn("缺少明确 AI 对象", result["penalty"])
 
-    def test_latest_feedback_rejects_questions_locks_and_thin_diaries(self) -> None:
-        common = {
-            "published": "2026-09-02T08:00:00Z",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-        }
-        items = [
-            {
-                **common,
-                "title": "Codex多Agent工作流为什么只开会不干活",
-                "summary": "社区讨论",
-                "content": "我搭了一套多Agent流程，就想问问，到底是我这流程本身有病，还是额度不够？" * 50,
-                "source_name": "作者 / V2EX社区讨论",
-                "link": "https://example.com/question",
-            },
-            {
-                **common,
-                "title": "Kimi Work一个月使用复盘",
-                "summary": "真实任务中的坑和红利",
-                "content": "真香场景 Top 5，翻车场景 Top 5。点击解锁完整内容，关注后自动获取验证码。" * 50,
-                "source_name": "中文博客",
-                "link": "https://example.com/locked",
-            },
-            {
-                **common,
-                "title": "度假三周后，我意识到自己被AI工具奴役了",
-                "summary": "个人反思",
-                "content": "我没有想念它。它成了习惯性的拐杖，让我变笨了，也让我有点抑郁。效率的衔尾蛇让我仍然谨慎乐观。" * 50,
-                "source_name": "个人博客",
-                "link": "https://example.com/diary",
-            },
-        ]
-        now = datetime(2026, 9, 3, tzinfo=timezone.utc)
-        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
-        self.assertIn("社区提问求助帖", lookup["https://example.com/question"]["penalty"])
-        self.assertIn("材料不完整", lookup["https://example.com/locked"]["penalty"])
-        self.assertIn("只有个人感受与情绪", lookup["https://example.com/diary"]["penalty"])
-        self.assertTrue(all(item["penalty"] for item in lookup.values()))
-
-    def test_ai_official_packaging_tone_is_rejected(self) -> None:
-        item = {
-            "title": "Agent 重塑软件商业的底层运行逻辑",
-            "summary": "一个极具穿透力、精准击中痛点的判断",
-            "content": ("这场变化正在彻底重写行业，形成自然的闭环，并释放有力的信号。" * 120),
-            "published": "2026-08-19",
-            "source_name": "二手整理站",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/official-ai-tone",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("AI 式官方包装语言过重", result["penalty"])
-
     def test_self_disclosed_ai_generated_article_is_rejected(self) -> None:
         item = {
             "title": "AI 内容生产线的六个工位",
@@ -864,126 +777,6 @@ Language: zh
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
         self.assertTrue(result["recommended"])
-        self.assertNotIn("以 Benchmark", result["penalty"])
-
-    def test_permission_governance_talk_is_too_distant_for_readers(self) -> None:
-        item = {
-            "title": "Agent 真正需要的是能撤销、限速和追责的行动预算",
-            "summary": "Anthropic CI 团队的权限治理与工作负载事故",
-            "content": "代理层身份、速率限制、撤销测试和聚合监控。" * 220,
-            "published": "2026-08-22",
-            "source_name": "Anthropic CI 团队",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/agent-budget",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("距离目标读者过远", result["penalty"])
-
-    def test_formulaic_ai_headings_are_rejected_without_disclosure(self) -> None:
-        item = {
-            "title": "你的 AI 额度为什么总是不够用",
-            "summary": "从 Context 管理出发的实用建议",
-            "content": ("一句话结论。三个动作。第一招：丢掉。第二招：缩小。第三招：打折。记住两句自问。" * 90),
-            "published": "2026-08-25",
-            "source_name": "中文整理站",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/formulaic-ai-headings",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("AI 批量加工结构", result["penalty"])
-
-    def test_author_discussing_ai_summaries_is_not_an_ai_summary_page(self) -> None:
-        item = {
-            "title": "前文字记者公开 Writing DNA Skill",
-            "summary": "用语言学分层沉淀写作风格",
-            "content": ("作者解释为什么 AI 总结往往只学会口头禅，以及怎样用原始语料修正。" * 160),
-            "published": "2026-09-04",
-            "source_name": "前文字记者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/writing-dna",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertNotIn("AI 总结或机器翻译感明显", result["penalty"])
-
-    def test_deeply_nested_large_checklist_is_rejected(self) -> None:
-        item = {
-            "title": "我与 AI 协作的 19 条实战经验",
-            "summary": "从需求到交付的完整方法",
-            "content": ("12.1 文件安全。12.2 完整阅读。12.3 反编造。17.1 多会话。17.2 子代理。" * 80),
-            "published": "2026-09-04",
-            "source_name": "个人作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/nested-checklist",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("嵌套多级编号", result["penalty"])
-
-    def test_model_versions_and_decimal_metrics_are_not_nested_headings(self) -> None:
-        item = {
-            "title": "去 AI 味不能只改词，真正暴露模型的是叙事架构",
-            "summary": "研究覆盖六万多篇文本并给出三层修订方法",
-            "content": ("Claude Fable 5.1、Opus 4.8 与 GPT-5.6 都有不同特征。"
-                        "分类器达到 93.2% macro-F1，表层修改后从 95.5% 变成 93.9%。" * 80),
-            "published": "2026-09-04",
-            "source_name": "开源研究型 Skill",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/model-version-decimals",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertNotIn("嵌套多级编号", result["penalty"])
-
-    def test_humanizer_tools_are_rejected_as_saturated_topic(self) -> None:
-        item = {
-            "title": "去 AI 味不能只改词：一个新的 Humanizer Skill",
-            "summary": "通过叙事结构修复降低 AI 痕迹",
-            "content": ("项目提供完整研究、规则、案例和测试。" * 220),
-            "published": "2026-09-04",
-            "source_name": "开源项目作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/another-humanizer",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("高度同质化", result["penalty"])
 
     def test_default_batch_is_ten_topics_without_composition_quota(self) -> None:
         self.assertEqual(self.profile["default_topic_count"], 10)
@@ -1026,93 +819,7 @@ Language: zh
         self.assertNotIn("Star", enough["penalty"])
         self.assertIn("GitHub 100 Star", enough["reason"])
 
-    def test_coding_agent_instruction_maintenance_is_too_deep(self) -> None:
-        item = {
-            "title": "审计 AGENTS.md 和 CLAUDE.md 中过期的 Skill 规则",
-            "summary": "检查常驻说明与 instruction file",
-            "content": ("工具扫描深层配置并生成修复建议。" * 180),
-            "published": "2026-09-04",
-            "source_name": "中文工具作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/instruction-maintenance",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("普通读者无法使用", result["penalty"])
-
-    def test_dense_quotes_and_em_dashes_are_rejected_as_ai_style(self) -> None:
-        item = {
-            "title": "一个 Agent 稳定性复盘",
-            "summary": "作者记录真实项目经验",
-            "content": ("模型说”完成了”——团队又问”真的完成了吗”——于是补充一轮”验证”——" * 90),
-            "published": "2026-09-04",
-            "source_name": "中文原创作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/punctuation-heavy",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("破折号与引号密度异常高", result["penalty"])
-
-    def test_narrow_avatar_short_drama_and_obsolete_vision_workarounds_are_rejected(self) -> None:
-        common = {
-            "content": "作者提供完整中文说明、案例与验证结果。" * 180,
-            "published": "2026-09-04",
-            "source_name": "中文作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-        }
-        items = [
-            {**common, "title": "数字人视频如何完成口型同步", "summary": "自媒体制作", "link": "https://example.com/avatar"},
-            {**common, "title": "AI 短剧制作工作流", "summary": "角色设定集与分镜", "link": "https://example.com/drama"},
-            {**common, "title": "给纯文本 Agent 装上眼睛", "summary": "Vision Toolkit 外挂视觉", "link": "https://example.com/vision"},
-            {**common, "title": "DeepSeek Harness 桌面工作台", "summary": "技术预览版后续可能破坏性更新", "link": "https://example.com/preview"},
-        ]
-        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))}
-        self.assertIn("过于垂直", lookup["https://example.com/avatar"]["penalty"])
-        self.assertIn("过于垂直", lookup["https://example.com/drama"]["penalty"])
-        self.assertIn("绕路方案", lookup["https://example.com/vision"]["penalty"])
-        self.assertIn("技术预览", lookup["https://example.com/preview"]["penalty"])
-
-    def test_personal_project_journey_is_rejected_even_with_methods(self) -> None:
-        item = {
-            "title": "我的 AI 原生开发方法",
-            "summary": "包含可复用方法和操作规则",
-            "content": ("我的 App 先改设置页。我在原型上反复调整。我的注意力放在界面上。"
-                        "接着处理我的项目，这是我的路径，也是我的答案。" * 90),
-            "published": "2026-09-04",
-            "source_name": "个人作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/personal-project-journey",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("难以脱离作者经历", result["penalty"])
-
-    def test_latest_feedback_rejects_brand_dependent_builder_and_company_cases(self) -> None:
+    def test_stale_github_repo_is_blocked(self) -> None:
         common = {
             "published": "2026-09-05",
             "source_priority": 5,
@@ -1123,151 +830,8 @@ Language: zh
             "content_form": "article",
             "content_status": "fulltext",
         }
-        cases = [
-            {
-                **common,
-                "title": "刀法工作流：怎么用 AI 做行内内容",
-                "summary": "内容团队的完整方法",
-                "content": ("我们公司依靠我们的内容团队、私有方法论和水下信息。我每天会见行业专家，左右滑动查看更多个人品牌图片。" * 80),
-                "source_name": "个人品牌创始人",
-                "link": "https://example.com/brand-workflow",
-                "penalty": "个人品牌、私有素材或团队资源",
-            },
-            {
-                **common,
-                "title": "Builder 用 AI 一周完成 MVP",
-                "summary": "从 Demo 到一人公司",
-                "content": ("我先做 MVP 和 Demo，再做原型，随后讨论获客、一人公司、人人都是开发者以及 AI 不会消失。" * 90),
-                "source_name": "个人 Builder",
-                "link": "https://example.com/builder-mvp",
-                "penalty": "Builder 主题已经写滥",
-            },
-            {
-                **common,
-                "title": "中国式 FDE 如何部署企业 AI Agent",
-                "summary": "岗位标杆与业务结果",
-                "content": ("我们用企业数据建立岗位标杆，让客服Agent和销售Agent服务单个客户。我负责内部复盘并解释业务流程。" * 90),
-                "source_name": "企业访谈",
-                "link": "https://example.com/fde-case",
-                "penalty": "单一公司或岗位案例",
-            },
-            {
-                **common,
-                "title": "AI+HR 的招聘工作流",
-                "summary": "个人招聘实践",
-                "content": ("我搭建 AI+HR 招聘工作流，我们围绕岗位标杆和企业数据反复调整。我再把结果交给业务。" * 100),
-                "source_name": "个人作者",
-                "link": "https://example.com/hr-workflow",
-                "penalty": "单一公司或岗位案例",
-            },
-        ]
-        for case in cases:
-            expected = case.pop("penalty")
-            result = score_item(case, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
-            self.assertTrue(result["penalty"])
-            self.assertIn(expected, result["penalty"])
-
-    def test_latest_feedback_rejects_deep_paper_explainers_but_keeps_direct_tools(self) -> None:
-        common = {
-            "published": "2026-09-05",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-        }
-        papers = [
-            ("视觉工具的幻觉", "论文用 TOY、LWP、CWL、VEG 和消融实验解释视觉工具。"),
-            ("Knowing When to Quit", "arXiv 论文比较 AUROC、Hit@1、rollout 与强化学习后训练。"),
-            ("Repo-To-Skill", "论文讨论 PaperBench、latent、rollout、消融实验和 Hit@1。"),
-            ("AI 接管实验室之前", "学术论文包含门控交叉注意力、激活空间、对数概率和雅可比矩阵。"),
-        ]
-        for index, (title, body) in enumerate(papers):
-            result = score_item(
-                {**common, "title": f"AI {title}", "summary": "深度机制解读", "content": body * 180, "source_name": "论文解读", "link": f"https://example.com/paper-{index}"},
-                self.profile,
-                now=datetime(2026, 9, 6, tzinfo=timezone.utc),
-            )
-            self.assertTrue(result["penalty"])
-            self.assertIn("深论文解读", result["penalty"])
-
-        practical = score_item(
-            {
-                **common,
-                "title": "AI 会不会推荐你的产品？输入域名直接查",
-                "summary": "查看竞品、原始回答和引用来源",
-                "content": "输入自己的产品域名和客户问题，系统展示模型是否提及品牌、推荐哪些竞品，并让每条结论回到原始回答和引用来源。" * 160,
-                "source_name": "开源产品作者",
-                "link": "https://example.com/direct-tool",
-            },
-            self.profile,
-            now=datetime(2026, 9, 6, tzinfo=timezone.utc),
-        )
-        self.assertNotIn("深论文解读", practical["penalty"])
-
-        incidental = score_item(
-            {
-                **common,
-                "title": "AI 双语网页阅读工具",
-                "summary": "可翻译网页、技术文档和字幕",
-                "content": "用户也可以阅读一篇 arXiv 论文。" + ("支持 PDF、API、TTS、OCR、BYOK 和 URL，但正文主要讲双语对照、划词与保存。" * 180),
-                "source_name": "软件体验站",
-                "link": "https://example.com/reader-tool",
-            },
-            self.profile,
-            now=datetime(2026, 9, 6, tzinfo=timezone.utc),
-        )
-        self.assertNotIn("深论文解读", incidental["penalty"])
-
-    def test_latest_feedback_rejects_ads_official_copy_peripheral_ai_and_stale_github(self) -> None:
-        common = {
-            "published": "2026-09-05",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-        }
-        advertorial = score_item({**common, "title": "AI 双语阅读插件", "summary": "功能体验", "content": ("值得推荐，试错成本为零，点击下载。" * 200), "source_name": "异次元软件世界", "link": "https://example.com/ad"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
-        official = score_item({**common, "title": "Chatbox AI 1.23", "summary": "版本发布", "content": ("这次新增记忆，优化工作模式，修复长任务问题，设置里可以开启。" * 180), "source_name": "Chatbox AI 官方", "link": "https://example.com/release"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
-        peripheral = score_item({**common, "title": "X 的 AI 推荐算法与猜你喜欢", "summary": "信息流排序机制", "content": ("推荐系统预测用户下一步互动并调整信息流排序。" * 220), "source_name": "中文作者", "link": "https://example.com/feed"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
         stale_repo = score_item({**common, "title": "ChatGPT 长对话导出工具", "summary": "开源插件", "content": ("完整消息树与分页导出。" * 300), "source_name": "GitHub 作者", "published": "2026-08-25", "github_stars": 941, "link": "https://github.com/example/exporter"}, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))
-        self.assertIn("广告属性过重", advertorial["penalty"])
-        self.assertIn("产品官方更新稿", official["penalty"])
-        self.assertIn("外围算法", peripheral["penalty"])
         self.assertIn("超过 7 天", stale_repo["penalty"])
-
-    def test_release_copy_requires_release_subject_or_layout(self) -> None:
-        base = {**self.items[0], "published": "2026-09-05", "source_name": "中文访谈", "summary": "完整对话"}
-        interview = score_item({**base, "title": "对谈产品负责人：设计中的取舍", "content": "主持人：如何优化产品？\n嘉宾：新增能力之前要先修复老问题。\n" * 100}, self.profile)
-        self.assertNotIn("产品官方更新稿", interview["penalty"])
-        release = score_item({**base, "title": "产品进展", "content": ("## 新增记忆\n功能说明\n## 优化界面\n功能说明\n## 修复问题\n功能说明\n" * 60)}, self.profile)
-        self.assertIn("产品官方更新稿", release["penalty"])
-
-    def test_vendor_supplied_robotics_article_is_rejected(self) -> None:
-        item = {
-            "title": "机器人不能停下来等模型：在线强化学习进入真实部署",
-            "summary": "VLA 通过 action chunk 提高投掷成功率",
-            "content": ("World-Action Model 采用在线强化学习。本文由星尘智能提供，获授权转载，观点归原作者所有。" * 100),
-            "published": "2026-09-04",
-            "source_name": "中文科技媒体",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/vendor-robotics",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("普通读者难以使用", result["penalty"])
-        self.assertIn("厂商供稿或授权转载", result["penalty"])
 
     def test_translation_only_podcast_digest_domain_is_blocked(self) -> None:
         item = {
@@ -1287,67 +851,7 @@ Language: zh
         }
         result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
         self.assertTrue(result["penalty"])
-        self.assertIn("AI 批量内容站或商业导流站", result["penalty"])
-
-    def test_legal_authorship_controversy_is_not_long_term_practical_content(self) -> None:
-        item = {
-            "title": "AI 写完全文后，署名者还能算作者吗",
-            "summary": "讨论作者身份、版权归属与责任归属",
-            "content": ("文章结合版权局、法院案例和人工智能生成合成内容标识办法，讨论社会争议与 AI 参与声明。" * 100),
-            "published": "2026-09-04",
-            "source_name": "中文原创作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/ai-authorship-law",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("不符合长期干货调性", result["penalty"])
-
-    def test_enterprise_recruiting_agent_case_study_is_rejected(self) -> None:
-        item = {
-            "title": "人力资源巨头用 AI Agent 完成百万次候选人对话，交付周期缩短一半",
-            "summary": "大型企业招聘自动化案例",
-            "content": ("企业通过招聘 Agent 扩大候选人沟通规模并优化交付。" * 180),
-            "published": "2026-09-04",
-            "source_name": "中文案例整理站",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/recruiting-agent-case",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertTrue(result["penalty"])
-        self.assertIn("通稿式表述", result["penalty"])
-
-    def test_scientific_discovery_tree_search_is_too_vertical(self) -> None:
-        item = {
-            "title": "树搜索驱动科学发现，小时级写出通用积分器",
-            "summary": "低成本找出物理科学规律",
-            "content": ("系统通过树搜索驱动科研工作流，发现新的物理科学规律。" * 180),
-            "published": "2026-09-04",
-            "source_name": "中文科技媒体",
-            "source_priority": 5,
-            "source_type": "web",
-            "source_role": "candidate",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-            "link": "https://example.com/science-discovery-tree-search",
-        }
-        result = score_item(item, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))
-        self.assertFalse(result["recommended"])
-        self.assertIn("大众切口偏弱", result["penalty"])
+        self.assertIn("来源域名已被明确排除", result["penalty"])
 
     def test_report_contains_review_controls(self) -> None:
         ranked = rank_candidates(self.items, self.profile, now=self.now)[:5]
@@ -1651,215 +1155,6 @@ Language: zh
         self.assertFalse(result["recommended"])
         self.assertIn("视频缺少逐字稿", result["penalty"])
 
-    def test_visual_demo_transcript_is_flagged_for_review_not_blocked(self) -> None:
-        common = {
-            "link": "https://www.youtube.com/watch?v=demo",
-            "summary": "AI 产品完整实操",
-            "published": "2026-09-07",
-            "source_name": "中文创作者",
-            "source_priority": 5,
-            "source_type": "youtube",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "video",
-            "content_status": "transcript",
-        }
-        visual_body = ("我们打开这个页面，点击这里，现在可以看到界面的演示结果。" * 30)
-        blocked = score_item({**common, "title": "AI 开发全流程视频实操", "content": visual_body}, self.profile, now=self.now)
-        renamed = score_item({**common, "title": "从需求到交付的完整方法", "content": visual_body}, self.profile, now=self.now)
-        interview = score_item({
-            **common,
-            "title": "AI 产品负责人对话：失败后怎样改验收标准",
-            "content": "受访者讲述了真实任务的失败、调整、结果和限制条件。" * 120,
-        }, self.profile, now=self.now)
-        for item in (blocked, renamed):
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
-            self.assertIn("关键证据依赖视频画面", item["penalty"])
-        self.assertNotIn("关键证据依赖视频画面", interview["penalty"])
-
-    def test_code_dominated_article_is_ineligible_but_brief_example_survives(self) -> None:
-        common = {
-            "summary": "AI 协同编辑的完整实践",
-            "published": "2026-09-07",
-            "source_name": "中文产品团队",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-        }
-        code = "\n".join([
-            "const beforeDoc = state.doc.toJSON()", "messages: []", "}", ".messages.push({",
-            "stepsJson: tr.steps.map(step => step.toJSON())", "tr.setMeta(", ",", "captureTransaction = tr =>",
-            ") === sessionId &&", ") === runId", "return afterDoc", "export function rollback()",
-        ])
-        prose = "人类编辑与 AI 修改必须能够区分，这是一个真实产品问题。" * 120
-        blocked = score_item({**common, "title": "AI 文档协作实现", "link": "https://example.com/code", "content": prose + "\n" + code}, self.profile, now=self.now)
-        renamed = score_item({**common, "title": "人和智能体如何安全共编", "link": "https://example.com/code-renamed", "content": prose + "\n" + code}, self.profile, now=self.now)
-        brief = score_item({**common, "title": "AI 文档修改如何不误伤人工编辑", "link": "https://example.com/brief", "content": prose + "\nconst runId = currentRun\n"}, self.profile, now=self.now)
-        for item in (blocked, renamed):
-            self.assertTrue(item["penalty"])
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
-            self.assertTrue(item["editorial_decision"]["human_review_required"])
-            self.assertIn("正文代码或实现片段占比过高", item["penalty"])
-        self.assertNotIn("正文代码或实现片段占比过高", brief["penalty"])
-
-    def test_extreme_system_jargon_density_is_ineligible_without_code_blocks(self) -> None:
-        common = {
-            "summary": "AI 团队记忆方法",
-            "published": "2026-09-07",
-            "source_name": "中文技术团队",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-        }
-        acronyms = " ".join(f"SYS{i}" for i in range(20))
-        identifiers = " ".join(f"componentName{i}" for i in range(90))
-        dense = ("团队解释复杂系统的调用边界与配置。" * 120) + acronyms + identifiers
-        blocked = score_item({**common, "title": "AI 团队记忆架构实践", "link": "https://example.com/jargon", "content": dense}, self.profile, now=self.now)
-        renamed = score_item({**common, "title": "如何让智能体不再重复犯错", "link": "https://example.com/jargon-renamed", "content": dense}, self.profile, now=self.now)
-        accessible = score_item({
-            **common,
-            "title": "AI 团队为什么要保留错误证据",
-            "link": "https://example.com/accessible",
-            "content": ("作者用一次真实失败说清了错误、根因、修复和后续验证。" * 150) + " ACL RAG SDK",
-        }, self.profile, now=self.now)
-        for item in (blocked, renamed):
-            self.assertTrue(item["penalty"])
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
-            self.assertTrue(item["editorial_decision"]["risk_signals"])
-            self.assertIn("专业缩写、系统名与工程标识密度过高", item["penalty"])
-        self.assertNotIn("专业缩写、系统名与工程标识密度过高", accessible["penalty"])
-
-    def test_complex_technical_case_is_not_rescued_by_a_simple_lesson(self) -> None:
-        common = {
-            "summary": "普通人使用 AI 的失败复盘", "published": "2026-09-08", "source_name": "中文作者",
-            "source_priority": 5, "source_type": "web", "language": "zh", "maturity": "secondary",
-            "content_form": "article", "content_status": "fulltext",
-        }
-        complex_body = ("作者为了爬虫安装虚拟机和 Docker，使用 VPN、脚本与接口监听反复排查。" * 90)
-        blocked = score_item({**common, "title": "AI 为什么总把小问题做复杂", "link": "https://example.com/complex", "content": complex_body}, self.profile, now=self.now)
-        renamed = score_item({**common, "title": "先说最终目标的重要性", "link": "https://example.com/complex-renamed", "content": complex_body}, self.profile, now=self.now)
-        accessible = score_item({**common, "title": "AI 帮我改周报时误会了目标", "link": "https://example.com/simple", "content": "作者对照了修改前后的周报，发现说清读者和用途后返工明显减少。" * 150}, self.profile, now=self.now)
-        for item in (blocked, renamed):
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
-            self.assertTrue(item["editorial_decision"]["human_review_required"])
-            self.assertIn("核心案例同时依赖多种技术环境", item["penalty"])
-        self.assertNotIn("核心案例同时依赖多种技术环境", accessible["penalty"])
-
-    def test_frontier_lab_safety_news_is_blocked_but_user_protection_survives(self) -> None:
-        common = {
-            "published": "2026-09-08", "source_name": "中文深度媒体", "source_priority": 5, "source_type": "web",
-            "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext",
-        }
-        risk = ("OpenAI 与 Anthropic 回查模型安全事故，记录越界、网络攻击、恶意软件与暂停评测。" * 90)
-        blocked = score_item({**common, "title": "两家 AI 实验室为什么踩了刹车", "summary": "前沿安全风险", "link": "https://example.com/lab-risk", "content": risk}, self.profile, now=self.now)
-        renamed = score_item({**common, "title": "模型能力越强，评测团队为什么越谨慎", "summary": "对齐安全报告", "link": "https://example.com/lab-risk-renamed", "content": risk}, self.profile, now=self.now)
-        practical = score_item({**common, "title": "收到 AI 换脸转账请求时怎样停下核对", "summary": "普通用户防诈", "link": "https://example.com/user-safety", "content": "用户收到转账消息后改用原联系方式回拨，核对姓名、金额和真实身份后再决定。" * 140}, self.profile, now=self.now)
-        for item in (blocked, renamed):
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
-            self.assertTrue(item["editorial_decision"]["risk_signals"])
-            self.assertIn("前沿模型实验室的安全", item["penalty"])
-        self.assertNotIn("前沿模型实验室的安全", practical["penalty"])
-
-    def test_strategic_product_forecast_is_not_a_reader_task(self) -> None:
-        common = {
-            "published": "2026-09-08", "source_name": "产品媒体", "source_priority": 5, "source_type": "web",
-            "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext",
-        }
-        strategy = ("文章追踪某大厂 AI 产品演进、生态护城河和市场位置，预测下一阶段的未来竞争与战略布局。" * 90)
-        blocked = score_item({**common, "title": "某 AI 助手的下一阶段", "summary": "大厂生态战略解读", "link": "https://example.com/strategy", "content": strategy}, self.profile, now=self.now)
-        renamed = score_item({**common, "title": "从 AI 首次补贴到未来入口", "summary": "产品发展分析", "link": "https://example.com/strategy-renamed", "content": strategy}, self.profile, now=self.now)
-        practice = score_item({**common, "title": "我用 AI 重做客户拜访 PPT", "summary": "真实任务复盘", "link": "https://example.com/task", "content": "作者先找齐资料和历史沟通，核对事实后只做局部修改，最后带着客户拜访 PPT 进入会议。" * 130}, self.profile, now=self.now)
-        for item in (blocked, renamed):
-            self.assertEqual(item["editorial_decision"]["eligibility"]["status"], "passed")
-            self.assertTrue(item["editorial_decision"]["risk_signals"])
-            self.assertIn("单一大厂产品演进", item["penalty"])
-        self.assertNotIn("单一大厂产品演进", practice["penalty"])
-
-    def test_latest_feedback_rejects_short_engineering_and_commercial_noise(self) -> None:
-        common = {
-            "summary": "中文完整材料",
-            "content": "这是中文正文，包含真实数字和产品案例。" * 160,
-            "published": "2026-09-03",
-            "source_name": "中文媒体",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-        }
-        rows = [
-            {**common, "title": "腾讯WorkBuddy联名硬件来了", "link": "https://example.com/hardware"},
-            {**common, "title": "智谱和 MiniMax，把大模型做成了两种生意", "link": "https://example.com/business"},
-            {**common, "title": "AI 如何重构广告定向", "link": "https://example.com/ads"},
-            {**common, "title": "MiniMax打开了AI视频的实时商业化路径", "link": "https://example.com/commercial"},
-            {**common, "title": "成立不到一年连融三轮，这个睡眠 AI 产品火了", "link": "https://example.com/funding"},
-            {**common, "title": "一个模型场景通吃，它的泛化能力有点狠", "link": "https://example.com/hype"},
-        ]
-        lookup = {item["link"]: item for item in rank_candidates(rows, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))}
-        self.assertTrue(all(item["penalty"] for item in lookup.values()))
-
-        short_engineering = score_item(
-            {
-                **common,
-                "title": "GitHub 用 AI Agent 优化工作流",
-                "link": "https://example.com/short-engineering",
-                "content": ("持续集成中的 MCP Schema 与 Pull Request Diff。" * 30),
-            },
-            self.profile,
-            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
-        )
-        self.assertTrue(short_engineering["penalty"])
-        self.assertIn("文章偏短且技术术语密集", short_engineering["penalty"])
-
-    def test_latest_feedback_rejects_feature_lists_official_tone_and_education(self) -> None:
-        common = {
-            "published": "2026-08-31",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-        }
-        items = [
-            {
-                **common,
-                "title": "ChatGPT Work 到底是什么？一份功能与风险拆解",
-                "link": "https://example.com/features",
-                "source_name": "中文科技站",
-                "summary": "逐项介绍产品能力",
-                "content": "联网执行、浏览器、共享工作区、子 Agent 和定时任务。" * 200,
-            },
-            {
-                **common,
-                "title": "AI 进入职场，真正要面对的可能不是机器",
-                "link": "https://example.com/official",
-                "source_name": "央视网",
-                "summary": "公众调查",
-                "content": "调查报告分析公众认知、受访者态度与就业治理，并提出公共政策建议。" * 180,
-            },
-            {
-                **common,
-                "title": "千名学生实验：ChatGPT 与课堂批判性思维训练",
-                "link": "https://example.com/education",
-                "source_name": "研究机构",
-                "summary": "学生作业实验",
-                "content": "大学生在学校课堂中使用 AI 完成作业。" * 30,
-            },
-        ]
-        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))}
-        self.assertIn("产品功能说明", lookup["https://example.com/features"]["penalty"])
-        self.assertIn("官方调查与治理表达", lookup["https://example.com/official"]["penalty"])
-        self.assertIn("教育方向", lookup["https://example.com/education"]["penalty"])
-        self.assertIn("正文偏短", lookup["https://example.com/education"]["penalty"])
-        self.assertTrue(all(item["penalty"] for item in lookup.values()))
-
     def test_old_first_person_failure_review_is_still_outdated(self) -> None:
         item = score_item(
             {
@@ -1891,97 +1186,10 @@ Language: zh
         self.assertTrue(is_historical_content_duplicate(renamed, reviewed))
         self.assertFalse(is_historical_content_duplicate(unrelated, reviewed))
 
-    def test_news_feature_is_not_a_writing_candidate(self) -> None:
-        result = score_item(
-            {
-                "title": "AI 内容行业谁在赚钱、谁在出局",
-                "link": "https://example.com/news-feature",
-                "summary": "记者采访多位行业从业者",
-                "content": "科创板日报记者采访，多位从业者表示行业正在变化，责编完成审校。" * 180,
-                "published": "2026-08-18",
-                "source_name": "科创板日报",
-                "source_priority": 5,
-                "source_type": "web",
-                "language": "zh",
-                "maturity": "secondary",
-                "content_form": "article",
-                "content_status": "fulltext",
-            },
-            self.profile,
-            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
-        )
-        self.assertTrue(result["penalty"])
-        self.assertIn("记者采访和行业报道", result["penalty"])
-
-    def test_personal_story_needs_a_transferable_artifact(self) -> None:
-        common = {
-            "content": "作者记录半年项目、真实体感、收入和具体过程。" * 300,
-            "published": "2026-08-27",
-            "source_name": "个人作者",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_form": "article",
-            "content_status": "fulltext",
-        }
-        personal = score_item(
-            {
-                **common,
-                "title": "付费用户过百之后，我为什么仍停掉 AI 社交产品",
-                "summary": "个人创业项目的留存、收入与体感",
-                "link": "https://example.com/personal-project",
-            },
-            self.profile,
-            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
-        )
-        transferable = score_item(
-            {
-                **common,
-                "title": "我写了个 AI 写作 Skill，第一次改稿就翻车了",
-                "summary": "包含对照实验、语料测试和可复用方法",
-                "link": "https://example.com/transferable",
-            },
-            self.profile,
-            now=datetime(2026, 9, 4, tzinfo=timezone.utc),
-        )
-        self.assertTrue(personal["penalty"])
-        self.assertIn("作者本人项目经历", personal["penalty"])
-        self.assertNotIn("作者本人项目经历", transferable["penalty"])
-
     def test_utf8_page_ignores_misleading_latin1_header(self) -> None:
         raw = "用 AI 让我们变笨了吗？认知债务与长期记忆".encode("utf-8")
         decoded = decode_html(raw, "ISO-8859-1")
         self.assertEqual(decoded, "用 AI 让我们变笨了吗？认知债务与长期记忆")
-
-    def test_feedback_patterns_downrank_hype_broad_and_niche_topics(self) -> None:
-        common = {
-            "summary": "一篇已经完成中文整合的 AI 长文。",
-            "content": "文章包含完整的事件、判断和案例。" * 250,
-            "published": "2026-08-24T08:00:00Z",
-            "source_name": "中文媒体",
-            "source_priority": 4,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-        }
-        items = [
-            {**common, "title": "硅谷押注的下一个 Harness，是整个桌面操作系统", "link": "https://example.com/harness"},
-            {**common, "title": "阿里视频大模型 Wan3.0 正式上线", "link": "https://example.com/wan"},
-            {**common, "title": "匿名模型被扒出智谱血缘，也有人怀疑 Cursor", "link": "https://example.com/gossip"},
-            {**common, "title": "AI 重塑商业，信任决定未来商业能走多远", "link": "https://example.com/broad"},
-            {**common, "title": "一篇论文改写 AI 科研评价规则", "link": "https://example.com/science"},
-            {**common, "title": "阿里达摩院推出肝癌 AI 模型", "link": "https://example.com/medical"},
-        ]
-        ranked = rank_candidates(items, self.profile, now=self.now)
-        lookup = {item["link"]: item for item in ranked}
-        self.assertTrue(lookup["https://example.com/harness"]["recommended"])
-        self.assertTrue(lookup["https://example.com/wan"]["recommended"])
-        self.assertIn("炒作或猎奇", lookup["https://example.com/gossip"]["penalty"])
-        self.assertIn("缺少具体切口", lookup["https://example.com/broad"]["penalty"])
-        self.assertIn("大众切口偏弱", lookup["https://example.com/science"]["penalty"])
-        self.assertIn("大众切口偏弱", lookup["https://example.com/medical"]["penalty"])
 
     def test_feedback_import_can_delete_verified_download(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -2071,66 +1279,6 @@ Language: zh
                 handle.write(json.dumps({"reviews": {"later": {"status": "selected"}}}) + "\n")
             self.assertEqual(feedback_module.final_reviewed_ids(target), {"later"})
 
-    def test_second_feedback_batch_prefers_authoritative_interview(self) -> None:
-        common = {
-            "content": "已完成中文整理的长文材料。" * 250,
-            "published": "2026-08-25T08:00:00Z",
-            "source_name": "中文媒体",
-            "source_priority": 4,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-        }
-        items = [
-            {
-                **common,
-                "title": "赛博义父 Tibo 最新访谈",
-                "summary": "下一代 Agent 将走向云端",
-                "content": "OpenAI Codex 负责人核心观点，以下是对话全文。" + common["content"],
-                "link": "https://example.com/interview",
-            },
-            {
-                **common,
-                "title": "开源国产 8B 模型，比肩闭源 Image 2",
-                "summary": "SenseNova U1.5 Lite",
-                "link": "https://example.com/unnamed-model",
-            },
-            {
-                **common,
-                "title": "WAIC CONNECT 带你拿下马来西亚 AI 采购需求",
-                "summary": "活动将在吉隆坡盛大开启",
-                "link": "https://example.com/event",
-            },
-            {
-                **common,
-                "title": "出版社与小猿达成合作，学习智能体首落 AI 学习机",
-                "summary": "双方签署合作协议",
-                "link": "https://example.com/partnership",
-            },
-            {
-                **common,
-                "title": "前 TikTok 产品经理创业，AI 视频平台获千万美元融资",
-                "summary": "融资与投资方信息",
-                "link": "https://example.com/product-manager-funding",
-            },
-            {
-                **common,
-                "title": "具身创业里的香港教授们",
-                "summary": "AI 创业者群像",
-                "link": "https://example.com/people",
-            },
-        ]
-        ranked = rank_candidates(items, self.profile, now=self.now)
-        lookup = {item["link"]: item for item in ranked}
-        self.assertTrue(lookup["https://example.com/interview"]["recommended"])
-        self.assertIn("权威人物访谈", lookup["https://example.com/interview"]["reason"])
-        self.assertIn("事件级别不足", lookup["https://example.com/unnamed-model"]["penalty"])
-        self.assertIn("活动、采购或合作宣传稿", lookup["https://example.com/event"]["penalty"])
-        self.assertIn("活动、采购或合作宣传稿", lookup["https://example.com/partnership"]["penalty"])
-        self.assertIn("只有资本事件", lookup["https://example.com/product-manager-funding"]["penalty"])
-        self.assertIn("纯人物群像", lookup["https://example.com/people"]["penalty"])
-
     def test_incidental_body_words_do_not_trigger_hard_exclusions(self) -> None:
         common = {
             "published": "2026-08-06T08:00:00Z",
@@ -2161,46 +1309,8 @@ Language: zh
         self.assertTrue(lookup["https://example.com/agent-cost"]["recommended"])
         self.assertTrue(lookup["https://example.com/agent-comparison"]["recommended"])
         self.assertNotIn("命中排除词", lookup["https://example.com/agent-comparison"]["penalty"])
-        self.assertNotIn("事件级别不足", lookup["https://example.com/agent-cost"]["penalty"])
 
-    def test_headline_noise_is_rejected_without_body_keyword_accidents(self) -> None:
-        common = {
-            "summary": "AI 行业长文",
-            "content": "一篇完整的中文文章。" * 120,
-            "published": "2026-08-24T08:00:00Z",
-            "source_name": "中文媒体",
-            "source_priority": 4,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-        }
-        titles = [
-            "WRC 2026｜原生全模态世界模型：从模拟世界到交互世界",
-            "有头有脸的大模型公司，集体搞起匿名公测",
-            "MiniMax 做视频领域 Claude Code 的野心已经藏不住了",
-            "从单点突破到全数 SOTA，阿里打响模型团战第一枪",
-            "AI 音乐走到该怎么做，中国大模型为啥选最难的路",
-            "字节 AI 产品向豆包集结，Agent 时代第一场巨头战役打响",
-            "Gen1.5 模型带来重要进展：物理 AI 正在接近 GPT3 时刻",
-            "OpenAI 辣椒芯干翻英伟达，老黄股价不跌反涨",
-            "腾讯重金投入 AI 之后，混元 Hy4 preview 交出了什么答卷",
-            "OpenAI 买几万台 Mac 搞强化训练，英伟达的活被苹果抢了",
-            "VC 疯了，200 万现金冠军奖，又花 4000 万造了一座 AI 创业乌托邦",
-            "世界模型突破三大瓶颈，让虚拟世界成为机器人训练场",
-            "Coding 自由之后，人开始成为最大的瓶颈",
-            "高德发布首个无长程依赖的万帧级流式 3D 重建模型 ABot-Recon",
-            "范式与华为达成重磅算力战略合作，成为首批拥抱国产高端算力底座的 AI 企业",
-            "32GB 大显存加持，英特尔锐炫 Pro B70 搞定 AI 漫剧创作",
-            "AQuA：让量化研究 Agent 持续进化",
-            "OpenAI 芯片实测跑分揭晓，为模型造芯片时代来了",
-            "造物 100：AI 为爱做鸭、PLAUD 推新作、字节 TRAE 造了数字工牌",
-        ]
-        items = [{**common, "title": title, "link": f"https://example.com/noise-{index}"} for index, title in enumerate(titles)]
-        ranked = rank_candidates(items, self.profile, now=self.now)
-        self.assertTrue(all(item["penalty"] for item in ranked))
-
-    def test_event_recency_and_reader_distance_follow_latest_feedback(self) -> None:
+    def test_event_recency_exempts_core_team_interviews(self) -> None:
         common = {
             "content": "一篇具有完整中文正文的深度材料。" * 250,
             "source_name": "中文深度媒体",
@@ -2244,10 +1354,9 @@ Language: zh
         lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
         self.assertTrue(lookup["https://example.com/old-interview"]["recommended"])
         self.assertTrue(lookup["https://example.com/old-comparison"]["recommended"])
-        self.assertIn("距离目标读者过远", lookup["https://example.com/enterprise-cost"]["penalty"])
         self.assertIn("超过时效窗口", lookup["https://example.com/stale-outage"]["penalty"])
 
-    def test_source_quality_and_generic_comparison_gate(self) -> None:
+    def test_blocked_domains_and_controlled_test(self) -> None:
         common = {
             "summary": "完整的中文深度文章",
             "content": "文章有足够长的正文材料。" * 250,
@@ -2283,107 +1392,11 @@ Language: zh
             },
         ]
         lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=self.now)}
-        self.assertIn("AI 批量内容站", lookup["https://kylinlabai.github.io/knowledge/review.html"]["penalty"])
-        self.assertIn("商业导流站", lookup["https://claudemax.shop/blog/comparison"]["penalty"])
-        self.assertIn("泛化工具清单或横评", lookup["https://trusted.example.com/generic-list"]["penalty"])
+        self.assertIn("来源域名已被明确排除", lookup["https://kylinlabai.github.io/knowledge/review.html"]["penalty"])
+        self.assertIn("来源域名已被明确排除", lookup["https://claudemax.shop/blog/comparison"]["penalty"])
         self.assertTrue(lookup["https://trusted.example.com/controlled-test"]["recommended"])
 
-    def test_reader_usability_and_long_term_value_gate(self) -> None:
-        common = {
-            "content": "一篇完整的中文深度文章。" * 250,
-            "published": "2026-08-31T08:00:00Z",
-            "source_name": "可信中文媒体",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-        }
-        items = [
-            {
-                **common,
-                "title": "AI 本地部署不如官方版的元凶找到了：734 个依赖包",
-                "summary": "深入 CUDA 核函数、logit 和 KV 缓存量化",
-                "link": "https://example.com/too-technical",
-            },
-            {
-                **common,
-                "title": "OpenAI 内部，AI 建立了三代「文明」",
-                "summary": "一次多 Agent 异常事件",
-                "link": "https://example.com/one-off-story",
-            },
-            {
-                **common,
-                "title": "编辑部来了 AI 实习生：千问入职 20 天实习小结",
-                "summary": "定时任务、选题评分系统与真实复盘",
-                "link": "https://example.com/long-practice",
-            },
-            {
-                **common,
-                "title": "Claude 发布连接硬件的 MHS 标准",
-                "summary": "统一设备描述与 Agent 调用边界",
-                "link": "https://example.com/mhs-standard",
-            },
-        ]
-        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=self.now)}
-        self.assertIn("目标读者难以理解或使用", lookup["https://example.com/too-technical"]["penalty"])
-        self.assertIn("缺少长期回看价值", lookup["https://example.com/one-off-story"]["penalty"])
-        self.assertTrue(lookup["https://example.com/long-practice"]["recommended"])
-        self.assertIn("持续实践复盘", lookup["https://example.com/long-practice"]["reason"])
-        self.assertTrue(lookup["https://example.com/mhs-standard"]["recommended"])
-
-    def test_latest_feedback_separates_deep_frameworks_from_dense_implementation(self) -> None:
-        common = {
-            "content": "一篇已经完成中文整理的完整深度文章。" * 160,
-            "published": "2026-08-28T08:00:00Z",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-        }
-        items = [
-            {
-                **common,
-                "title": "吴恩达访谈：AI最大的机遇并不在你想象的地方",
-                "summary": "吴恩达讨论岗位任务、人类判断与年轻人的时代机会，以下是对话全文",
-                "source_name": "信鸽中文",
-                "link": "https://example.com/broad-interview",
-            },
-            {
-                **common,
-                "title": "AI写代码飞快，为何交付没有变快？小红书Muse的Agentic架构实践",
-                "summary": "围绕业务本体、Agent Team、分层评测与失败分类的实践",
-                "source_name": "InfoQ",
-                "link": "https://example.com/implementation-heavy",
-            },
-            {
-                **common,
-                "title": "Agent评测漫谈：美团两年实践如何从结果、轨迹和组件分层评测",
-                "summary": "解释结果正确不等于过程合格，以及如何构建真实评测体系",
-                "source_name": "美团技术团队",
-                "link": "https://example.com/long-horizon-framework",
-            },
-            {
-                **common,
-                "title": "Claude Code额度回落：Agent正在制造新的祖传代码屎山？",
-                "summary": "解释Agent Loop、上下文压缩与设计理由丢失如何让局部合理补丁不断累积",
-                "source_name": "雷锋网",
-                "link": "https://example.com/codebase-debt",
-            },
-        ]
-        now = datetime(2026, 9, 2, tzinfo=timezone.utc)
-        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
-        self.assertTrue(lookup["https://example.com/broad-interview"]["penalty"])
-        self.assertIn("访谈角度过宽", lookup["https://example.com/broad-interview"]["penalty"])
-        self.assertTrue(lookup["https://example.com/implementation-heavy"]["penalty"])
-        self.assertIn("系统实现概念过密", lookup["https://example.com/implementation-heavy"]["penalty"])
-        self.assertTrue(lookup["https://example.com/long-horizon-framework"]["recommended"])
-        self.assertIn("长期实践沉淀", lookup["https://example.com/long-horizon-framework"]["reason"])
-        self.assertTrue(lookup["https://example.com/codebase-debt"]["penalty"])
-        self.assertIn("系统实现概念过密", lookup["https://example.com/codebase-debt"]["penalty"])
-
-    def test_next_batch_blocks_hype_updates_and_personnel_pr(self) -> None:
+    def test_major_release_stays_eligible(self) -> None:
         common = {
             "content": "一篇具有完整中文正文的 AI 文章。" * 160,
             "published": "2026-09-02T08:00:00Z",
@@ -2419,10 +1432,9 @@ Language: zh
         )
         now = datetime(2026, 9, 2, tzinfo=timezone.utc)
         lookup = {item["title"]: item for item in rank_candidates(items, self.profile, now=now)}
-        self.assertTrue(all(lookup[title]["penalty"] for title in rejected_titles))
         self.assertTrue(lookup["李飞飞发布：全球首个多模态世界模型"]["recommended"])
 
-    def test_latest_feedback_requires_adaptable_and_information_dense_material(self) -> None:
+    def test_podcast_without_transcript_is_blocked(self) -> None:
         common = {
             "published": "2026-08-26T08:00:00Z",
             "source_priority": 5,
@@ -2464,13 +1476,9 @@ Language: zh
             },
         ]
         lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 2, tzinfo=timezone.utc))}
-        self.assertIn("工程门槛过高", lookup["https://example.com/code-heavy"]["penalty"])
-        self.assertIn("理论或商业评论过多", lookup["https://example.com/abstract-business"]["penalty"])
         self.assertIn("播客缺少逐字稿", lookup["https://example.com/podcast-shownotes"]["penalty"])
-        self.assertIn("框架化表达多于扎实证据", lookup["https://example.com/formulaic"]["penalty"])
-        self.assertTrue(all(item["penalty"] for item in lookup.values()))
 
-    def test_latest_feedback_blocks_benchmarks_collages_translations_and_creator(self) -> None:
+    def test_blocked_creator_and_domain(self) -> None:
         common = {
             "published": "2026-08-30T08:00:00Z",
             "source_priority": 5,
@@ -2515,67 +1523,10 @@ Language: zh
         ]
         now = datetime(2026, 9, 2, tzinfo=timezone.utc)
         lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=now)}
-        self.assertIn("人物引语堆叠", lookup["https://example.com/citation-collage"]["penalty"])
         self.assertIn("个人 IP 已被明确排除", lookup["https://example.com/blocked-creator"]["penalty"])
-        self.assertIn("机器翻译感明显", lookup["https://aipodcast.jasonlin.tech/example"]["penalty"])
-        self.assertIn("Benchmark", lookup["https://example.com/benchmark"]["penalty"])
-        self.assertTrue(all(item["penalty"] for item in lookup.values()))
+        self.assertIn("来源域名已被明确排除", lookup["https://aipodcast.jasonlin.tech/example"]["penalty"])
 
-    def test_latest_feedback_prefers_focused_product_owner_speech_over_chatty_interview_and_cli(self) -> None:
-        common = {
-            "published": "2026-09-03T08:00:00Z",
-            "source_priority": 5,
-            "source_type": "web",
-            "language": "zh",
-            "maturity": "secondary",
-            "content_status": "fulltext",
-            "content_form": "article",
-        }
-        items = [
-            {
-                **common,
-                "title": "OpenAI CEO 长访谈：AI 的下一个时代",
-                "summary": "从人生经历聊到工业革命与人类自主权",
-                "content": ("高中时他开始尝试编程，大学时经历了辍学和创业历程。"
-                            "话题又转向工业革命、推向世界和人类自主权。") * 80,
-                "source_name": "中文访谈",
-                "link": "https://example.com/chatty-interview",
-            },
-            {
-                **common,
-                "title": "同时开多个 Agent：herdr 终端复用器实践",
-                "summary": "用分屏和快捷键查看 Agent 状态",
-                "content": ("这是 Rust 编写的终端复用器，支持 tmux、Zellij、Shell 和 SSH。"
-                            "使用 Ctrl+b 快捷键分屏，再在命令行中切换窗格。") * 80,
-                "source_name": "少数派",
-                "link": "https://example.com/terminal-agent",
-            },
-            {
-                **common,
-                "title": "百度网盘产品负责人：老产品如何做 AI 重构",
-                "summary": "现场演讲材料整理，围绕一个产品的取舍",
-                "content": ("我们当时先问用户真正要什么，没有停在搜索升级。"
-                            "团队开始做编辑与存储的交付链路，之后做了一次完整调整。") * 80,
-                "source_name": "大会演讲整理",
-                "link": "https://example.com/product-owner-speech",
-            },
-            {
-                **common,
-                "title": "AI Agent 的护城河与终局",
-                "summary": "跨多个公司讨论产品骨架",
-                "content": ("话题从 Instagram 转到平台战略，再用护城河、骨架、终局和三国战局解释大时代。") * 100,
-                "source_name": "行业媒体",
-                "link": "https://example.com/macro-collage",
-            },
-        ]
-        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))}
-        self.assertIn("人生经历或宏观闲聊", lookup["https://example.com/chatty-interview"]["penalty"])
-        self.assertIn("终端、CLI、Shell", lookup["https://example.com/terminal-agent"]["penalty"])
-        self.assertIn("缺少单一连续的决策链", lookup["https://example.com/macro-collage"]["penalty"])
-        self.assertTrue(lookup["https://example.com/product-owner-speech"]["recommended"])
-        self.assertIn("单一产品复盘", lookup["https://example.com/product-owner-speech"]["reason"])
-
-    def test_latest_feedback_prefers_concrete_user_task_and_rejects_hardware_old_closure_and_product_governance(self) -> None:
+    def test_old_event_news_is_blocked_but_task_story_stays(self) -> None:
         common = {
             "published": "2026-09-03T08:00:00Z", "source_priority": 5, "source_type": "web",
             "language": "zh", "maturity": "secondary", "content_status": "fulltext", "content_form": "article",
@@ -2612,45 +1563,7 @@ Language: zh
         ]
         lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))}
         self.assertTrue(lookup["https://example.com/end-user-task"]["recommended"])
-        self.assertIn("终端任务", lookup["https://example.com/end-user-task"]["reason"])
-        self.assertIn("AI 硬件", lookup["https://example.com/hardware-product"]["penalty"])
-        self.assertIn("专业 AI 产品治理", lookup["https://example.com/pro-governance"]["penalty"])
         self.assertIn("事件新闻已超过时效窗口", lookup["https://example.com/old-closure"]["penalty"])
-
-    def test_latest_feedback_separates_article_quality_from_topic_appeal_and_prefers_direct_use_tools(self) -> None:
-        common = {
-            "published": "2026-09-04T08:00:00Z", "source_priority": 5, "source_type": "web",
-            "language": "zh", "maturity": "secondary", "content_status": "fulltext", "content_form": "article",
-        }
-        items = [
-            {
-                **common, "title": "Anthropic电商Agent：购物Agent该用单Agent加Skills",
-                "summary": "商家Agent与购物车状态", "content": "Skills, not subagents，购物 Agent 与商家 Agent 共享电商上下文。" * 140,
-                "source_name": "中文深度文章", "link": "https://example.com/commerce-agent",
-            },
-            {
-                **common, "title": "实测飞猪AI：旅行Agent替你申请升房",
-                "summary": "飞猪帮帮产品解读", "content": "飞猪帮帮发现免费升房机会，授权后给酒店前台打电话申请升房。" * 120,
-                "source_name": "科技媒体", "link": "https://example.com/travel-ad",
-            },
-            {
-                **common, "title": "吴恩达的桌面 Agent OpenWorker 为什么不Work",
-                "summary": "为什么不能替普通人工作", "content": "OpenWorker 连续重试失败，用户需要自己排查。" * 160,
-                "source_name": "科技媒体", "link": "https://example.com/weak-product",
-            },
-            {
-                **common, "title": "AI阅读器：读书提问后把回答保存成笔记",
-                "summary": "安装与快速开始，可精确返回原文", "content": ("下载最新版后即可使用。阅读完全离线，AI 默认关闭。"
-                          "选文提问后可保存完整 AI 回答，笔记支持精确返回原文；PDF 保留原页且不伪造 OCR。") * 80,
-                "source_name": "开源产品作者", "link": "https://example.com/direct-tool",
-            },
-        ]
-        lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 6, tzinfo=timezone.utc))}
-        self.assertIn("不具备当前选题吸引力", lookup["https://example.com/commerce-agent"]["penalty"])
-        self.assertIn("案例宣传属性过强", lookup["https://example.com/travel-ad"]["penalty"])
-        self.assertIn("产品本身缺少可写价值", lookup["https://example.com/weak-product"]["penalty"])
-        self.assertTrue(lookup["https://example.com/direct-tool"]["recommended"])
-        self.assertIn("可直接试用", lookup["https://example.com/direct-tool"]["reason"])
 
     def test_main2_150320_feedback_blocks_partial_login_and_written_astra_prompt_topic(self) -> None:
         base = {

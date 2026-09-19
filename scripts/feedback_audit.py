@@ -1,7 +1,7 @@
-"""Audit private editorial feedback without exporting its full text.
+"""Summarize Stephen's review feedback without exporting its full text.
 
-The report proves coverage and surfaces records that need interpretation. It
-never turns notes into new rules automatically.
+Reports selection rate per batch, reason-tag counts, records with no reason and
+possible button/note conflicts. It never turns notes into rules by itself.
 """
 from __future__ import annotations
 
@@ -107,8 +107,11 @@ def audit_feedback(path: Path) -> dict:
                 "batches": [batch for _, batch, _ in decisions],
             })
 
+    decided = status_counts["selected"] + status_counts["rejected"]
     return {
         "contract_version": 1,
+        "selected_rate": round(status_counts["selected"] / decided, 4) if decided else None,
+        "recent_batches": batches[-10:],
         "source": str(path),
         "batch_count": len(batches),
         "review_count": sum(status_counts.values()),

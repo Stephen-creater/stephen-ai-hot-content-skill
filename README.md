@@ -12,7 +12,7 @@ Stephen 的个人 AI 选题系统：找能改写成文章的简体中文 AI 材�
 - **Agent**：先通读全部合格材料的标题和开头，挑出要读的；读完全文按六个维度各打 0 到 2 分（选题吸引力、读者改变、干货含量、可重写性、长期价值，外加只作参考的改写成本），前五维至少 6 分、读者改变和干货含量都不是 0 分就推荐，每条引用原文。
 - **Stephen**：在审核页点要或不要，原因点标签。没点的默认算不要。
 
-关键词不参与排序，也不参与判断，只作为调试记录保留，重要性很低。
+关键词不参与排序，也不参与判断。只有一票否决用到少量固定词（已写主题、屏蔽作者、登录墙提示语等）。
 
 一批的流程：分轮抓取 → 读全文前查重 → 读全文打分 → 组装到 `topics/<批次ID>/` → 发布前检查 → 生成审核页 → 导入审核结果。
 
@@ -28,7 +28,7 @@ Stephen 的个人 AI 选题系统：找能改写成文章的简体中文 AI 材�
 .venv/bin/python3 scripts/eval_replay.py leak-check   # 规则里不能引用留出集文章
 ```
 
-真正衡量效果的指标是 Stephen 的采纳率：`scripts/editorial_outcomes.py` 看历史结果，`scripts/source_yield.py` 看每个来源的采纳情况。
+真正衡量效果的指标是 Stephen 的采纳率：`scripts/feedback_audit.py` 看历史结果，`scripts/source_yield.py` 看每个来源的采纳情况。
 
 ## 快速开始
 
@@ -57,18 +57,17 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - `references/channels.md`：Exa、GitHub、YouTube、B 站、X、知乎、浏览器等取材渠道怎么用。
 
 给脚本读的配置：
-- `resources/editorial_profile.json`：口味档案。目标读者、条数、时效、已写主题、屏蔽名单；关键词表只作调试记录。
-- `resources/editorial_profile.schema.json`：口味档案的格式检查，防止改配置时误删关键开关。
+- `resources/editorial_profile.json`：口味档案。目标读者、条数、时效、已写主题、屏蔽名单和一票否决用到的少量词。
 - `resources/content_curator_sources.json`：订阅清单，按类别和用途（候选源、线索源、核验源）标注。
-- `resources/source_portfolio.json`：12 类取材渠道和权重，用来判断搜得够不够。
+- `resources/source_portfolio.json`：12 类取材渠道和权重，收工检查用。
 
 脚本（按流程）：
-- `scrape_aihot.py`：抓取总入口；`curator.py`：一票否决和阅读顺序（关键词匹配只留作调试记录）。
+- `scrape_aihot.py`：抓取总入口；`curator.py`：一票否决和阅读顺序。
 - `add_source.py`：登记 Agent 手动找到的文章；`history_check.py`：读全文前查重。
 - `editorial_judgment.py`：推荐理由格式检查（六维打分、原文引用、正文指纹）。
 - `publish_batch.py`：发布前总检查，`--check-only` 只检查不登记；`report.py`：生成审核页。
-- `import_feedback.py`：导入审核结果；`feedback_audit.py`：统计原因标签，找出没给原因或自相矛盾的反馈。
-- `discovery_ledger.py`：搜索记录本和收工检查；`source_coverage.py`：最近 7 天各类渠道搜过没有；`channel_check.py`：渠道能不能用。
+- `import_feedback.py`：导入审核结果；`feedback_audit.py`：入选率、原因标签统计，找出没给原因或自相矛盾的反馈。
+- `discovery_ledger.py`：搜索记录本和收工检查；`channel_check.py`：渠道能不能用。
 - `eval_replay.py`：历史回放评测；`quality_audit.py`：仓库结构检查，只说明文件齐不齐，不代表选题好不好。
 - `format_captions.py`、`local_transcribe.py`：整理字幕、本机离线转写。
 
@@ -76,7 +75,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ## 隐私与浏览器
 
-API Key、Cookie、登录态、审核反馈和完整候选正文都不进公开仓库。需要浏览器时只用隔离浏览器的独立任务空间，不操作 Stephen 的 Chrome。可选的模型复排读取 `OPENROUTER_API_KEY` 或 `.config/openrouter_api_key.txt`。
+API Key、Cookie、登录态、审核反馈和完整候选正文都不进公开仓库。需要浏览器时只用隔离浏览器的独立任务空间，不操作 Stephen 的 Chrome。
 
 ## 验证
 

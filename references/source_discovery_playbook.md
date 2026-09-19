@@ -1,99 +1,78 @@
 # 信息源清单
 
-当合格材料不足本批目标数量时，按下面顺序持续扩源，直到满足 `SKILL.md`「交付规则」里的条数或停止条件。扩源的目标是找到更多高质量材料，不是降低门槛。
+合格材料不够本批目标条数时，按下面的顺序扩源，直到满足 `SKILL.md`「交付规则」里的条数或停止条件。扩源是为了找到更多好材料，不是降低标准。
 
-## 先量化覆盖，不凭感觉扩源
-
-`resources/source_portfolio.json` 把取材渠道分成 12 类，按预期价值给了权重。每周运行一次覆盖检查，并在扩源前查看台账：
+每个来源的地址、分组和参数以 `resources/content_curator_sources.json` 为准，这里只讲每一层收什么、怎么用。扩源前后看搜索记录：
 
 ```bash
-.venv/bin/python3 scripts/source_coverage.py --verified-channel exa_search --verified-channel github --write-snapshot .local/source_coverage.json
 .venv/bin/python3 scripts/discovery_ledger.py report
+.venv/bin/python3 scripts/source_yield.py --min-decided 5   # 每个来源被 Stephen 选中几次
 ```
 
-`verified-channel` 只能填本轮用 `scripts/channel_check.py --live` 实测有结果的渠道。工具装好了或配置文件存在都不算能用。
+`resources/source_portfolio.json` 把取材渠道分成 12 类并给了权重，收工检查用它判断高权重的渠道类别有没有搜过。
 
-每次检索后按 `SKILL.md`「记账」一条的命令记录实际产出，额外可加 `--evidence-url` 留下已读取的搜索结果页。
+## 五层来源
 
-最近 7 天里，搜过的渠道类别权重合计应不低于 80；实测能用的渠道权重合计应不低于 85。覆盖不足时从最高权重缺口开始补，不能用低权重 GitHub 搜索代替公众号、X、播客或中文长文。
+历史入选集中在少数访谈和编译号、精选站、一线作者，资讯媒体几乎不出货；不少入选访谈的上游是英文播客或演讲，中文稿是编译或整理。所以按作者和栏目订阅，不扩综合媒体。
 
-权重是待校准的估计，不代表互联网内容份额。每类渠道分别验证搜索（search）、读全文（read）、看作者（author）三种操作；只算有时间、有结果、有证据链接的记录。装工具不算数；只测连通的记录写 purpose=smoke，不算正式搜索。最终入选数只能在用户审核后填写，不能由 Agent 代填。
+### 第一层：中文精选主入口（候选源）
 
-## 分层来源模型
+BestBlogs、觉醒AI 文章库、宝玉。别人已经筛过一遍的高质量中文内容。
 
-五个来源层描述「从哪里取材、按什么顺序取」；`source_portfolio.json` 的 12 类渠道用于搜索记账和停止判断。一个层可以对应多个类别，例如访谈公众号记在 `wechat`，播客转录记在 `chinese_podcasts`。
+- BestBlogs 的评分和摘要是它自己的 AI 生成的，只决定先读什么，交付前回原文核对。
+- 觉醒AI 列表上的日期是更新时间，要用页面里的发布日期（datePublished）判断时效；旧的 X 帖子重新导入时，按正文提到的模型版本核对年代。
+- 宝玉的订阅只有摘要，抓取时回原页取全文。
 
-历史入选材料集中在少数「访谈与编译号、精选站、一线博主」，资讯媒体几乎不出货；不少入选访谈的上游是英文播客或演讲，中文稿是编译或整理。因此按作者和栏目订阅，不再扩综合媒体。具体地址与说明以 `content_curator_sources.json` 为准。
+### 第二层：访谈与实践公众号（候选源）
 
-### 第一层：中文精选主入口
+公众号按组订阅：访谈与文字稿、一线实践与方法、大厂技术团队 Agent 实践、独立作者等。组内共用默认参数（全文、优先级、标题排除规则），单个号只写与默认不同的地方；单号的排除规则追加在组规则之后。
 
-- BestBlogs（`type: bestblogs`）：官方公开 RSS 带 category、minScore、featured、type、timeFilter 参数；资源接口返回原文 URL、来源、评分和正文。评分和摘要由它的 AI 生成，只决定先读什么；交付前回核原文。
-- 觉醒AI（`type: paged_web`）：遍历文章库分页，用页面 datePublished 判定时效；旧 X 帖子重新导入时，还要按正文提到的模型版本核对。
-- 宝玉：官方 feed 只有摘要，抓取时回原页取全文。
+- 大厂技术团队的号大多写底层基建，组规则只收 Agent 落地、AI Coding、评测方法类标题。
+- 按号判断价值，不按平台：同一个号的访谈可能入选，活动报名和资讯不入选，用标题排除规则过滤。
+- 人人都是产品经理、公众号作战室索引作补充；作战室索引只保留访谈、实录、复盘和长期实测标题。
 
-### 第二层：访谈与文字稿公众号
+### 第三层：播客变文字稿（有文字稿才算候选）
 
-公众号源在配置里按 `rss_group` 分组：组内共用 `defaults`（全文、优先级、噪音排除），单个号只写名称、地址和与默认不同的字段；单号的 `title_exclude_pattern` 追加在组规则之后，不会覆盖组规则。
+按顺序取材，前一步拿到就停：节目方或公众号的中文文字版 → BestBlogs 播客转录 → 本机离线转写。具体做法见 [取材渠道手册](channels.md)。没有可读文字稿的音频只算线索。
 
-- 访谈与文字稿组：语言即世界（张小珺）、Web3天空之城、Founder Park、十字路口、海外独角兽、晚点AI、晚点再听、深思圈、乱翻书、产品犬舍、AI炼金术、有新Newin、42章经；2026-09 新增非凡产研、极客公园（公众号全文），以及 B 级的 Z Potentials、随机小分队、硅谷101、爱范儿、APPSO、智能涌现、硅星人Pro、51CTO技术栈。
-- 一线实践与方法组：花叔、一泽Eze、范冰、刘言飞语、AI产品黄叔、歸藏、刘小排；新增阿真Irene、小互AI、卡尔的AI沃茨、佳芮的创业笔记、艾逗笔、言午、强少来了，以及 B 级的 AI产品阿颖、沃垠AI、向阳乔木推荐看、山行AI、土猛的员外、MacTalk、夕小瑶科技说、AI前线、AI科技大本营、王建硕、飞哥说AI、二一的笔记、Memm设计知识分享、产品二姐、caoz的梦呓、李继刚、HelloSREAgent。
-- 大厂技术团队 Agent 实践组：京东、携程、腾讯云开发者、百度Geek说、字节、阿里、腾讯技术工程、大淘宝、dbaplus、InfoQ、Qunar技术沙龙、有赞coder、哔哩哔哩技术、转转技术、高可用架构。这些号大多写底层基建，组规则用 `title_include_pattern` 只收 Agent 落地、AI Coding、评测方法类标题。
-- 人人都是产品经理：历史审核 5/36 入选，以普通 RSS 接入并回原页取全文。
-- 公众号作战室索引（`type: wechat_index`）作为补充，只保留访谈、实录、复盘和长期实测标题。
-- 按号判断价值，不按平台：同一个号的访谈可能入选，活动报名和资讯不入选，已用标题排除过滤。
+中文播客订阅主要走小宇宙，通过公共 RSSHub 的 `/xiaoyuzhou/podcast/<ID>`，订阅里带节目介绍和音频地址。
 
-### 第三层：播客变文字稿
+### 第四层：英文一手和社交短内容（只作线索）
 
-按顺序取材，前一步拿到就停：
+英文博客和 newsletter、X 一线作者、YouTube 实操频道、即刻和 Telegram 短内容。它们只进 `discovery.md`，不进候选。
 
-1. 官方或编辑过的中文文字版（公众号全文、节目方发布的文字稿）。
-2. BestBlogs 播客转录：按说话人合并成段落；专名可能错，说话人只有编号，交付前补主持人/嘉宾标签并校对专名。
-3. 本地转写 `scripts/local_transcribe.py`：离线零费用，但没有标点、专名错误多，只在前两步都没有时使用。
+- 命中后依次找中文成熟稿：宝玉、Web3天空之城、Z Finance、海外独角兽、BestBlogs 关键词订阅。都没有，就在缺口报告里写“中文材料缺位”，由 Stephen 判断要不要原创。
+- 部分英文节目带免费逐字稿，可以用来核对中文编译稿是否忠实。
+- YouTube 官方频道订阅对部分频道返回 404，统一走 RSSHub `/youtube/channel/<频道ID>`，命中后用 yt-dlp 取字幕。
 
-没有可读文字稿的音频只作线索。
+### 第五层：独立博客低频池（候选源）
 
-中文播客访谈线索组（discovery）：硅谷101、硅谷早知道、张小珺商业访谈录、十字路口、晚点聊、42章经、二分电台、AI炼金术、What's Next 科技早知道、开始连接 LinkStart、硅基立场、卫诗婕漫谈、此话当真、AI Odyssey、跨国串门儿计划，以及 B 级的牛油果烤面包、津津乐道、剩余价值、三五环、GGV 创业者访谈、乱翻书、屠龙之术、AI每周谈、科技乱炖、硬地骇客、Web Worker。小宇宙节目用公共 RSSHub 的 `/xiaoyuzhou/podcast/<ID>` 订阅，RSS 带约 1500 字节目介绍和音频地址。
+中文个人技术和产品博客。更新慢，但多是一线复盘；非 AI 文章由一票否决过滤。
 
-### 第四层：英文一手雷达（discovery，不进候选）
+### 公共 RSSHub
 
-- follow-builders：X 上 Claude Code、Codex 等团队一线作者的推文。
-- Anthropic Engineering、OpenAI Developers、Cursor 的 RSS 镜像；The Pragmatic Engineer、Latent Space、Lenny、Simon Willison、Hamel Husain、Addy Osmani、Jason Liu、Every AI & I、Training Data、YC Lightcone。红杉 Training Data 与 Latent Space 带免费英文逐字稿，可用来核对中文编译稿是否忠实，但英文稿本身不进候选。
-- 2026-09 新增：Ben's Bites、Dwarkesh Patel、Stratechery、LukeW、NN/g、Evil Martians。
-- X 一线作者雷达组：xgo.ing 生成的公开 RSS（只能用已有地址，新建要登录）。Karpathy、Simon Willison、Mike Krieger、Harrison Chase、Jerry Liu，以及 B 级的歸藏、orange.ai、Tw93、Viking、Amjad Masad、Varun Mohan、Andrew Ng、Philipp Schmid、Martin Fowler、Akshay Kothari、Sahil Lavingia、a16z。
-- YouTube 一线实操雷达组：How I AI、AI Engineer、Riley Brown、Matt Pocock。YouTube 官方频道 feed 对这些频道返回 404，统一走 RSSHub `/youtube/channel/<频道ID>`；命中后用 yt-dlp 取字幕。
-- 中文一线短内容线索组：即刻用户（RSSHub `/jike/user/<ID>`）歸藏、AI产品黄叔、卡尔的AI沃茨、橘AI、一泽、花叔、李继刚、空格.space、Kenny、艾逗笔、甲木未来派、Indie-Fox、Barret李靖；Telegram 频道 DPS Build、冰器库、Laisky's Notes。短帖只作线索，命中后找作者长文或访谈。
-- 雷达命中后依次找中文成熟稿：宝玉、Web3天空之城、瓜哥AI新知、Z Finance、海外独角兽、BestBlogs 关键词 feed。都没有就说明中文材料缺位，标记为高研究成本，交给用户判断是否原创。
-
-### 第五层：独立博客低频池
-
-`独立博客低频池` 分组：向阳乔木、最小可读、Tw93、唐巧、Joway、wklken、Sagasu、XINDOO、明立非、谢乾坤、创见思考、imlee-tech；2026-09 新增罗磊、bmpi、电波障害、枫言枫语，以及 B 级的 manateelazycat、范叶亮、懒程序员改变世界、Limboy、Reorx、编码记录、蚊BloG、Yubolun、重归混沌、Design Scenes、张可。更新慢但多为一线复盘，非 AI 文章由资格门槛过滤。
-
-### 公共 RSSHub 实例
-
-`rsshub.bestblogs.dev` 为主，`rsshub.imlg.co` 为备（配置里写 `mirror_hosts`，主实例失败时按同一路径切换）；`rsshub.app` 官方实例返回 403。实测可用路由：小宇宙播客、YouTube 频道与用户、即刻用户、Telegram 频道、掘金、少数派、知乎热榜。B 站用户、知乎个人、X、小红书路由需要 Cookie，公共实例返回 503 或超时。知乎专栏可用 `rss.lilydjwg.me/zhihuzhuanlan/<专栏>`，但知乎历史审核 2/43，暂不接入。
+`rsshub.bestblogs.dev` 为主，`rsshub.imlg.co` 为备（配置里的 `mirror_hosts`，主实例失败时按同一路径切换）；`rsshub.app` 官方实例返回 403。能用的路由：小宇宙、YouTube、即刻、Telegram、掘金、少数派、知乎热榜。B 站用户、知乎个人、X、小红书路由需要 Cookie，公共实例不可用。
 
 ### 不再接入
 
 - 以资讯为主：36氪、虎嗅、少数派、IT之家、Solidot、Readhub、机器之心、新智元。
 - 需要 Cookie 或已不可用：公共 RSSHub 的知乎和 X 路由、nitter/xcancel、搜狗微信、feeddd、wewe-rss。
-- 已停更：OnBoard!、AI局内人、海外独角兽播客。
-- 2026-09 RSS 合集中确认失效：xyzfm 托管的播客地址全部超时；一批 `.cn` 个人博客证书过期（curl 同样失败）。
-- 各层都用 `discovery_ledger.py` 记账；连续 3 批零入选的来源降为线索源，依据是 `source_yield.py`，不凭印象增删。
+- 已停更或失效：OnBoard!、AI局内人、海外独角兽播客、xyzfm 托管的播客、证书过期的一批 `.cn` 个人博客。
+- 连续 3 批零入选的来源降为线索源，依据 `source_yield.py`，不凭印象增删。
 
-## 接入新源的流程
+## 接入新源
 
-用户提供 OPML 或订阅清单时，按实测数据和逐源评级接入，不整包导入：
+Stephen 给 OPML 或订阅清单时，按实测数据逐个评级接入，不整包导入：
 
-1. 解析并去掉已接入的地址，丢弃只属于生活、理财、前端、移动端、后端和运维分类的源。
-2. 低并发探测（wechat2rss 在高并发下会超时）：记录是否可用、近 45 天篇数、AI 相关篇数、正文不少于 800 字的篇数。近 45 天 AI 全文少于 2 篇的源不进入评审。
-3. 按近 45 天标题逐源评级，依据是编辑判断模型和 `source_yield.py` 列出的真实入选、否决样例。A 级（至少 3 篇像会入选的）按组默认值接入；B 级（1 到 2 篇）用 priority 3，items_limit 低于组默认值；C 级只作线索或不接；X 级不接。
-4. 排除规则只写可以反复出现的噪音栏目或事件类型，例如早报、报名、大会、招聘；不要拿某一篇具体标题里的字眼当规则，否则以后的好文章会被误伤。标题党和炒作用语放进口味档案的 `hype_or_gossip_terms`，对所有来源统一生效（它是审稿提示，不直接淘汰）。
-5. 用 `--pool 60` 试抓一轮，比较新旧来源各占多少待终审名额，并逐条看新来源带进来的噪音；噪音集中在某一类标题时，回到第 4 步补规则。
-
+1. 去掉已接入的地址，丢弃只属于生活、理财、前端、移动端、后端和运维分类的源。
+2. 低并发探测（wechat2rss 并发高了会超时）：是否可用、近 45 天篇数、AI 相关篇数、正文不少于 800 字的篇数。近 45 天 AI 全文少于 2 篇的不评。
+3. 按近 45 天标题逐个评级，参照编辑判断标准和 `source_yield.py` 列出的真实入选和淘汰例子：A 级（至少 3 篇像会入选的）按组默认值接入；B 级（1 到 2 篇）优先级 3、条数少于组默认；C 级只作线索或不接；X 级不接。
+4. 排除规则只写反复出现的噪音栏目或事件类型，例如早报、报名、大会、招聘；不要拿某一篇标题里的字眼当规则，否则以后的好文章会被误伤。
+5. 试抓一轮，看新来源带进来多少合格材料、多少噪音；噪音集中在某类标题时，回到第 4 步补规则。
 
 ## 搜索组合
 
-围绕以下结构交叉搜索，而不是只搜“AI 热点”：
+围绕这些结构交叉搜索，而不是只搜“AI 热点”：
 
 - `AI Agent + 一个月/半年/一年 + 复盘/失败/踩坑`
 - `Claude Code/Codex + 正式项目 + commits/测试/交付`
@@ -102,16 +81,11 @@
 - `AI + 组织变化 + 岗位/流程/协作 + 案例`
 - `访谈/播客/逐字稿 + 核心团队 + 具体问题`
 
-## 持续搜索循环
+## 扩源循环
 
-1. 优先用已验证的订阅源和不需要浏览器的渠道；各渠道用法见 [取材渠道手册](channels.md)。
-2. 运行常规来源与本地 inbox。
-3. 合格材料不够时，先组合 Exa、公开文章索引、中文订阅源、网页读取和 B 站或 YouTube 字幕；还不够时，再用浏览器渠道查知乎和其他必须登录的页面。X、Reddit、V2EX 和 GitHub 只负责发现线索。
-4. 从尚未覆盖的层级选择至少两个渠道继续搜索，不得只重复同一组网页关键词。
-5. GitHub 项目要附中文文章解读和成本、安全检查，不设条数比例。
-6. 找到线索后先读取完整正文、字幕或逐字稿，确认没有登录墙、关注墙和正文截断，再写入 `.local/source_inbox.json`。
-7. 重新抓取、硬门槛筛选和历史去重。
-8. 读全文终审所有候选，拦下提问帖、通稿、SEO 内容、AI 模板文、标题党、泛泛观点和过深实现细节。
-9. 仍不够目标条数就回到第 3 步，直到满足 `SKILL.md` 的条数或停止条件；停下时交缺口报告，不用弱题补位。
-
-最终推荐按 [编辑判断标准](editorial-judgment.md) 的六维打分决定。
+1. 先跑订阅源和手动补货单。
+2. 不够时，组合 Exa、公开文章索引、网页读取和 B 站或 YouTube 字幕；还不够，再用浏览器渠道查知乎和必须登录的页面。X、Reddit、V2EX、GitHub 只负责发现线索。各渠道用法见 [取材渠道手册](channels.md)。
+3. 每轮至少换两个还没用过的渠道，不要反复搜同一组关键词。
+4. 找到线索先读完整正文、字幕或逐字稿，确认没有登录墙和截断，再用 `add_source.py` 登记，重跑抓取。
+5. 读全文终审，按 [编辑判断标准](editorial-judgment.md) 打分。
+6. 仍不够就回到第 2 步，直到满足条数或收工检查通过；停下时交缺口报告，不用弱题补位。

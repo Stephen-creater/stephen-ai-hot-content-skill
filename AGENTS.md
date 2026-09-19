@@ -30,7 +30,7 @@ Skill 里的文档、注释、报错和审核页文字是写给 Stephen 看的�
 ## 验证
 
 - 修改评分、抓取或报告逻辑后，运行 `.venv/bin/python3 -m unittest discover -s tests -v`（worktree 内使用权威仓库的 `.venv`）。
-- 修改口味档案、审稿提示、打分或终审标准后，运行 `.venv/bin/python3 scripts/eval_replay.py machine`，报告退步时不提交；改终审标准时再按 `references/evaluation.md` 跑判断层评测。
+- 修改口味档案、一票否决、打分或终审标准后，运行 `.venv/bin/python3 scripts/eval_replay.py machine`，报告退步时不提交；改终审标准时再按 `references/evaluation.md` 跑判断层评测。
 - 修改来源后，至少运行一次离线夹具 `.venv/bin/python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --output-root .local/work/fixture`；条件允许时再运行联网抓取。
 - 声称完成前，回读远程仓库最新提交。
 

@@ -10,28 +10,22 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import eval_replay  # noqa: E402
 from datetime import datetime, timezone
 
-from curator import review_hint_deduction, score_item  # noqa: E402
+from curator import score_item  # noqa: E402
 
 NOW = datetime(2026, 9, 19, tzinfo=timezone.utc)
 
 PROFILE = json.loads((ROOT / "resources/editorial_profile.json").read_text(encoding="utf-8"))
 
 
-class KeywordHintTest(unittest.TestCase):
-    def test_keyword_hints_cost_nothing(self) -> None:
-        self.assertEqual(review_hint_deduction([("炒作或猎奇成分过高", 45)], PROFILE), 0)
-        self.assertEqual(review_hint_deduction([("只是一个需要核实的提示", 80)], PROFILE), 0)
-
-    def test_objective_failures_keep_full_weight(self) -> None:
-        self.assertEqual(review_hint_deduction([("超过时效范围", 60)], PROFILE), 60)
-
-    def test_reading_order_ignores_keywords(self) -> None:
+class ReadingOrderTest(unittest.TestCase):
+    def test_reading_order_ignores_wording(self) -> None:
         body = "作者连续两个月用 AI 完成真实任务，记录了失败、调整和结果。" * 60
         base = {"link": "https://example.com/a", "language": "zh", "maturity": "secondary", "content_status": "fulltext",
                 "content_form": "article", "source_priority": 4, "summary": "AI 实践复盘", "content": body}
         plain = score_item({**base, "title": "用 AI 做两个月真实任务的复盘"}, PROFILE, now=NOW)
         hyped = score_item({**base, "title": "炸裂！用 AI 做两个月真实任务的复盘", "link": "https://example.com/b"}, PROFILE, now=NOW)
-        self.assertTrue(hyped["penalty"])
+        self.assertEqual(plain["penalty"], "")
+        self.assertEqual(hyped["penalty"], "")
         self.assertEqual(plain["reading_order"], hyped["reading_order"])
 
 
