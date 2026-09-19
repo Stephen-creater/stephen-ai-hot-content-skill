@@ -28,6 +28,7 @@ from source_config import load_sources
 from discovery_history import delivered_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
+import buzz
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1062,14 +1063,18 @@ def main() -> None:
         datetime.now(timezone.utc),
         int(profile.get("discovery_max_age_days", 14)),
     )
+    # Fixture runs keep their buzz history next to the output so real history is untouched.
+    buzz_rows = buzz.update(items, datetime.now(timezone.utc), output_dir / "buzz_history.json" if args.fixture else buzz.HISTORY)
+    buzz_section = buzz.render(buzz_rows)
+    (output_dir / "buzz.json").write_text(json.dumps(buzz_rows, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "discovery.json").write_text(json.dumps(discovery_items, ensure_ascii=False, indent=2), encoding="utf-8")
-    (output_dir / "discovery.md").write_text(render_discovery_markdown(discovery_items), encoding="utf-8")
+    (output_dir / "discovery.md").write_text(buzz_section + render_discovery_markdown(discovery_items), encoding="utf-8")
     (output_dir / "candidates.json").write_text(json.dumps(candidates, ensure_ascii=False, indent=2), encoding="utf-8")
     eligible = select_report_candidates(
         ranked, len(ranked), min_article_chars=0 if args.fixture else minimum_article_chars(profile),
     )
     (output_dir / "eligible.json").write_text(json.dumps(eligible, ensure_ascii=False, indent=2), encoding="utf-8")
-    (output_dir / "triage.md").write_text(render_triage_markdown(eligible), encoding="utf-8")
+    (output_dir / "triage.md").write_text(buzz_section + render_triage_markdown(eligible), encoding="utf-8")
     (output_dir / "run.json").write_text(
         json.dumps(
             {

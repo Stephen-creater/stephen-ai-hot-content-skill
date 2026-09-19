@@ -50,6 +50,7 @@ def label_strength(review: dict) -> str:
 
 ADOPTIONS = EVAL_DIR / "adoptions.json"
 TOPICS = ROOT / "topics"
+WORK = ROOT / ".local" / "work"
 
 
 def load_adoptions(path: Path = ADOPTIONS) -> dict[str, dict]:
@@ -71,7 +72,22 @@ def delivered_rows(topics: Path = TOPICS) -> dict[str, tuple[dict, str]]:
     return rows
 
 
-def collect(feedback: Path = FEEDBACK, adoptions: dict[str, dict] | None = None, topics: Path = TOPICS) -> list[dict]:
+def read_rows(ids: set[str], work: Path = WORK) -> dict[str, tuple[dict, str]]:
+    """Material the Agent read but never delivered lives only in the scrape output."""
+    rows: dict[str, tuple[dict, str]] = {}
+    for path in sorted(work.glob("*/*/eligible.json")):
+        if not ids - set(rows):
+            break
+        try:
+            for row in json.loads(path.read_text(encoding="utf-8")):
+                if isinstance(row, dict) and str(row.get("id")) in ids:
+                    rows.setdefault(str(row["id"]), (row, path.parent.parent.name))
+        except (OSError, json.JSONDecodeError):
+            continue
+    return rows
+
+
+def collect(feedback: Path = FEEDBACK, adoptions: dict[str, dict] | None = None, topics: Path = TOPICS, work: Path = WORK) -> list[dict]:
     """Last decision per candidate wins; pending is not a label.
 
     A candidate Stephen later wrote up counts as selected with the strongest
@@ -93,6 +109,8 @@ def collect(feedback: Path = FEEDBACK, adoptions: dict[str, dict] | None = None,
                 decisions[str(item_id)] = (review, batch)
     adoptions = load_adoptions() if adoptions is None else adoptions
     delivered = delivered_rows(topics) if adoptions else {}
+    missing = {item_id for item_id in adoptions if item_id not in candidates and item_id not in delivered}
+    delivered.update(read_rows(missing, work) if missing else {})
     for item_id in adoptions:
         if item_id not in candidates and item_id in delivered:
             candidates[item_id] = delivered[item_id]
