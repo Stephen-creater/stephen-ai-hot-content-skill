@@ -44,7 +44,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ### 1. 接上之前的状态
 
 - 反馈原文很大，不直接读。用 `feedback_audit.py` 看入选率、原因标签统计和没给原因的记录，读进度文件续跑，不靠对话记忆。
-- 读本机私有的 `.local/articles/published_topics.md`：Stephen 已经写成文章的全部选题。写过的主题不再推荐（除非有实质新进展），类型和写法以它为参照。有新文章时先跑 `.venv/bin/python3 scripts/sync_articles.py` 从飞书只读同步。
+- 读本机私有的 `.local/articles/published_topics.md`：Stephen 已经写成文章的全部选题。写过的主题不再推荐（除非有实质新进展）；同一主题已经写了两篇以上的（例如 FDE 写了 4 篇），换个案例、换个说法也算重复，类型和写法以它为参照。有新文章时先跑 `.venv/bin/python3 scripts/sync_articles.py` 从飞书只读同步。
 - 先读哪些来源，参考 `.venv/bin/python3 scripts/source_yield.py --min-decided 5`：键是公众号名或网站域名，审核不足 5 次的来源不参与排序。
 - **读全文之前**把待读材料存成 JSON 数组，运行 `.venv/bin/python3 scripts/history_check.py <文件>` 查重。同一篇访谈常被不同站点换标题转载，链接不同但正文重合。
 - 相似主题只有新事实、新方法或新结果才算新材料。
