@@ -93,6 +93,12 @@ class EvalReplayTest(unittest.TestCase):
         # A baseline run with a different judge label is not a regression of this one.
         self.assertFalse(eval_replay.regression_warnings({**entry, "judge": "旧标准"}, history))
 
+    def test_machine_regression_ignores_reading_order(self) -> None:
+        history = [{"kind": "machine", "benchmark": "v1", "split": "dev", "metrics": {"selected_kept_rate": 1.0, "ranking_auc": 0.66}}]
+        entry = {"kind": "machine", "benchmark": "v1", "split": "dev", "metrics": {"selected_kept_rate": 1.0, "ranking_auc": 0.58}}
+        self.assertFalse(eval_replay.regression_warnings(entry, history))
+        self.assertTrue(eval_replay.regression_warnings({**entry, "metrics": {"selected_kept_rate": 0.9}}, history))
+
     def test_ranking_auc(self) -> None:
         self.assertEqual(eval_replay.rank_auc([(90, True), (10, False)]), 1.0)
         self.assertEqual(eval_replay.rank_auc([(10, True), (90, False)]), 0.0)

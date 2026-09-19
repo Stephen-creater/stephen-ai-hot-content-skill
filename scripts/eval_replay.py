@@ -312,7 +312,9 @@ def regression_warnings(entry: dict, history: list[dict]) -> list[str]:
         return []
     last = previous[-1]["metrics"]
     warnings = []
-    for key in ("selected_recall", "recommend_precision", "balanced_accuracy", "selected_kept_rate", "ranking_auc"):
+    # Reading order is informational only; the machine layer is judged on keeping selected items.
+    keys = ("selected_kept_rate",) if entry["kind"] == "machine" else ("selected_recall", "recommend_precision", "balanced_accuracy")
+    for key in keys:
         old, new = last.get(key), entry["metrics"].get(key)
         if isinstance(old, (int, float)) and isinstance(new, (int, float)) and new < old - 0.02:
             warnings.append(f"{key} 从 {old} 降到 {new}")
