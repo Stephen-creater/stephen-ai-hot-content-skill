@@ -109,8 +109,11 @@ class EditorialJudgmentTest(unittest.TestCase):
         # Most requirements met is enough; a weak dimension does not veto the rest.
         mixed = {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 0, "durability": 1, "rewrite_effort": 1}
         self.assertTrue(validate_manual_review(evidence_review(scores=mixed)).ok)
-        low_total = {**mixed, "durability": 0}
+        low_total = {"topic_appeal": 1, "reader_change": 1, "material_increment": 1, "re_authorability": 1, "durability": 1, "rewrite_effort": 2}
         self.assertFalse(validate_manual_review(evidence_review(scores=low_total)).ok)
+        # Rewrite effort is shown to Stephen but never decides the verdict.
+        hard_to_rewrite = {**mixed, "rewrite_effort": 0}
+        self.assertTrue(validate_manual_review(evidence_review(scores=hard_to_rewrite)).ok)
         no_reader_change = {**mixed, "reader_change": 0, "re_authorability": 2}
         self.assertFalse(validate_manual_review(evidence_review(scores=no_reader_change)).ok)
 

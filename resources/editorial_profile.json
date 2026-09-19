@@ -9,8 +9,9 @@
     "require_counterargument": true,
     "require_decision_driver": true,
     "keyword_matches_are_risk_signals_not_verdicts": true,
+    "keywords_affect_reading_order": false,
     "objective_hard_failures_only": true,
-    "pass_rule": "六维各打 0/1/2 分，总分至少 8 分，且读者改变、干货含量都不是 0 分"
+    "pass_rule": "六维各打 0/1/2 分；前五维总分至少 6 分（满分 10），且读者改变、干货含量都不是 0 分；改写成本只作参考，不参与门槛"
   },
   "feedback_learning": {
     "types": ["invariant", "conditional_preference", "operational_rule", "topic_state", "case_only", "unexplained_decision", "hypothesis"],
@@ -65,32 +66,6 @@
       "keywords": ["实践", "指南", "避坑", "案例", "教程", "方法", "复盘"]
     }
   ],
-  "review_hint_policy": {
-    "note": "命中审稿提示词只给读稿人一个要核实的问题，默认不扣分。downrank 里的类别会轻度降低阅读顺序（每类 10 分，最多 20 分），入选条件：历史回放中从未命中入选文章，且命中过至少 2 条、来自至少 2 个批次的淘汰文章；或 Stephen 明确说过以后不要。调整前先运行 scripts/eval_replay.py hints 和 machine。",
-    "downrank_points": 10,
-    "max_downrank_points": 20,
-    "downrank": [
-      "炒作或猎奇成分过高",
-      "来源为 AI 批量内容站或商业导流站",
-      "前沿模型实验室的安全、对齐或攻击风险占主体，对目标读者缺少可用价值",
-      "深论文解读依赖大量专有名词、缩写或实验指标，不适合普通读者",
-      "正文代码或实现片段占比过高，文章载体的普通读者难以独立理解",
-      "破折号与引号密度异常高，呈现明显 AI 写作痕迹",
-      "活动、采购或合作宣传稿",
-      "围绕 AGENTS.md、CLAUDE.md 等深层配置，普通读者无法使用",
-      "单一公司或岗位案例与原业务耦合过紧，难以抽离为 Stephen 的通用文章",
-      "数字人或 AI 短剧过于垂直，对当前普通读者缺少实际价值",
-      "以 Benchmark、评测集或跑分为主体，缺少实际使用价值",
-      "框架化表达多于扎实证据，信息密度偏低",
-      "企业维护或治理议题，距离目标读者过远",
-      "十几条大清单并嵌套多级编号，AI 加工痕迹过重",
-      "研究、报告与人物引语堆叠，缺少作者自己的高密度结论",
-      "学生、学校或课堂教育方向不符合当前选题偏好",
-      "以产品功能说明和名词拆解为主，缺少长期回看内涵",
-      "理论或商业评论过多，缺少对普通读者的实际价值",
-      "小红书图文排版 Skill 已饱和，用户明确不再需要推荐"
-    ]
-  },
   "risk_signal_lexicon": {
     "evergreen_angle_terms": ["harness", "skill", "mcp", "开源", "机制", "原理", "架构", "工作流", "缓存", "训练", "推理", "agent runtime"],
     "hype_or_gossip_terms": ["怒批", "自爆", "炮轰", "狂烧", "烧掉", "喊早了", "吹爆", "封神", "炸裂", "王炸", "被扒出", "匿名模型", "匿名公测", "怀疑cursor", "神秘模型", "爆火", "杀进", "拿走", "干翻", "老黄", "股价不跌反涨", "野心已经藏不住", "全数sota", "模型团战", "第一枪", "巨头战役", "gpt3时刻", "gpt3 时刻", "买几万台mac", "英伟达的活被苹果抢了", "交出了什么答卷", "vc疯了", "创业乌托邦", "突破三大瓶颈", "这ai比赛办得有点绝", "我用它做了", "github最热", "看哭了", "屠榜", "全球第一", "a割", "明升暗降", "理直气壮", "场景通吃", "有点狠", "欢迎来到agi时代", "agi来了", "agi 来了", "刚刚，gpt-6正式发布", "gpt-6 曝光"],

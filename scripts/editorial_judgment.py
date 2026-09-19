@@ -33,7 +33,9 @@ REVIEW_FIELD_LABELS = {
 }
 
 # Recommend when most requirements are met, not only when every one is.
-PASS_TOTAL = 8  # of 12
+# Rewrite effort is scored and shown to Stephen but does not decide the verdict.
+CORE_DIMENSIONS = DIMENSIONS[:5]
+PASS_TOTAL = 6  # of 10, over the five core dimensions
 MUST_NOT_BE_ZERO = ("reader_change", "material_increment")
 
 HARD_FAILURE_MARKERS = {
@@ -148,9 +150,9 @@ def validate_manual_review(review: dict, *, require_v2: bool = True) -> ReviewVa
     if not isinstance(scores, dict) or any(scores.get(key) not in (0, 1, 2) for key in DIMENSIONS):
         errors.append("六个维度都要打 0、1 或 2 分")
     else:
-        total = sum(scores[key] for key in DIMENSIONS)
+        total = sum(scores[key] for key in CORE_DIMENSIONS)
         if total < PASS_TOTAL:
-            errors.append(f"六维总分 {total} 低于 {PASS_TOTAL}")
+            errors.append(f"五个核心维度总分 {total} 低于 {PASS_TOTAL}")
         for key in MUST_NOT_BE_ZERO:
             if scores[key] == 0:
                 errors.append(f"{REVIEW_FIELD_LABELS[key]}为 0 分")

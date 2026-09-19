@@ -180,25 +180,8 @@ def deduplicate(items: list[dict]) -> list[dict]:
 
 
 def review_hint_deduction(point_penalties: list[tuple[str, float]], profile: dict) -> float:
-    """How much the matched rules may lower the reading order.
-
-    Objective failures keep their full weight (they are blocked anyway). Review
-    hints are notes for the reader and cost nothing, except the few listed in
-    review_hint_policy.downrank that never matched a selected item in the
-    historical replay; those cost a small, capped amount.
-    """
-    policy = profile.get("review_hint_policy", {})
-    downrank = set(policy.get("downrank", []))
-    per_hint = float(policy.get("downrank_points", 10))
-    cap = float(policy.get("max_downrank_points", 20))
-    hard = 0.0
-    soft = 0.0
-    for message, points in point_penalties:
-        if is_hard_failure(message):
-            hard += points
-        elif message in downrank:
-            soft += per_hint
-    return hard + min(soft, cap)
+    """Only objective failures lower the score. Keyword hints are debug notes and cost nothing."""
+    return sum(points for message, points in point_penalties if is_hard_failure(message))
 
 
 def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
@@ -322,6 +305,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         reasons.append("已有详细 Show Notes")
     else:
         penalize("缺少完整文字材料", 14)
+    # Reading order uses only objective signals: source priority, freshness, language,
+    # an already-edited secondary source and available full text. No keyword counts here.
+    reading_order = round(score - pillar_points, 1)
     if content_form == "podcast" and content_status != "transcript":
         penalize("播客缺少逐字稿，无法低成本二创", 55)
     if content_form == "video" and content_status != "transcript":
@@ -717,6 +703,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         "pillars": matched_pillars,
         "score": score,
         "discovery_score": score,
+        "reading_order": reading_order,
         # Review hints never remove an item here; only objective failures do.
         "recommended": score >= profile["minimum_score"] and decision_contract["eligibility"]["status"] == "passed" and source_role == "candidate",
         "machine_shortlisted": decision_contract["machine_disposition"] == "shortlist" and source_role == "candidate",
@@ -734,5 +721,5 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
 
 def rank_candidates(items: list[dict], profile: dict, now: datetime | None = None) -> list[dict]:
     scored = [score_item(item, profile, now=now) for item in deduplicate(items)]
-    scored.sort(key=lambda item: (item["editorial_decision"]["eligibility"]["status"] == "passed", item["score"]), reverse=True)
+    scored.sort(key=lambda item: (item["editorial_decision"]["eligibility"]["status"] == "passed", item["reading_order"]), reverse=True)
     return scored

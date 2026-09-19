@@ -881,6 +881,26 @@ def render_discovery_markdown(rows: list[dict]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_triage_markdown(rows: list[dict]) -> str:
+    """Every eligible item as one line, so the Agent picks what to read from titles and openings."""
+    lines = [
+        "# 合格材料标题清单",
+        "",
+        f"共 {len(rows)} 条，已过一票否决和历史查重，按来源优先级和新鲜度排列（没有用关键词）。",
+        "先通读全部标题和开头，挑出值得读全文的，再到 eligible.json 里按 id 取全文。",
+        "",
+    ]
+    for index, row in enumerate(rows, 1):
+        opening = re.sub(r"\s+", " ", str(row.get("content") or row.get("summary") or ""))[:120]
+        lines.append(
+            f"{index}. [{row.get('source_title') or row.get('title')}]({row.get('link', '')}) "
+            f"· {row.get('source_name', '')} · {str(row.get('published', ''))[:10]} · {len(row.get('content') or '')} 字 · id {row.get('id')}"
+        )
+        if opening:
+            lines.append(f"   {opening}")
+    return "\n".join(lines) + "\n"
+
+
 def select_report_candidates(
     ranked: list[dict],
     limit: int,
@@ -1066,6 +1086,11 @@ def main() -> None:
     (output_dir / "discovery.json").write_text(json.dumps(discovery_items, ensure_ascii=False, indent=2), encoding="utf-8")
     (output_dir / "discovery.md").write_text(render_discovery_markdown(discovery_items), encoding="utf-8")
     (output_dir / "candidates.json").write_text(json.dumps(candidates, ensure_ascii=False, indent=2), encoding="utf-8")
+    eligible = select_report_candidates(
+        ranked, len(ranked), min_article_chars=0 if args.fixture else minimum_article_chars(profile),
+    )
+    (output_dir / "eligible.json").write_text(json.dumps(eligible, ensure_ascii=False, indent=2), encoding="utf-8")
+    (output_dir / "triage.md").write_text(render_triage_markdown(eligible), encoding="utf-8")
     (output_dir / "run.json").write_text(
         json.dumps(
             {
@@ -1090,7 +1115,7 @@ def main() -> None:
         encoding="utf-8",
     )
     generate_report(candidates, output_dir / "index.html", timestamp)
-    print(f"待终审材料 {len(candidates)} 条，输入 {len(items)} 条，资格拒绝 {rejected_by_gate_count} 条；须完成原文终审与发布登记")
+    print(f"合格材料 {len(eligible)} 条（标题清单 triage.md），待读池 {len(candidates)} 条，输入 {len(items)} 条，一票否决 {rejected_by_gate_count} 条")
     if errors:
         print("抓取告警：")
         for error in errors:

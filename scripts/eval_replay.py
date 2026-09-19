@@ -4,7 +4,8 @@
 
   build    冻结一版基准集（按批次切分出开发集和留出集）
   machine  用当前打分规则回放基准集：你选中的文章有没有被拦下或排到后面
-  hints    每类审稿提示词命中了多少入选、多少淘汰，决定哪些可以降权
+  leak-check  检查规则文档有没有引用留出集的文章
+  hints    每类关键词提示命中了多少入选、多少淘汰（关键词不参与排序和判断，只用来观察）
   export   导出不带结论的盲评材料，交给 Agent 按当前 SKILL 重新判断
   score    把 Agent 的判断和你的结论对比，记录到评测历史
   history  查看历次评测结果，发现退步
@@ -141,11 +142,10 @@ def rank_auc(pairs: list[tuple[float, bool]]) -> float | None:
 
 def machine(items: list[dict], profile: dict) -> dict:
     """Deterministic layer: selected articles must survive and should rank above rejected ones."""
-    downrank = set(profile.get("review_hint_policy", {}).get("downrank", []))
     report: dict = {}
     for split in ("dev", "holdout", "all"):
         subset = [item for item in items if item["judgeable"] and (split == "all" or item["split"] == split)]
-        blocked, downranked, pairs = [], [], []
+        blocked, pairs = [], []
         for item in subset:
             result = replay(item, profile)
             failures = [
@@ -153,20 +153,16 @@ def machine(items: list[dict], profile: dict) -> dict:
                 # Live GitHub stars and release dates are not stored with old feedback; they were checked at review time.
                 if not (failure["evidence"].startswith("GitHub") and "github_stars" not in item["candidate"])
             ]
-            hints = [signal["evidence"] for signal in result["editorial_decision"]["risk_signals"]]
             selected = item["label"] == "selected"
-            pairs.append((result["score"], selected))
+            pairs.append((result["reading_order"], selected))
             if selected and failures:
                 blocked.append({"id": item["id"], "title": result["title"], "why": [f["evidence"] for f in failures]})
-            if selected and any(hint in downrank for hint in hints):
-                downranked.append({"id": item["id"], "title": result["title"], "why": [h for h in hints if h in downrank]})
         selected_total = sum(1 for _, positive in pairs if positive)
         report[split] = {
             "judgeable_items": len(subset),
             "selected": selected_total,
             "selected_kept_rate": round(1 - len(blocked) / selected_total, 3) if selected_total else None,
             "selected_blocked": blocked,
-            "selected_downranked": downranked,
             "ranking_auc": rank_auc(pairs),
         }
     return report
@@ -184,7 +180,6 @@ def hints(items: list[dict], profile: dict) -> list[dict]:
             hint = signal["evidence"]
             (selected if item["label"] == "selected" else rejected)[hint] += 1
             batches.setdefault(hint, set()).add(item["batch"])
-    downrank = set(profile.get("review_hint_policy", {}).get("downrank", []))
     rows = []
     for hint in sorted(set(selected) | set(rejected), key=lambda key: -(selected[key] + rejected[key])):
         rows.append({
@@ -192,10 +187,27 @@ def hints(items: list[dict], profile: dict) -> list[dict]:
             "selected_hits": selected[hint],
             "rejected_hits": rejected[hint],
             "batches": len(batches[hint]),
-            "downrank_now": hint in downrank,
-            "eligible_for_downrank": selected[hint] == 0 and rejected[hint] >= 3,
         })
     return rows
+
+
+def leak_check(items: list[dict], docs: list[Path]) -> list[dict]:
+    """Holdout titles quoted in rules make the holdout useless for catching overfit."""
+    import re as _re
+    texts = {str(path.relative_to(ROOT)): path.read_text(encoding="utf-8") for path in docs}
+    leaks = []
+    for item in items:
+        if item["split"] != "holdout":
+            continue
+        title = str(item["candidate"].get("source_title") or item["candidate"].get("title") or "")
+        # Any 12-character run of the title counts as a quote.
+        core = _re.sub(r"\s+", "", title)
+        fragments = {core[i:i + 12] for i in range(0, max(1, len(core) - 11))} if len(core) >= 12 else set()
+        for name, text in texts.items():
+            flat = _re.sub(r"\s+", "", text)
+            if any(fragment in flat for fragment in fragments):
+                leaks.append({"doc": name, "title": title, "label": item["label"]})
+    return leaks
 
 
 def export_blind(items: list[dict], split: str, limit: int | None) -> list[dict]:
@@ -303,6 +315,7 @@ def main() -> None:
     machine_parser = sub.add_parser("machine")
     machine_parser.add_argument("--no-record", action="store_true")
     sub.add_parser("hints")
+    sub.add_parser("leak-check")
     export_parser = sub.add_parser("export")
     export_parser.add_argument("--split", choices=["dev", "holdout", "all"], default="dev")
     export_parser.add_argument("--limit", type=int)
@@ -336,6 +349,11 @@ def main() -> None:
         if not args.no_record:
             append_history(entry)
         sys.exit(1 if warnings else 0)
+    if args.command == "leak-check":
+        docs = [ROOT / "SKILL.md", *sorted((ROOT / "references").glob("*.md"))]
+        leaks = leak_check(items, docs)
+        print(json.dumps(leaks, ensure_ascii=False, indent=2))
+        sys.exit(1 if leaks else 0)
     if args.command == "hints":
         print(json.dumps(hints(items, profile), ensure_ascii=False, indent=2))
     elif args.command == "export":

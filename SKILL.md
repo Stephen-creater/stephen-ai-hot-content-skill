@@ -5,7 +5,7 @@ description: "按 Stephen 的编辑标准找 AI 选题：读全文终审后发�
 
 # Stephen AI 热点选题
 
-这个 Skill 帮 Stephen 找能改写成文章的 AI 中文好材料。脚本负责抓取、一票否决、排序和去重；Agent 读完全文，按六个维度打分并引用原文；Stephen 在审核页拍板。关键词只决定先读谁，不决定选不选。文章正文交给 `stephen-writing-skill`，每日资讯简报不归这里管。
+这个 Skill 帮 Stephen 找能改写成文章的 AI 中文好材料。脚本负责抓取、一票否决和去重；Agent 自己看全部合格材料的标题和开头挑出要读的，读完全文按六个维度打分并引用原文；Stephen 在审核页拍板。关键词不参与排序，也不参与判断。文章正文交给 `stephen-writing-skill`，每日资讯简报不归这里管。
 
 ## 环境
 
@@ -50,7 +50,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 2. 抓取与找原文
 
-- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。默认输出 30 篇待读材料（对应 10 条选题）；要 20 条时加 `--pool 60`。模型复排默认关闭，`--ai` 才调用 OpenRouter 并计费。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
+- 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。输出里的 `triage.md` 列出全部合格材料（已过一票否决和查重）的标题、来源、日期、字数和开头，按来源优先级和新鲜度排列；全文在 `eligible.json`。**先通读 `triage.md` 全部标题，自己挑出值得读全文的**，一般是目标条数的 3 倍左右（默认 10 条选题读约 30 篇）。`candidates.json` 只是按顺序截的前 30 篇，不代表推荐。模型复排默认关闭，`--ai` 才调用 OpenRouter 并计费。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
 - 线索源（播客、YouTube、X、即刻）只进 `discovery.md`。命中后先找中文全文或文字稿，再登记进来重抓。
 - 按原始发布时间从新到旧读。转载、网页更新、重新上榜都不改变文章的真实年龄。
 - 登录、关注、验证码或付费后才能看到的正文直接放弃；代理或缓存抓到的隐藏文字不算公开。
@@ -69,17 +69,17 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 屏蔽的来源、作者或已写主题；
 - 文章自己说明由 AI 生成；关键内容在缺失的图片里。
 
-### 4. 审稿提示
+### 4. 关键词提示不参与判断
 
-抓取结果里的 `risk_signals` 是审稿提示，例如“技术词很多”“个人经历很多”“像 AI 写的”。它们是读稿时要核实的问题，不是结论：命中不代表淘汰，没命中也不代表合格。只有 `review_hint_policy.downrank` 里有数据支撑的少数几类会稍微降低阅读顺序（每类 10 分，最多 20 分）。
+抓取结果里的 `risk_signals` 是按关键词匹配出来的提示，只用于调试和观察，重要性很低：不扣分，不影响排序，挑稿和打分时不要参考。判断一律来自读全文。
 
 ### 5. 六维终审
 
 先看原文标题，分成三类：明显不对、值得读、看不出来。标题好只决定先读，不决定通过。原页面标题存 `source_title`，自拟切口存 `editorial_angle`；不能用改标题掩盖原文的题材和受众。
 
-读完全文，六个维度各打 0、1、2 分（2 分：明显做到，有正文证据；1 分：部分做到或有明显短板；0 分：基本没做到）。判定标准见 [编辑判断标准](references/editorial-judgment.md)。
+读完全文，六个维度各打 0、1、2 分（2 分：明显做到，有正文证据；1 分：部分做到或有明显短板；0 分：基本没做到）。判定标准见 [编辑判断标准](references/editorial-judgment.md)，打分前先对照 [正反例](references/editorial-calibration-cases.md) 开头“Stephen 选过什么”。
 
-**总分至少 8 分，且“读者改变”“干货含量”都不是 0 分，就推荐。** 击中大部分要求就够，不要求每一项都满分。待读材料多时，按来源拆给子 Agent 并行读全文、起草打分和原文引用，主 Agent 逐条复核后再放行。
+**前五维（除改写成本外）总分至少 6 分（满分 10），且“读者改变”“干货含量”都不是 0 分，就推荐。** 击中大部分要求就够。改写成本照样打分写给 Stephen 看，不参与门槛。整篇明显由 AI 写、关键内容靠大量截图或视频画面、主体是实验室安全风险，这三种读完确认后不推荐。待读材料多时，按来源拆给子 Agent 并行读全文、起草打分和原文引用，主 Agent 逐条复核后再放行。
 
 每条推荐写入 `manual_editorial_review`。字段缺失、只有空泛好评或没有原文证据的，不能发布：
 
@@ -127,14 +127,15 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 8. 改判断规则之前和之后都要跑评测
 
-改口味档案、审稿提示、打分或终审标准时，按 [评测方法](references/evaluation.md) 用历史审核回放：
+改口味档案、一票否决、打分或终审标准时，按 [评测方法](references/evaluation.md) 用历史审核回放：
 
 ```bash
 .venv/bin/python3 scripts/eval_replay.py build     # 有新反馈时冻结一版新基准
 .venv/bin/python3 scripts/eval_replay.py machine   # 你选中过的文章不能被拦下
+.venv/bin/python3 scripts/eval_replay.py leak-check   # 规则里不能引用留出集文章
 ```
 
-`machine` 报告退步时不能提交。改终审标准时，还要用盲评集让子 Agent 重新判断，再用 `eval_replay.py score` 对照结论。
+`machine` 或 `leak-check` 报错时不能提交。改终审标准时，还要用盲评集让子 Agent 重新判断，再用 `eval_replay.py score` 对照结论。
 
 ## 交付时怎么回复
 
@@ -152,7 +153,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 不提交 `.local/`、`.config/`、`topics/`、反馈、密钥、Cookie 或登录态。
 - 浏览器只用隔离的任务空间，不启动或接管 Stephen 的 Chrome，不导出 Cookie，不替他登录。何时用、怎么限频见 [取材渠道手册](references/channels.md)。
 - 只有用户明确要求时才开多个窗口并行。并行时各认领不重叠的来源，工作文件分开放；同一批次由认领它的窗口发布和导入反馈。
-- 模型复排只是辅助排序；没配置或失败时视为未知。排序分 `discovery_score` 只决定先读谁。
+- 阅读顺序 `reading_order` 只看来源优先级、新鲜度和有没有全文，Agent 还要自己通读全部标题。模型复排只是辅助；没配置或失败时视为未知。
 - 单批反馈不能把读者兴趣、题材偏好、技术难度或改写难度变成一票否决。只有语言、公开完整、时效、写过或审过的精确记录、来源安全、GitHub 可核验门槛这类事实可以一票否决。
 
 ## 修改后的验证

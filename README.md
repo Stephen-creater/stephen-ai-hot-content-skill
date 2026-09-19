@@ -9,10 +9,10 @@ Stephen 的个人 AI 选题系统：找能改写成文章的简体中文 AI 材�
 一批选题分三层分工：
 
 - **脚本**：抓取 197 个订阅源和手动登记的文章，做一票否决（语言、全文、时效、写过、Star 等客观条件）、排序和去重。
-- **Agent**：读完全文，按六个维度各打 0 到 2 分（选题吸引力、读者改变、干货含量、可重写性、长期价值、改写成本），总分至少 8 分且读者改变、干货含量都不是 0 分就推荐，每条引用原文。
+- **Agent**：先通读全部合格材料的标题和开头，挑出要读的；读完全文按六个维度各打 0 到 2 分（选题吸引力、读者改变、干货含量、可重写性、长期价值，外加只作参考的改写成本），前五维至少 6 分、读者改变和干货含量都不是 0 分就推荐，每条引用原文。
 - **Stephen**：在审核页点要或不要，原因点标签。没点的默认算不要。
 
-关键词只做两件事：决定先读谁，以及给读稿的 Agent 一个要核实的提示。它们不会把文章淘汰掉。
+关键词不参与排序，也不参与判断，只作为调试记录保留，重要性很低。
 
 一批的流程：分轮抓取 → 读全文前查重 → 读全文打分 → 组装到 `topics/<批次ID>/` → 发布前检查 → 生成审核页 → 导入审核结果。
 
@@ -25,7 +25,7 @@ Stephen 的个人 AI 选题系统：找能改写成文章的简体中文 AI 材�
 ```bash
 .venv/bin/python3 scripts/eval_replay.py build     # 冻结一版基准集
 .venv/bin/python3 scripts/eval_replay.py machine   # 程序层回放
-.venv/bin/python3 scripts/eval_replay.py hints     # 每类审稿提示的命中情况
+.venv/bin/python3 scripts/eval_replay.py leak-check   # 规则里不能引用留出集文章
 ```
 
 真正衡量效果的指标是 Stephen 的采纳率：`scripts/editorial_outcomes.py` 看历史结果，`scripts/source_yield.py` 看每个来源的采纳情况。
@@ -57,13 +57,13 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - `references/channels.md`：Exa、GitHub、YouTube、B 站、X、知乎、浏览器等取材渠道怎么用。
 
 给脚本读的配置：
-- `resources/editorial_profile.json`：口味档案。目标读者、条数、时效、已写主题、屏蔽名单、审稿提示词和降权名单。
+- `resources/editorial_profile.json`：口味档案。目标读者、条数、时效、已写主题、屏蔽名单；关键词表只作调试记录。
 - `resources/editorial_profile.schema.json`：口味档案的格式检查，防止改配置时误删关键开关。
 - `resources/content_curator_sources.json`：订阅清单，按类别和用途（候选源、线索源、核验源）标注。
 - `resources/source_portfolio.json`：12 类取材渠道和权重，用来判断搜得够不够。
 
 脚本（按流程）：
-- `scrape_aihot.py`：抓取总入口；`curator.py`：一票否决、排序和审稿提示。
+- `scrape_aihot.py`：抓取总入口；`curator.py`：一票否决和阅读顺序（关键词匹配只留作调试记录）。
 - `add_source.py`：登记 Agent 手动找到的文章；`history_check.py`：读全文前查重。
 - `editorial_judgment.py`：推荐理由格式检查（六维打分、原文引用、正文指纹）。
 - `publish_batch.py`：发布前总检查，`--check-only` 只检查不登记；`report.py`：生成审核页。

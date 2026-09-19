@@ -49,7 +49,6 @@ def audit() -> dict:
     importer = read("scripts/import_feedback.py")
     curator = read("scripts/curator.py")
     ignore = read(".gitignore")
-    policy = profile.get("review_hint_policy", {})
     subjective_codes = {
         "implementation_dominates_article", "specialist_language_dominates", "complex_technical_case",
         "frontier_lab_safety_topic", "strategic_product_analysis", "visual_evidence_dependency",
@@ -59,13 +58,13 @@ def audit() -> dict:
 
     checks = [
         Check("判断标准写全六个维度", all(term in judgment for term in ("选题吸引力", "读者改变", "干货含量", "可重写性", "长期价值", "改写成本")), "references/editorial-judgment.md"),
-        Check("打分规则和代码一致", profile["decision_model"].get("dimensions_in_order") == list(DIMENSIONS) and "至少 8 分" in skill and "至少 8 分" in judgment, "六维与总分门槛"),
+        Check("打分规则和代码一致", profile["decision_model"].get("dimensions_in_order") == list(DIMENSIONS) and "至少 6 分" in skill and "至少 6 分" in judgment, "六维与总分门槛"),
         Check("反馈有七种归类", all(term in protocol for term in ("invariant", "conditional_preference", "case_only", "unexplained_decision", "hypothesis")), "feedback-learning-protocol.md"),
         Check("正反例成对", calibration.count("### 可选") >= 5 and calibration.count("### 不选") >= 5, "editorial-calibration-cases.md"),
         Check("关键词不是结论", profile["decision_model"].get("keyword_matches_are_risk_signals_not_verdicts") is True, "口味档案"),
         Check("单批反馈不能造硬规则", profile["feedback_learning"].get("single_batch_can_create_subjective_hard_gate") is False and profile["feedback_learning"].get("blank_note_creates_rule") is False, "口味档案"),
         Check("一票否决只收客观条件", not (set(HARD_FAILURE_MARKERS.values()) & subjective_codes), "editorial_judgment.py"),
-        Check("降权名单有上限且每项都存在", bool(policy.get("downrank")) and policy.get("max_downrank_points", 999) <= 20 and all(f'"{hint}"' in curator for hint in policy.get("downrank", [])), "review_hint_policy"),
+        Check("关键词不影响阅读顺序", profile["decision_model"].get("keywords_affect_reading_order") is False and 'item["reading_order"]' in curator, "curator.rank_candidates"),
         Check("核心文档不按日期打补丁", not re.search(r"^#{1,4} .*20\d{2}-\d{2}-\d{2}", skill + "\n" + judgment, re.M), "SKILL.md 与判断标准"),
         Check("发布前检查终审理由", "validate_manual_review" in publisher and 'eligibility.get("status") == "failed"' in publisher, "publish_batch.py"),
         Check("有历史回放评测", (ROOT / "scripts/eval_replay.py").exists() and (ROOT / "references/evaluation.md").exists() and "eval_replay.py machine" in skill, "eval_replay.py"),
