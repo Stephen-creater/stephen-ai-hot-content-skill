@@ -22,7 +22,7 @@ import requests
 import trafilatura
 from bs4 import BeautifulSoup
 
-from curator import canonical_url, clean_text, parse_datetime, rank_candidates
+from curator import canonical_url, clean_text, minimum_article_chars, parse_datetime, rank_candidates
 from source_config import load_sources
 from discovery_history import delivered_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
@@ -1061,7 +1061,7 @@ def main() -> None:
         report_count,
         include_rejected=args.include_rejected,
         maximum_github=maximum_github_candidates,
-        min_article_chars=0 if args.fixture else int(settings.get("minimum_review_chars", 0)),
+        min_article_chars=0 if args.fixture else minimum_article_chars(profile),
     )
     if args.ai and not args.no_ai and api_key():
         try:

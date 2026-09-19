@@ -28,6 +28,7 @@
   "max_age_days": 45,
   "time_sensitive_max_age_days": 5,
   "discovery_max_age_days": 14,
+  "minimum_article_chars": 800,
   "minimum_score": 48,
   "preferred_language": "zh",
   "required_chinese_script": "simplified",

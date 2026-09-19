@@ -471,7 +471,6 @@
     "cache_ttl_seconds": 3600,
     "page_cache_ttl_seconds": 604800,
     "failure_cache_ttl_seconds": 900,
-    "minimum_review_chars": 2500,
     "max_article_bytes": 1500000
   }
 }

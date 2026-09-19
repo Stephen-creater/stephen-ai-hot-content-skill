@@ -244,6 +244,17 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
         self.assertIn("事件新闻已超过时效窗口", news["penalty"])
 
+    def test_article_length_gate_is_800_chars(self):
+        base = {"title": "我用 Codex 重写了团队的发布脚本", "summary": "一次 AI 编程实践复盘", "published": "2026-09-01", "source_name": "博客",
+                "source_priority": 4, "source_type": "rss", "source_role": "candidate", "language": "zh", "maturity": "secondary",
+                "content_form": "article", "content_status": "fulltext", "link": "https://example.com/len"}
+        now = datetime(2026, 9, 5, tzinfo=timezone.utc)
+        self.assertEqual(self.profile["minimum_article_chars"], 800)
+        short = score_item({**base, "content": "甲" * 799}, self.profile, now=now)
+        enough = score_item({**base, "content": "甲" * 800}, self.profile, now=now)
+        self.assertIn("文章正文偏短", short["penalty"])
+        self.assertNotIn("文章正文偏短", enough["penalty"])
+
     def test_body_lead_stands_in_for_missing_summary_when_judging_ai_subject(self):
         base = {"title": "14 天，110 次上线", "summary": "", "published": "2026-09-01", "source_name": "公众号", "source_priority": 4,
                 "source_type": "rss", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article",
@@ -1844,7 +1855,7 @@ Language: zh
                 "link": "https://example.com/education",
                 "source_name": "研究机构",
                 "summary": "学生作业实验",
-                "content": "大学生在学校课堂中使用 AI 完成作业。" * 50,
+                "content": "大学生在学校课堂中使用 AI 完成作业。" * 30,
             },
         ]
         lookup = {item["link"]: item for item in rank_candidates(items, self.profile, now=datetime(2026, 9, 4, tzinfo=timezone.utc))}

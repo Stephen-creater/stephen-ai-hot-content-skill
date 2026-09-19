@@ -8,7 +8,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from curator import canonical_url, deduplicate
+from curator import canonical_url, deduplicate, minimum_article_chars
 from discovery_history import delivered_candidates
 from editorial_judgment import classify_penalties, final_decision_record, validate_manual_review, validate_source_anchors
 from import_feedback import final_reviewed_candidates
@@ -59,7 +59,7 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool 
             penalty = row.get("penalty", [])
             warnings = [penalty] if isinstance(penalty, str) else list(penalty)
             warnings.extend(signal.get("evidence", "") for signal in row.get("editorial_decision", {}).get("risk_signals", []))
-            if row.get("content_form") == "article" and row.get("content_status") == "fulltext" and len(row.get("content", "")) < 2500:
+            if row.get("content_form") == "article" and row.get("content_status") == "fulltext" and len(row.get("content", "")) < minimum_article_chars(profile):
                 warnings.append("文章正文偏短，不足以支撑高质量二创")
             failures, _ = classify_penalties(warnings)
             if failures:

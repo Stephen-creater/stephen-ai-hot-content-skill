@@ -46,6 +46,11 @@ STRONG_AI_TERMS = (
 )
 
 
+def minimum_article_chars(profile: dict) -> int:
+    """Shortest article body that can still carry a rewrite; one value for scoring, pooling and publishing."""
+    return int(profile.get("minimum_article_chars", 800))
+
+
 def ai_subject_in_body(summary: str, content: str) -> bool:
     """Feeds without a real summary (most WeChat RSS) leave only the title to judge.
 
@@ -514,7 +519,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     long_interview = (
         any(word.lower() in title.lower() for word in interview_terms)
         and not any(word.lower() in title.lower() for word in time_sensitive_terms)
-        and len(content) >= int(profile.get("minimum_review_chars", 2500))
+        and len(content) >= minimum_article_chars(profile)
     )
     if age_days is not None and time_sensitive_terms and not (authoritative_interview or long_interview) and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
         score -= 60
@@ -737,7 +742,7 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if long_horizon_framework:
         score += 18
         reasons.insert(0, "长期实践沉淀出可复用的方法框架")
-    if content_form == "article" and content_status == "fulltext" and len(content) < 2500:
+    if content_form == "article" and content_status == "fulltext" and len(content) < minimum_article_chars(profile):
         score -= 55
         penalties.append("文章正文偏短，不足以支撑高质量二创")
 
