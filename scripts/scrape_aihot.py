@@ -11,6 +11,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
 import zlib
 from datetime import datetime, timedelta, timezone
@@ -523,6 +524,10 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
             rows = fetch_web_index(source, settings)
         for row in rows:
             row.setdefault("collected_by", source["name"])
+            if source.get("official_release"):
+                row["official_release"] = True
+            if source.get("reader_fallback"):
+                row["reader_fallback"] = True
         # wechat_index applies its own exclusion before fetching bodies.
         if source.get("title_exclude_pattern") and source["type"] != "wechat_index":
             exclude = re.compile(source["title_exclude_pattern"])
@@ -535,9 +540,52 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
         return [], f"{source['name']}: {exc}"
 
 
+READER_SLOTS = threading.Semaphore(2)  # the free Jina reader answers 429 when hit in parallel
+
+
+def read_via_reader(item: dict, settings: dict) -> dict:
+    """Some official sites refuse scripted requests (OpenAI answers 403); the public Jina reader returns their text."""
+    url = "https://r.jina.ai/" + item["link"]
+    ttl = int(settings.get("page_cache_ttl_seconds", 0))
+    cached = cache_read(settings, url, ttl)
+    if cached is not None:
+        text = base64.b64decode(cached["body"]).decode("utf-8", errors="replace")
+    else:
+        with READER_SLOTS:
+            for attempt in range(4):
+                response = requests.get(url, headers=HEADERS, timeout=max(60, settings["request_timeout_seconds"]))
+                if response.status_code != 429:
+                    break
+                time.sleep(3 * (attempt + 1))
+            response.raise_for_status()
+        text = response.content.decode("utf-8", errors="replace")
+        if re.search(r"^Warning: Target URL returned error", text, re.M):
+            raise ValueError("网页读取返回错误页")
+        if ttl > 0:
+            cache_write(settings, url, response.content, "utf-8")
+    body = text.split("Markdown Content:", 1)[-1].strip()
+    if len(body) >= 400:
+        item["content"] = body
+        item["image_count"] = len(re.findall(r"!\[[^\]]*\]\(", body))
+        item["content_status"] = "fulltext"
+        item["content_origin"] = "web_reader"
+        item.pop("fetch_error", None)
+    return item
+
+
 def hydrate(item: dict, settings: dict) -> dict:
     if not item.get("link") or item.get("source_role") == "discovery":
         return item
+    item = hydrate_direct(item, settings)
+    if item.get("reader_fallback") and len(item.get("content") or "") < 400:
+        try:
+            item = read_via_reader(item, settings)
+        except Exception as exc:
+            item["fetch_error"] = f"{item.get('fetch_error', '')}；网页读取也失败：{exc}".lstrip("；")
+    return item
+
+
+def hydrate_direct(item: dict, settings: dict) -> dict:
     if item.get("content") and (
         item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext", "public_index_cache", "bestblogs_api", "feed_fulltext"}
     ):
@@ -688,7 +736,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "content": "",
         "published": row.get("published", ""),
         "source_name": row.get("creator") or platform,
-        "source_category": "中文人工投喂",
+        "source_category": "官方发布（人工登记）" if row.get("official_release") else "中文人工投喂",
         "source_priority": int(row.get("priority", 5)),
         "source_type": platform,
         "source_role": "candidate",
@@ -697,6 +745,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "content_form": "video" if platform in {"bilibili", "youtube"} else "podcast" if platform in {"xiaoyuzhou", "podcast"} else "article",
         "content_status": "summary",
         "github_stars": row.get("github_stars"),
+        "official_release": bool(row.get("official_release")),
     }
     content_file = row.get("content_file")
     if content_file:

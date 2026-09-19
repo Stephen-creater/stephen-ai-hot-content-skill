@@ -212,8 +212,6 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         traditional_count = sum(char in TRADITIONAL_MARKERS for char in chinese)
         if traditional_count >= 12 and traditional_count / max(len(chinese), 1) >= 0.02:
             failures.append("原文为繁体中文，要求简体中文材料")
-    if language == "en":
-        failures.append("英文一手信息，优先用于核验")
     if source_role == "verification":
         failures.append("核验来源，不进入默认选题")
 
@@ -272,6 +270,13 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         and not any(word.lower() in title.lower() for word in event_words)
         and len(content) >= minimum_article_chars(profile)
     )
+    # Stephen writes major launches the same day straight from the official English post;
+    # other English material, and official posts past the launch window, stay leads.
+    official_release = bool(item.get("official_release")) and age_days is not None and age_days <= int(profile.get("time_sensitive_max_age_days", 5))
+    if language == "en" and not official_release:
+        failures.append("英文官方发布已过当天解读窗口，只作线索" if item.get("official_release") else "英文一手信息，优先用于核验")
+    if official_release:
+        reasons.append("官方发布原文，仍在事件时效窗口内")
     if age_days is not None and event_words and not (core_team_interview or long_interview) and age_days > int(profile.get("time_sensitive_max_age_days", 5)):
         failures.append("事件新闻已超过时效窗口")
 
@@ -321,10 +326,11 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     reading_order = int(item.get("source_priority", 3)) * 2
     reading_order += max(0, 18 - age_days) if age_days is not None else 0
     reading_order += 18 if language == profile.get("preferred_language") else 0
-    reading_order += 16 if maturity == profile.get("preferred_maturity") else (-15 if maturity == "primary" else 0)
+    reading_order += 16 if maturity == profile.get("preferred_maturity") else (-15 if maturity == "primary" and not official_release else 0)
+    reading_order += 34 if official_release else 0
     reading_order += {"transcript": 20, "fulltext": 15, "shownotes": 8}.get(content_status, 0)
 
-    if content_status in {"transcript", "fulltext"} and language == "zh" and len(content) >= 1000:
+    if content_status in {"transcript", "fulltext"} and (language == "zh" or official_release) and len(content) >= 1000:
         adaptation_readiness, research_cost = "高", "低"
     elif content_status in {"shownotes", "fulltext", "transcript"} and len(content) >= 400:
         adaptation_readiness, research_cost = "中", "中"

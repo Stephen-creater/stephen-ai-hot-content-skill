@@ -41,6 +41,8 @@ BestBlogs、觉醒AI 文章库、宝玉。别人已经筛过一遍的高质量�
 
 英文博客和 newsletter、X 一线作者、YouTube 实操频道、即刻和 Telegram 短内容。它们只进 `discovery.md`，不进候选。
 
+例外是主流厂商的官方发布：OpenAI（含 Developers）、Anthropic、Claude、Google DeepMind 的官方博客标了 `official_release`，发布后 5 天内的原文直接作候选。OpenAI 官网拒绝脚本请求，标了 `reader_fallback`，直连失败时改用 Jina 网页读取取正文。
+
 - 命中后依次找中文成熟稿：宝玉、Web3天空之城、Z Finance、海外独角兽、BestBlogs 关键词订阅。都没有，就在缺口报告里写“中文材料缺位”，由 Stephen 判断要不要原创。
 - 部分英文节目带免费逐字稿，可以用来核对中文编译稿是否忠实。
 - YouTube 官方频道订阅对部分频道返回 404，统一走 RSSHub `/youtube/channel/<频道ID>`，命中后用 yt-dlp 取字幕。

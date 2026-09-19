@@ -58,7 +58,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 给脚本读的配置：
 - `resources/editorial_profile.json`：口味档案。目标读者、条数、时效、已写主题、屏蔽名单和一票否决用到的少量词。
-- `resources/content_curator_sources.json`：订阅清单，按类别和用途（候选源、线索源）标注；OpenAI、Anthropic 等官方发布源是线索源，排在线索清单最前面。
+- `resources/content_curator_sources.json`：订阅清单，按类别和用途（候选源、线索源）标注；OpenAI（含 Developers）、Anthropic、Claude、Google DeepMind 的官方博客是候选源，只有发布后 5 天内的原文能进候选，过了窗口自动退回线索。
 - `resources/source_portfolio.json`：12 类取材渠道和权重，收工检查用。
 
 脚本（按流程）：

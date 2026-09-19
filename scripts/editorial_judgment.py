@@ -48,6 +48,7 @@ HARD_FAILURE_MARKERS = {
     "超过时效范围": "stale_material",
     "事件新闻已超过时效窗口": "stale_event",
     "英文一手信息": "verification_only_language",
+    "英文官方发布已过当天解读窗口": "verification_only_language",
     "核验来源，不进入默认选题": "verification_only_source",
     "缺少完整文字材料": "incomplete_text",
     "材料过少": "incomplete_text",

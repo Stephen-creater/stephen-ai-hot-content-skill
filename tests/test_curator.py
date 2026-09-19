@@ -225,6 +225,33 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
         self.assertIn("事件新闻已超过时效窗口", news["penalty"])
 
+    def test_english_official_release_is_a_candidate_only_inside_launch_window(self):
+        item = {"title": "Introducing GPT-6", "summary": "OpenAI releases GPT-6 for ChatGPT and the API.", "content": "GPT-6 is our new model for agentic coding and long tasks. " * 60,
+                "published": "2026-09-04", "source_name": "OpenAI News", "source_priority": 5, "source_type": "rss", "source_role": "candidate",
+                "language": "en", "maturity": "primary", "content_form": "article", "content_status": "fulltext", "link": "https://openai.com/index/gpt-6", "official_release": True}
+        fresh = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
+        stale = score_item(item, self.profile, now=datetime(2026, 9, 10, tzinfo=timezone.utc))
+        blog = score_item({**item, "official_release": False, "source_name": "Simon Willison"}, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
+        self.assertTrue(fresh["editorial_decision"]["eligibility"]["status"] == "passed", fresh["penalty"])
+        self.assertIn("过当天解读窗口", stale["penalty"])
+        self.assertEqual(stale["editorial_decision"]["eligibility"]["status"], "failed")
+        self.assertIn("英文一手信息", blog["penalty"])
+
+    def test_official_site_that_refuses_scripts_is_read_through_web_reader(self):
+        item = {"title": "Introducing GPT-6", "link": "https://openai.com/index/gpt-6", "source_role": "candidate", "reader_fallback": True, "content_status": "summary"}
+        page = ("Title: Introducing GPT-6\n\nMarkdown Content:\n" + "GPT-6 is our new model. " * 40).encode()
+        with patch("scrape_aihot.hydrate_direct", side_effect=lambda row, settings: {**row, "fetch_error": "403"}), \
+             patch("scrape_aihot.requests.get", return_value=type("R", (), {"content": page, "status_code": 200, "raise_for_status": lambda self: None})()):
+            hydrated = hydrate(item, {"request_timeout_seconds": 10})
+        self.assertEqual(hydrated["content_origin"], "web_reader")
+        self.assertTrue(hydrated["content"].startswith("GPT-6 is our new model."))
+        self.assertNotIn("fetch_error", hydrated)
+
+    def test_manually_registered_official_release_keeps_its_flag(self):
+        row = inbox_item({"url": "https://x.com/OpenAI/status/1", "platform": "web", "language": "en", "official_release": True, "title": "GPT-6"}, {})
+        self.assertTrue(row["official_release"])
+        self.assertEqual(row["language"], "en")
+
     def test_article_length_gate_is_800_chars(self):
         base = {"title": "我用 Codex 重写了团队的发布脚本", "summary": "一次 AI 编程实践复盘", "published": "2026-09-01", "source_name": "博客",
                 "source_priority": 4, "source_type": "rss", "source_role": "candidate", "language": "zh", "maturity": "secondary",

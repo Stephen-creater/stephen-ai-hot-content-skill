@@ -35,7 +35,7 @@ def append_source(path: Path, row: dict) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="向本地中文来源 inbox 添加内容")
+    parser = argparse.ArgumentParser(description="向本地来源 inbox 添加内容")
     parser.add_argument("url")
     parser.add_argument(
         "--platform",
@@ -49,6 +49,8 @@ def main() -> None:
     parser.add_argument("--published", default="")
     parser.add_argument("--notes", default="")
     parser.add_argument("--maturity", choices=["secondary", "primary"], default="secondary")
+    parser.add_argument("--language", choices=["zh", "en"], default="zh")
+    parser.add_argument("--official-release", action="store_true", help="厂商官方发布原文（博客、官网、文档、官方账号），英文也可在发布后 5 天内作候选")
     parser.add_argument("--transcript", dest="transcript_path", default="")
     parser.add_argument("--content-file", default="", help="通过浏览器读取并保存的完整文章正文文件")
     parser.add_argument("--content-url", default="", help="用于抓取正文的公开原始文本链接；展示仍使用位置参数 URL")
@@ -69,6 +71,8 @@ def main() -> None:
             "published": args.published,
             "notes": args.notes,
             "maturity": args.maturity,
+            "language": args.language,
+            "official_release": args.official_release,
             "transcript_path": args.transcript_path,
             "content_file": args.content_file,
             "content_url": args.content_url,
