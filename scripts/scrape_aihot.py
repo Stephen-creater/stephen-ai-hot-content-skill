@@ -29,6 +29,7 @@ from discovery_history import delivered_candidates
 from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
 import buzz
+import published
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -883,7 +884,8 @@ def render_triage_markdown(rows: list[dict]) -> str:
         lines.append(
             f"{index}. [{row.get('source_title') or row.get('title')}]({row.get('link', '')}) "
             f"· {row.get('source_name', '')} · {str(row.get('published', ''))[:10]} · {len(row.get('content') or '')} 字"
-            f"{' · 图 ' + str(row['image_count']) + ' 张' if row.get('image_count') is not None else ''} · id {row.get('id')}"
+            f"{' · 图 ' + str(row['image_count']) + ' 张' if row.get('image_count') is not None else ''}"
+            f"{' · 可能已写过《' + row['written_topic_hint'] + '》' if row.get('written_topic_hint') else ''} · id {row.get('id')}"
         )
         if opening:
             lines.append(f"   {opening}")
@@ -1027,6 +1029,7 @@ def main() -> None:
         with concurrent.futures.ThreadPoolExecutor(max_workers=settings["hydrate_workers"]) as executor:
             items = list(executor.map(lambda item: hydrate(item, settings), items))
 
+    published.annotate(items)
     ranked = rank_candidates(items, profile)
     reviewed_ids = set() if args.fixture else final_reviewed_ids(feedback_store)
     skipped_reviewed_count = sum(1 for item in ranked if str(item["id"]) in reviewed_ids)

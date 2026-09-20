@@ -44,7 +44,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ### 1. 接上之前的状态
 
 - 反馈原文很大，不直接读。用 `feedback_audit.py` 看入选率、原因标签统计和没给原因的记录，读进度文件续跑，不靠对话记忆。
-- 读本机私有的 `.local/articles/published_topics.md`：Stephen 已经写成文章的全部选题。写过的主题不再推荐（除非有实质新进展）；同一主题已经写了两篇以上的（例如 FDE 写了 4 篇），换个案例、换个说法也算重复，类型和写法以它为参照。有新文章时先跑 `.venv/bin/python3 scripts/sync_articles.py` 从飞书只读同步。
+- 读本机私有的 `.local/articles/published_topics.md`：Stephen 已经写成文章的全部选题。写过的主题不再推荐（除非有实质新进展）；抓取时会机械对照这份清单，标出同名候选，见下面的“机器标记”；同一主题已经写了两篇以上的（例如 FDE 写了 4 篇），换个案例、换个说法也算重复，类型和写法以它为参照。有新文章时先跑 `.venv/bin/python3 scripts/sync_articles.py` 从飞书只读同步。
 - 先读哪些来源，参考 `.venv/bin/python3 scripts/source_yield.py --min-decided 5`：键是公众号名或网站域名，审核不足 5 次的来源不参与排序。
 - **读全文之前**把待读材料存成 JSON 数组，运行 `.venv/bin/python3 scripts/history_check.py <文件>` 查重。同一篇访谈常被不同站点换标题转载，链接不同但正文重合。
 - 相似主题只有新事实、新方法或新结果才算新材料。
@@ -103,6 +103,13 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ```
 
 程序只检查打分、字段和原句是否存在，不能证明判断正确。原句必须真的支撑推荐理由。正文变了要重审。
+
+**机器标记**：抓取脚本会自己对照已发布文章和图片数，标出两种情况，`triage.md` 的标题行里能看到，发布脚本会拦：
+
+- 标题和某篇已发布文章同名（`written_topic_hint`）：要在终审卡里加 `new_progress`，写明这次有什么新进展。2026-09-20 一批 20 条里有 9 条是写过的主题，靠 Agent 自己对照清单没拦住，所以改成机械标记。
+- 配图 10 张及以上（`many_images`）：要在终审卡里加 `image_plan`，写明二创时这些图怎么办。图只是展示界面、文字讲得清的，写清楚就能过。
+
+标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。
 
 ### 6. 发布
 

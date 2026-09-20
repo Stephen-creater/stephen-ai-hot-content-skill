@@ -10,7 +10,7 @@ from pathlib import Path
 
 from curator import canonical_url, deduplicate, minimum_article_chars
 from discovery_history import delivered_candidates
-from editorial_judgment import classify_penalties, final_decision_record, validate_manual_review, validate_source_anchors
+from editorial_judgment import classify_penalties, final_decision_record, flags_for, validate_manual_review, validate_source_anchors
 from import_feedback import final_reviewed_candidates
 from report import generate_report
 from scrape_aihot import is_historical_content_duplicate
@@ -69,7 +69,8 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool 
                 raise ValueError(f"存在未通过客观资格门槛的候选：{row.get('title')}")
             if not eligibility and not row.get("recommended"):
                 raise ValueError("旧版候选缺少机器资格记录且未通过筛选")
-            validation = validate_manual_review(row.get("manual_editorial_review", {}))
+            validation = validate_manual_review(
+                row.get("manual_editorial_review", {}), flags=flags_for(row, maximum_images=int(profile.get("maximum_images", 10))))
             if not validation.ok:
                 raise ValueError(f"终审理由不完整：{row.get('title')}：{'；'.join(validation.errors)}")
             source_validation = validate_source_anchors(row)

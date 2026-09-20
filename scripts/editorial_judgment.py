@@ -132,7 +132,24 @@ def build_decision_contract(
     }
 
 
-def validate_manual_review(review: dict, *, require_v2: bool = True) -> ReviewValidation:
+FLAG_FIELDS = {
+    "written_topic_hint": ("new_progress", "与已写文章《{value}》同名，要在 new_progress 写明这次的新进展"),
+    "many_images": ("image_plan", "配图 {value} 张，要在 image_plan 写明二创时图怎么办"),
+}
+
+
+def flags_for(row: dict, *, maximum_images: int = 10) -> dict[str, object]:
+    """What the machine noticed about a candidate and the Agent must answer before delivery."""
+    flags: dict[str, object] = {}
+    if row.get("written_topic_hint"):
+        flags["written_topic_hint"] = row["written_topic_hint"]
+    count = row.get("image_count")
+    if isinstance(count, int) and count >= maximum_images:
+        flags["many_images"] = count
+    return flags
+
+
+def validate_manual_review(review: dict, *, require_v2: bool = True, flags: dict[str, object] | None = None) -> ReviewValidation:
     """Validate evidence required before a candidate may be published."""
     if not isinstance(review, dict):
         return ReviewValidation(False, ("缺少终审记录",))
@@ -145,6 +162,10 @@ def validate_manual_review(review: dict, *, require_v2: bool = True) -> ReviewVa
         value = review.get(field)
         if not isinstance(value, str) or len(value.strip()) < 12:
             errors.append(f"{label}缺少具体正文证据")
+    for flag, value in (flags or {}).items():
+        field, message = FLAG_FIELDS[flag]
+        if len(str(review.get(field, "")).strip()) < 12:
+            errors.append(message.format(value=value))
     scores = review.get("scores")
     if not isinstance(scores, dict) or any(scores.get(key) not in (0, 1, 2) for key in DIMENSIONS):
         errors.append("六个维度都要打 0、1 或 2 分")
