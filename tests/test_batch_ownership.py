@@ -246,3 +246,11 @@ class BatchOwnershipTest(unittest.TestCase):
 
 if __name__=='__main__':
     unittest.main()
+
+
+class SkillVersionGateTest(unittest.TestCase):
+    def test_a_batch_run_on_an_old_skill_cannot_be_published(self):
+        with patch("publish_batch.behind_remote", return_value="abc1234 收紧配图规则"):
+            with self.assertRaises(ValueError) as caught:
+                publish_batch(ROOT / "topics" / "2026-09-20-main-a", "主力", check_only=True)
+        self.assertIn("旧版 Skill", str(caught.exception))

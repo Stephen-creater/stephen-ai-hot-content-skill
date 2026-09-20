@@ -11,6 +11,7 @@ from pathlib import Path
 from curator import canonical_url, deduplicate, minimum_article_chars
 from discovery_history import delivered_candidates
 from editorial_judgment import classify_penalties, final_decision_record, flags_for, validate_manual_review, validate_source_anchors
+from skill_version import behind_remote, current_commit
 from import_feedback import final_reviewed_candidates
 from report import generate_report
 from scrape_aihot import is_historical_content_duplicate
@@ -18,8 +19,12 @@ from scrape_aihot import is_historical_content_duplicate
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool = False) -> Path:
+def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool = False, allow_stale: bool = False) -> Path:
     folder = folder.resolve()
+    if not allow_stale:
+        missing = behind_remote(root)
+        if missing:
+            raise ValueError(f"这批是用旧版 Skill 跑的，先 git pull --ff-only origin main 再重跑：\n{missing}")
     if owner not in {"主力", "主力2"} or folder.parent != (root / "topics").resolve():
         raise ValueError("仅允许发布当前项目 topics 下的批次，且必须声明归属")
     lock = root / ".local" / "delivery.lock"
@@ -118,6 +123,7 @@ if __name__ == "__main__":
     parser.add_argument("folder", type=Path)
     parser.add_argument("--owner", choices=["主力", "主力2"], required=True)
     parser.add_argument("--check-only", action="store_true", help="只执行全部发布前校验，不写文件、不登记交付")
+    parser.add_argument("--allow-stale", action="store_true", help="跳过 Skill 版本检查，只在确实断网时使用")
     args = parser.parse_args()
-    result = publish_batch(args.folder, args.owner, check_only=args.check_only)
+    result = publish_batch(args.folder, args.owner, check_only=args.check_only, allow_stale=args.allow_stale)
     print(f"校验通过，未登记：{result}" if args.check_only else result)

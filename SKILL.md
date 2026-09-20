@@ -43,6 +43,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 1. 接上之前的状态
 
+- **开工第一件事**：`git pull --ff-only origin main`，用最新的 Skill 跑。抓取脚本会自己对一次远程，落后时打印警告并继续；发布脚本直接拒绝发布用旧版跑出来的批次（确实断网时才用 `--allow-stale`）。每次抓取把当时的 commit 记进 `run.json` 的 `skill_commit`。2026-09-20 有一批用旧版规则跑完才发现，整批作废。
 - 反馈原文很大，不直接读。用 `feedback_audit.py` 看入选率、原因标签统计和没给原因的记录，读进度文件续跑，不靠对话记忆。
 - 读本机私有的 `.local/articles/published_topics.md`：Stephen 已经写成文章的全部选题。写过的主题不再推荐（除非有实质新进展）；抓取时会机械对照这份清单，标出同名候选，见下面的“机器标记”；同一主题已经写了两篇以上的（例如 FDE 写了 4 篇），换个案例、换个说法也算重复，类型和写法以它为参照。有新文章时先跑 `.venv/bin/python3 scripts/sync_articles.py` 从飞书只读同步。
 - 先读哪些来源，参考 `.venv/bin/python3 scripts/source_yield.py --min-decided 5`：键是公众号名或网站域名，审核不足 5 次的来源不参与排序。

@@ -30,6 +30,7 @@ from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
 import buzz
 import published
+from skill_version import behind_remote, current_commit
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -1029,6 +1030,9 @@ def main() -> None:
         with concurrent.futures.ThreadPoolExecutor(max_workers=settings["hydrate_workers"]) as executor:
             items = list(executor.map(lambda item: hydrate(item, settings), items))
 
+    stale = "" if args.fixture else behind_remote()
+    if stale:
+        print(f"警告：Skill 不是最新的，先 git pull --ff-only origin main 再跑这一批。缺的提交：\n{stale}")
     published.annotate(items)
     ranked = rank_candidates(items, profile)
     reviewed_ids = set() if args.fixture else final_reviewed_ids(feedback_store)
@@ -1082,6 +1086,7 @@ def main() -> None:
         json.dumps(
             {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
+                "skill_commit": current_commit(),
                 "input_count": len(items),
                 "source_attempts": source_attempts,
                 "discovery_count": len(discovery_items),
