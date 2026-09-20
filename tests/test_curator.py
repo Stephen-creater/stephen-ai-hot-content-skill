@@ -1608,3 +1608,27 @@ Language: zh
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class WayToAGITest(unittest.TestCase):
+    def test_daily_picks_become_candidates_and_stubs_follow_the_original(self):
+        home = '<a href="/zh/blog/news-20260919">知识库精选-2026年9月19日</a>'
+        day = ('<nav><a href="https://waytoagi.feishu.cn/wiki/NAV">直达「 通往AGI之路 」飞书知识库 →</a></nav>'
+               '<div><a href="https://waytoagi.feishu.cn/wiki/FULL">详解 Jev 模型</a>讲清楚了它的工作原理</div>'
+               '<div><a href="https://waytoagi.feishu.cn/wiki/STUB">外网围观的十个玩法</a>作者整理了十个实测</div>')
+        full = "<html><body><article><p>" + "这是知识库页自己写全的中文正文。" * 60 + "</p></article></body></html>"
+        stub = '<html><body><article><p>导读一句话</p><a href="https://mp.weixin.qq.com/s/abc">原文链接</a></article></body></html>'
+        pages = {"https://www.waytoagi.com/zh": home, "https://www.waytoagi.com/zh/blog/news-20260919": day,
+                 "https://waytoagi.feishu.cn/wiki/FULL": full, "https://waytoagi.feishu.cn/wiki/STUB": stub}
+
+        def fake_get(url, settings, params=None, ttl=None):
+            return type("R", (), {"text": pages[url], "raise_for_status": lambda self: None})()
+
+        source = {"name": "WayToAGI 知识库精选", "category": "中文AI精选主入口", "url": "https://www.waytoagi.com/zh",
+                  "priority": 5, "role": "candidate", "days": 3}
+        with patch("scrape_aihot.http_get", side_effect=fake_get):
+            rows = __import__("scrape_aihot").fetch_waytoagi(source, {})
+        self.assertEqual([row["title"] for row in rows], ["详解 Jev 模型", "外网围观的十个玩法"])
+        self.assertEqual(rows[0]["content_status"], "fulltext")
+        self.assertEqual(rows[1]["link"], "https://mp.weixin.qq.com/s/abc")
+        self.assertEqual(rows[1]["wiki_link"], "https://waytoagi.feishu.cn/wiki/STUB")

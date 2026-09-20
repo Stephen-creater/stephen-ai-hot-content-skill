@@ -307,6 +307,69 @@ def fetch_follow_builders(source: dict, settings: dict) -> list[dict]:
     return rows[: int(source.get("items_limit", 60))]
 
 
+NEWS_DAY_RE = re.compile(r"/zh/blog/news-(\d{8})")
+
+
+def fetch_waytoagi(source: dict, settings: dict) -> list[dict]:
+    """WayToAGI 每天一页「知识库精选」，每页六到八篇，每篇都指向一个飞书知识库页面。
+
+    首页列出最近几天的日期页，日期页里才是当天的文章。文章正文在飞书页上，直连就能读到。
+    """
+    response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
+    response.raise_for_status()
+    days = []
+    for match in NEWS_DAY_RE.finditer(response.text):
+        day = match.group(1)
+        if day not in days:
+            days.append(day)
+    items = []
+    for day in days[: int(source.get("days", 3))]:
+        published = f"{day[:4]}-{day[4:6]}-{day[6:]}"
+        try:
+            page = http_get(f"https://www.waytoagi.com/zh/blog/news-{day}", settings, ttl=source.get("cache_ttl_seconds"))
+            page.raise_for_status()
+        except requests.RequestException:
+            continue
+        soup = BeautifulSoup(page.text, "html.parser")
+        for anchor in soup.find_all("a", href=True):
+            link, title = anchor["href"], clean_text(anchor.get_text(" ", strip=True))
+            if "feishu.cn/wiki" not in link or len(title) < 6 or title in {"致谢"} or "直达" in title:
+                continue
+            if anchor.find_parent(["header", "nav", "footer"]):
+                continue
+            block = anchor.find_parent(["p", "div", "li"])
+            summary = clean_text(block.get_text(" ", strip=True)) if block else ""
+            items.append({
+                "title": title, "link": link, "summary": summary.replace(title, "", 1).strip("《》 ")[:600],
+                "published": published, "source_name": source["name"], "source_category": source["category"],
+                "source_priority": source["priority"], "source_type": "web",
+                "source_role": source.get("role", "candidate"), "language": "zh",
+                "maturity": source.get("maturity", "secondary"), "content_form": "article",
+                "content_status": "summary",
+            })
+    return [follow_original(item, settings) for item in items[: int(source.get("items_limit", 30))]]
+
+
+ORIGINAL_LINK_RE = re.compile(r'href="(https?://(?:mp\.weixin\.qq\.com|www\.zhihu\.com|zhuanlan\.zhihu\.com|juejin\.cn|sspai\.com|x\.com|twitter\.com|[^"]*substack\.com)[^"]*)"')
+
+
+def follow_original(item: dict, settings: dict) -> dict:
+    """知识库页写全了就用它；只放了导读的，跟着「原文链接」去原文，也顺便和公众号源用同一个链接查重。"""
+    try:
+        page = http_get(item["link"], settings, ttl=int(settings.get("page_cache_ttl_seconds", 0)))
+    except requests.RequestException:
+        return item
+    text = clean_text(trafilatura.extract(page.text, include_comments=False) or "")
+    if len(text) >= int(settings.get("waytoagi_min_wiki_chars", 800)):
+        item.update(content=text, content_status="fulltext", content_origin="waytoagi_wiki")
+        return item
+    match = ORIGINAL_LINK_RE.search(page.text)
+    if match:
+        item["wiki_link"] = item["link"]
+        item["link"] = match.group(1).replace("&amp;", "&")
+    return item
+
+
 def fetch_paged_web_index(source: dict, settings: dict) -> list[dict]:
     """Walk numbered list pages so a high-yield library is not limited to its homepage."""
     limit = int(source.get("items_limit", settings["web_links_per_source"]))
@@ -518,6 +581,8 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
             rows = fetch_learnprompt_radar(source, settings)
         elif source["type"] == "wechat_index":
             rows = fetch_wechat_index(source, settings)
+        elif source["type"] == "waytoagi":
+            rows = fetch_waytoagi(source, settings)
         elif source["type"] == "paged_web":
             rows = fetch_paged_web_index(source, settings)
         elif source["type"] == "bestblogs":
@@ -629,7 +694,7 @@ def hydrate(item: dict, settings: dict) -> dict:
 
 def hydrate_direct(item: dict, settings: dict) -> dict:
     if item.get("content") and (
-        item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext", "public_index_cache", "bestblogs_api", "feed_fulltext"}
+        item.get("content_status") == "transcript" or item.get("content_origin") in {"explicit_content_url", "local_fulltext", "public_index_cache", "bestblogs_api", "feed_fulltext", "waytoagi_wiki"}
     ):
         return item
     try:

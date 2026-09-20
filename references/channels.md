@@ -18,6 +18,7 @@
 | id | 平台 | 能做什么 | 命令 | 实测 |
 |---|---|---|---|---|
 | `rss` | 各类订阅源 | 自动拉文章、播客、视频更新 | 抓取脚本内置 | 可用 |
+| `waytoagi` | WayToAGI 知识库精选 | 每天一页人工精选的中文文章 | 抓取脚本内置（`type: waytoagi`） | 可用，2026-09-20 实测 17 条取到 11 条合格 |
 | `web_reader` | 任意公开网页 | 取网页正文（Markdown） | `curl -s "https://r.jina.ai/<URL>"` | 可用 |
 | `exa_search` | 全网 | 按主题跨站搜长文、博客 | `mcporter call exa.web_search_exa query="<查询>" numResults=10` | 可用，结果中 SEO 内容多，要逐条看 |
 | `github` | GitHub | 搜仓库，核对 Star、最近更新、Release | `gh search repos "<查询>" --sort updated --limit 10` | 可用 |
