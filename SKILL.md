@@ -54,7 +54,8 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 - 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。输出里的 `triage.md` 列出全部合格材料（已过一票否决和查重）的标题、来源、日期、字数和开头，按来源优先级和新鲜度排列；全文在 `eligible.json`。`triage.md` 开头的“最近 3 天多源刷屏”列出几天内在很多来源同时冒出来的新名字，这是单篇文章看不出的热度，先看它：每个刷屏的名字至少挑一篇最完整的稿子读全文；中文稿都不好时，用 `add_source.py` 登记中文 X 长帖或官网原文。然后**通读 `triage.md` 全部标题，自己挑出值得读全文的**，一般是目标条数的 3 倍左右（默认 10 条选题读约 30 篇）。`candidates.json` 只是按顺序截的前 30 篇，不代表推荐。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
 - 重大发布是 Stephen 写得最多的一类，他常直接拿英文官方原文写当天解读。所以 OpenAI（含 Developers）、Anthropic、Claude、Google DeepMind 的官方博客是候选源：发布后 5 天内的原文直接进 `triage.md` 并排在前面，超过 5 天自动退回线索。官方博客里客户案例、合作、公益和政策稿占多数，这些不推荐；值得读的是三类：新模型、新产品、新功能的正式发布，厂商自己团队的一手做法和内部数据，头部实验室首次展示的新能力方向。X 上的官方发布帖或官方文档页用 `add_source.py <链接> --platform web --language en --official-release --content-file <正文>` 登记。有中文首发报道或实测时，两篇都可以读，推荐讲得更清楚的那篇。
-- 其余线索源（播客、YouTube、X、即刻、GitHub Changelog）只进 `discovery.md`。
+- **每批必跑 X**：Stephen 很多文章是在 X 上看到并二创的，这个渠道和公众号同等重要。用 ego-browser 打开他登录的 X，看首页时间线、翻重点作者主页、搜当天的关键词；长帖用 `add_source.py <链接> --platform x --creator "<作者>" --content-file <正文文件>` 登记成候选，重跑抓取走资格判定。做法见 [取材渠道手册](references/channels.md) 的“X（推特）”。交付时写明从 X 找到几条、搜了哪些词。订阅里那两个 X 源只覆盖 25 个固定账号，是补充，不能替代这一步。
+- 其余线索源（播客、YouTube、即刻、GitHub Changelog）只进 `discovery.md`；X 短推按点赞数排序，纯链接和纯回复不显示。
 - 按原始发布时间从新到旧读。转载、网页更新、重新上榜都不改变文章的真实年龄。
 - 登录、关注、验证码或付费后才能看到的正文直接放弃；代理或缓存抓到的隐藏文字不算公开。
 - 机器转录要合并段落、校正专名、标出说话人，不能把字幕墙交给用户。

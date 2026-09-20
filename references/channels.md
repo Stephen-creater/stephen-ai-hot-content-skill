@@ -22,7 +22,7 @@
 | `github` | GitHub | 搜仓库，核对 Star、最近更新、Release | `gh search repos "<查询>" --sort updated --limit 10` | 可用 |
 | `youtube` | YouTube | 取字幕 | `yt-dlp --write-sub --write-auto-sub --sub-lang "zh-Hans,zh,en" --skip-download -o "/tmp/%(id)s" "<URL>"` | 可用 |
 | `bilibili` | B 站 | 搜视频、取字幕 | `bili search "<查询>" --type video -n 10` | 可用 |
-| `twitter` | X | 搜推文、看作者时间线 | `twitter search "<查询>" -n 10`，或走浏览器 | 命令行查询超时；用浏览器 |
+| `x` | X（推特） | 看首页时间线、作者主页、搜关键词，取长帖全文 | `ego-browser`，见下文“X（推特）” | 主力渠道，每批必跑；命令行 `twitter` 超时，不用 |
 | `v2ex` | V2EX | 热门帖、节点、帖子详情 | `curl -s https://www.v2ex.com/api/topics/hot.json` | 可用 |
 | `zhihu` | 知乎 | 搜索、读回答和专栏、看作者文章 | 见下文“知乎” | 需要浏览器登录态 |
 | `browser` | 需要登录或渲染的页面 | X、小红书、Reddit、知乎的搜索、详情、作者页 | `ego-browser`（隔离浏览器） | 可用 |
@@ -49,9 +49,63 @@
 
 已走通的路径：
 
-- X：打开 `/search?q=<查询>`，等帖子出现，逐条取正文和 `/status/` 链接。注意自动翻译，原文语言以“显示原文”为准。
 - 小红书：打开 `/search_result?keyword=<查询>`，进详情核对正文、图片依赖、评论，再看作者主页。评论区的 AI 总结不是作者正文。
 - Reddit：先进社区 `/r/ChatGPT/`，再用社区内搜索 `/r/ChatGPT/search/?q=<查询>&restrict_sr=1`。
+
+## X（推特）
+
+Stephen 日常刷 X，很多文章就是在这里看到并二创的。这个渠道和公众号、中文精选站同等重要，**每批都要跑**，不是缺口时才用。
+没有可用接口：`twitter` 命令行超时，公开 RSS 只覆盖 25 个固定账号，都只能当补充。主力方式是用 ego-browser 打开他登录着的 X。
+
+每批至少做这三件事，做完把查询词和结果数记进 `discovery_ledger.py record`：
+
+1. **首页时间线**：打开 `https://x.com/home`，看最近 24 小时。这是他关注的人今天在聊什么，别的渠道看不到。
+2. **重点作者主页**：打开 `https://x.com/<handle>`，看有没有新的长帖或实测。名单见 `resources/content_curator_sources.json` 里 `X 一线作者雷达` 和 `follow-builders` 两组，也可以从时间线里新发现的人补。
+3. **关键词搜索**：`https://x.com/search?q=<查询>&f=live`（按时间）或 `&f=top`（按热度）。查询词围绕 [信息源清单](source_discovery_playbook.md) 的“搜索组合”，再加上当天多源刷屏里冒出来的名字。
+
+三段实测可用的取材代码（2026-09-20 实测通过，`ego-browser nodejs < 脚本文件`；一个批次共用一个 task space）：
+
+```js
+// 1. 首页时间线：他关注的人今天在聊什么
+const task = await taskSpace("X 渠道");           // 后续轮次用 taskSpace(<上一轮打印的 spaceId>)
+const page = task.page("p1");
+await page.goto("https://x.com/home");
+await page.waitForTimeout(4000);
+console.log(await page.evaluate(() => [...document.querySelectorAll("article")].slice(0, 30).map((a) => ({
+  text: a.innerText.replace(/\n/g, " ").slice(0, 160),
+  link: [...a.querySelectorAll("a")].map((x) => x.href).find((h) => h.includes("/status/")),
+}))));
+```
+
+```js
+// 2. 关键词搜索：f=live 按时间，f=top 按热度；作者主页把 URL 换成 https://x.com/<handle>
+await page.goto("https://x.com/search?q=" + encodeURIComponent("Agent 实测") + "&f=live");
+```
+
+```js
+// 3. 长帖取全文：只留作者自己的那几条，连起来才是完整正文
+await page.goto("<帖子链接>");
+await page.waitForTimeout(4000);
+console.log(await page.evaluate(() => {
+  const author = location.pathname.split("/")[1].toLowerCase();
+  return [...document.querySelectorAll("article")]
+    .map((a) => ({
+      handle: ([...a.querySelectorAll("a")].map((x) => new URL(x.href).pathname.split("/")[1]).find(Boolean) || "").toLowerCase(),
+      text: a.innerText,
+    }))
+    .filter((p) => p.handle === author)
+    .map((p) => p.text)
+    .join("\n");
+}));
+```
+
+取材要点：
+
+- **长帖要展开**：一条主推下面常挂着整串（thread），点开“显示更多”和回复串，把作者自己的部分连起来才是完整正文。只取第一条等于断章。
+- **看数字**：转赞数、谁转的、评论区在吵什么，这些是热度判断的依据，抓取脚本拿不到。写进登记时的备注。
+- **注意自动翻译**：X 会把外文自动译成中文，原文语言以“显示原文”为准。中文长帖才算中文材料。界面语言不一定是中文（实测这个账号是葡萄牙语，“显示原文”写作 Mostrar tradução），所以按结构取元素，不要按按钮文字找。
+- **登记**：值得读全文的长帖存成文本文件，再 `.venv/bin/python3 scripts/add_source.py <帖子链接> --platform x --creator "<作者>" --content-file <正文文件> --notes "转赞数、为什么值得"`。英文官方发布帖加 `--language en --official-release`。登记后重跑抓取，由程序走资格判定，不要手写“这篇合格”。
+- **只读**：不发帖、不点赞、不关注、不回复，不动 Stephen 的账号状态。
 
 ## 知乎
 

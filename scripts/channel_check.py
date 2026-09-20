@@ -21,7 +21,7 @@ CHANNELS: dict[str, tuple[str | None, str | None, str]] = {
     "twitter": ("twitter", 'twitter search "Claude Code" -n 2', "X 搜索（需要本机已有登录态）"),
     "v2ex": ("curl", 'curl -s -m 15 https://www.v2ex.com/api/topics/hot.json', "V2EX 热门和帖子"),
     "zhihu": ("opencli", "opencli zhihu --help -f yaml", "知乎只读命令说明；取数据需走浏览器登录态"),
-    "browser": ("ego-browser", None, "隔离浏览器，用于必须登录或渲染的页面（X、小红书、Reddit、知乎）"),
+    "browser": ("ego-browser", None, "隔离浏览器；X 每批必跑，另用于小红书、Reddit、知乎"),
     "local_transcribe": ("ffmpeg", None, "本机离线语音转文字的前置工具"),
 }
 

@@ -739,12 +739,14 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "content": "",
         "published": row.get("published", ""),
         "source_name": row.get("creator") or platform,
-        "source_category": "官方发布（人工登记）" if row.get("official_release") else "中文人工投喂",
+        "source_category": ("官方发布（人工登记）" if row.get("official_release")
+                            else "X 长帖（人工登记）" if platform == "x" else "中文人工投喂"),
         "source_priority": int(row.get("priority", 5)),
         "source_type": platform,
         "source_role": "candidate",
         "language": row.get("language", "zh"),
-        "maturity": row.get("maturity", "secondary"),
+        # An X thread is the author writing first-hand, like a blog post they never moved off the platform.
+        "maturity": "primary" if platform == "x" else row.get("maturity", "secondary"),
         "content_form": "video" if platform in {"bilibili", "youtube"} else "podcast" if platform in {"xiaoyuzhou", "podcast"} else "article",
         "content_status": "summary",
         "github_stars": row.get("github_stars"),
@@ -837,7 +839,7 @@ def load_inbox(path: Path | None, settings: dict, skip_urls: set[str] | None = N
     return [inbox_item(row, settings) for row in rows if canonical_url(row.get("url", "")) not in skipped]
 
 
-DISCOVERY_FIELDS = ("title", "link", "published", "source_name", "source_category", "language", "content_form", "audio_url")
+DISCOVERY_FIELDS = ("title", "link", "published", "source_name", "source_category", "language", "content_form", "audio_url", "engagement")
 
 
 def discovery_digest(items: list[dict], now: datetime, max_age_days: int) -> list[dict]:
@@ -856,18 +858,29 @@ def discovery_digest(items: list[dict], now: datetime, max_age_days: int) -> lis
     return [row for _, row in rows]
 
 
+def is_thin_tweet(row: dict) -> bool:
+    """A tweet that is only a link or a reply handle says nothing on its own."""
+    text = re.sub(r"https?://\S+|@\w+|[\s\u200b]+", "", str(row.get("title") or ""))
+    return len(text) < 20
+
+
 def render_discovery_markdown(rows: list[dict]) -> str:
     groups: dict[str, list[dict]] = {}
     for row in rows:
         groups.setdefault(row.get("source_category") or "其他线索", []).append(row)
-    lines = [f"# 线索（{len(rows)} 条，按来源类别分组，组内从新到旧）"]
+    lines = [f"# 线索（{len(rows)} 条，按来源类别分组）"]
     # Official launches first: Stephen writes release explainers within a day or two.
     ordered = sorted(groups.items(), key=lambda pair: not pair[0].startswith("官方发布"))
     for category, members in ordered:
+        # Where likes are known (X), the hottest posts first; a timeline in date order hides them.
+        if any(row.get("engagement") for row in members):
+            members = [row for row in members if not is_thin_tweet(row)]
+            members.sort(key=lambda row: int(row.get("engagement") or 0), reverse=True)
         lines += ["", f"## {category}（{len(members)}）"]
         for row in members:
             day = (parse_datetime(row.get("published")) or None)
-            lines.append(f"- {day.date().isoformat() if day else '日期未知'} [{row.get('title', '')}]({row.get('link', '')}) · {row.get('source_name', '')}")
+            likes = f" · {int(row['engagement'])} 赞" if row.get("engagement") else ""
+            lines.append(f"- {day.date().isoformat() if day else '日期未知'} [{row.get('title', '')}]({row.get('link', '')}) · {row.get('source_name', '')}{likes}")
     return "\n".join(lines) + "\n"
 
 

@@ -39,7 +39,7 @@ def main() -> None:
     parser.add_argument("url")
     parser.add_argument(
         "--platform",
-        choices=["wechat", "bilibili", "youtube", "xiaoyuzhou", "podcast", "web"],
+        choices=["wechat", "bilibili", "youtube", "xiaoyuzhou", "podcast", "web", "x"],
         required=True,
     )
     parser.add_argument("--creator", default="")

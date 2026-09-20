@@ -103,6 +103,8 @@ def detect(history: dict, now: datetime, *, min_sources: int = 4, min_chinese: i
 
 
 def render(rows: list[dict]) -> str:
+    """英文圈先热、中文还没跟进的名字不在这里：只按英文来源统计时，噪声全是 think、need 这类常用词。
+    那段时间差由 Agent 每批用 ego-browser 直接看 X 覆盖，见 SKILL.md 第 2 步。"""
     if not rows:
         return ""
     lines = [

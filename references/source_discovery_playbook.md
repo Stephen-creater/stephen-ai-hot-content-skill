@@ -37,9 +37,11 @@ BestBlogs、觉醒AI 文章库、宝玉。别人已经筛过一遍的高质量�
 
 中文播客订阅主要走小宇宙，通过公共 RSSHub 的 `/xiaoyuzhou/podcast/<ID>`，订阅里带节目介绍和音频地址。
 
-### 第四层：英文一手和社交短内容（只作线索）
+### 第四层：X 与英文一手（X 是主力渠道，其余只作线索）
 
-英文博客和 newsletter、X 一线作者、YouTube 实操频道、即刻和 Telegram 短内容。它们只进 `discovery.md`，不进候选。
+X 不在这一层的“只作线索”里。它是和中文精选站、公众号同等重要的主力渠道，每批都要用 ego-browser 实际去看：首页时间线、重点作者主页、关键词搜索。看到的长帖（中文长帖、完整实测、英文官方发布帖）登记成候选，走正常资格判定；零散短推仍然只作线索。做法见 [取材渠道手册](channels.md) 的“X（推特）”。
+
+订阅里的两个 X 源（`follow-builders`、`X 一线作者雷达`）只覆盖 25 个固定账号、只留最近 24 小时，是补充。它们和英文博客、newsletter、YouTube 实操频道、即刻、Telegram 短内容一样，只进 `discovery.md`。
 
 例外是主流厂商的官方发布：OpenAI（含 Developers）、Anthropic、Claude、Google DeepMind 的官方博客标了 `official_release`，发布后 5 天内的原文直接作候选。OpenAI 官网拒绝脚本请求，标了 `reader_fallback`，直连失败时改用 Jina 网页读取取正文。
 
