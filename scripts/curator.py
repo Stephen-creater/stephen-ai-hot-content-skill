@@ -295,6 +295,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         failures.append("视频缺少逐字稿，无法核验完整论证")
     if len(content) < 500 and len(summary) < 80:
         failures.append("材料过少")
+    if content_status == "blocked":
+        failures.append("站点返回验证页，没有取到正文")
     if content_form == "article" and content_status == "fulltext" and len(content) < minimum_article_chars(profile):
         failures.append("文章正文偏短，不足以支撑高质量二创")
     if any(word.lower() in haystack for word in gates.get("locked_content_terms", [])):

@@ -62,7 +62,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - `resources/source_portfolio.json`：12 类取材渠道和权重，收工检查用。
 
 脚本（按流程）：
-- `scrape_aihot.py`：抓取总入口；`skill_version.py`：确认跑批用的是最新 Skill；`curator.py`：一票否决和阅读顺序；`published.py`：对照已发布文章标出同名候选；`buzz.py`：找出最近 3 天在很多来源同时刷屏的新名字，列在标题清单开头。
+- `scrape_aihot.py`：抓取总入口；`harvest_leads.py`：把线索补上正文登记成候选；`browser_fetch.py`：抓不到的正文用 ego-browser 兜底；`skill_version.py`：确认跑批用的是最新 Skill；`curator.py`：一票否决和阅读顺序；`published.py`：对照已发布文章标出同名候选；`buzz.py`：找出最近 3 天在很多来源同时刷屏的新名字，列在标题清单开头。
 - `add_source.py`：登记 Agent 手动找到的文章；`history_check.py`：读全文前查重。
 - `editorial_judgment.py`：推荐理由格式检查（六维打分、原文引用、正文指纹）。
 - `publish_batch.py`：发布前总检查，`--check-only` 只检查不登记；`report.py`：生成审核页。

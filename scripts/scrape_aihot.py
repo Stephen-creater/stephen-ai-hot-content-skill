@@ -30,6 +30,7 @@ from import_feedback import final_reviewed_candidates, final_reviewed_ids
 from report import generate_report
 import buzz
 import published
+import browser_fetch
 from skill_version import behind_remote, current_commit
 
 
@@ -543,7 +544,45 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
         return [], f"{source['name']}: {exc}"
 
 
+# 站点返回的验证页，不是正文。把它当正文会报成“文章正文偏短”，让人以为是内容不行。
+BLOCKED_MARKERS = ("环境异常", "完成验证后即可继续访问", "去验证", "请在微信客户端打开链接", "参数错误", "此内容因违规无法查看")
+
+
+def looks_blocked(text: str) -> bool:
+    body = clean_text(text)
+    return len(body) < 600 and any(marker in body for marker in BLOCKED_MARKERS)
+
+
 READER_SLOTS = threading.Semaphore(2)  # the free Jina reader answers 429 when hit in parallel
+
+
+def rescue_with_browser(items: list[dict], settings: dict) -> int:
+    """直连和网页读取都没拿到正文的，交给 ego-browser 再取一次。
+
+    微信、知乎这类站点只对真实浏览器放行。没有这一步，整个源就是哑的，
+    而且报错写成“正文偏短”，看上去像内容不合格。
+    """
+    stuck = [
+        item for item in items
+        if item.get("source_role") != "discovery" and item.get("link")
+        and len(item.get("content") or "") < 400
+        and (item.get("content_status") == "blocked" or item.get("fetch_error"))
+    ]
+    if not stuck:
+        return 0
+    limit = int(settings.get("browser_fallback_limit", 12))
+    fetched = browser_fetch.fetch([item["link"] for item in stuck], limit=limit)
+    rescued = 0
+    for item in stuck:
+        row = fetched.get(item["link"])
+        if not row or len(row.get("text", "")) < 400:
+            continue
+        item.update(content=row["text"], content_status="fulltext", content_origin="ego_browser",
+                    image_count=row.get("images"))
+        item.pop("fetch_error", None)
+        rescued += 1
+    print(f"浏览器兜底：{len(stuck)} 条没取到正文，取回 {rescued} 条（上限 {limit}）")
+    return rescued
 
 
 def read_via_reader(item: dict, settings: dict) -> dict:
@@ -639,6 +678,10 @@ def hydrate_direct(item: dict, settings: dict) -> dict:
         return item
     try:
         extracted = trafilatura.extract(text, include_comments=False, include_tables=True) or ""
+        if looks_blocked(extracted):
+            item["content_status"] = "blocked"
+            item["fetch_error"] = "站点返回验证页，没有取到正文"
+            return item
         if extracted:
             item["content"] = extracted.strip()
             with_images = trafilatura.extract(text, include_comments=False, include_images=True, output_format="xml") or ""
@@ -1006,6 +1049,7 @@ def main() -> None:
     parser.add_argument("--round", type=int, help="本批第几轮检索，从 1 开始；与 --batch 同时使用")
     parser.add_argument("--pool", type=int, help="输出的待终审条数，默认取画像 report_candidate_count（30，对应默认 10 条选题）；要 20 条时可设 60")
     parser.add_argument("--no-cache", action="store_true", help="忽略共享抓取缓存，全部重新请求")
+    parser.add_argument("--no-browser", action="store_true", help="跳过 ego-browser 兜底取正文（调试用）")
     args = parser.parse_args()
     if args.batch and (args.round is None or args.round < 1):
         parser.error("使用 --batch 记账时必须同时提供 --round（从 1 开始）")
@@ -1023,6 +1067,7 @@ def main() -> None:
         reviewed_candidates += delivered_candidates(ROOT / "topics")
     reviewed_urls = {canonical_url(row.get("link", "")) for row in reviewed_candidates if row.get("link")}
 
+    browser_rescued = 0
     if args.fixture:
         items = load_json(args.fixture)
     else:
@@ -1042,6 +1087,8 @@ def main() -> None:
         items = [item for item in items if canonical_url(item.get("link", "")) not in reviewed_urls]
         with concurrent.futures.ThreadPoolExecutor(max_workers=settings["hydrate_workers"]) as executor:
             items = list(executor.map(lambda item: hydrate(item, settings), items))
+        if not args.no_browser:
+            browser_rescued = rescue_with_browser(items, settings)
 
     stale = "" if args.fixture else behind_remote()
     if stale:
@@ -1106,6 +1153,8 @@ def main() -> None:
                 "skipped_reviewed_count": skipped_reviewed_count,
                 "skipped_content_duplicate_count": skipped_content_duplicate_count,
                 "rejected_by_gate_count": rejected_by_gate_count,
+                "browser_rescued_count": browser_rescued,
+                "blocked_by_site_count": sum(1 for item in items if item.get("content_status") == "blocked"),
                 "held_for_editorial_review_count": held_for_editorial_review_count,
                 "candidate_count": len(candidates),
                 "default_topic_count": int(profile.get("default_topic_count", 10)),

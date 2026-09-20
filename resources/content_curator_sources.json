@@ -443,6 +443,7 @@
     "rss_items_per_source": 12,
     "web_links_per_source": 15,
     "hydrate_workers": 16,
+    "browser_fallback_limit": 25,
     "request_timeout_seconds": 8,
     "cache_ttl_seconds": 3600,
     "page_cache_ttl_seconds": 604800,

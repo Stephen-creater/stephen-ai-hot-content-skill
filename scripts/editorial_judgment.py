@@ -51,6 +51,7 @@ HARD_FAILURE_MARKERS = {
     "英文官方发布已过当天解读窗口": "verification_only_language",
     "核验来源，不进入默认选题": "verification_only_source",
     "缺少完整文字材料": "incomplete_text",
+    "站点返回验证页": "blocked_by_site",
     "材料过少": "incomplete_text",
     "不足以支撑高质量二创": "insufficient_source_material",
     "只有版本号": "invalid_material",
