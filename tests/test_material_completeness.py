@@ -49,10 +49,19 @@ class MaterialCompletenessTest(unittest.TestCase):
             (folder / 'clip.en.vtt').write_text('English words only. ' * 50)
             (folder / 'clip.zh-Hans.vtt').write_text('完整中文字幕保留了原始结论。' * 50)
             return ''
-        with patch('scrape_aihot.shutil.which', return_value='/bin/yt-dlp'), patch('scrape_aihot.subprocess.check_output', side_effect=download):
+        with patch('scrape_aihot.shutil.which', return_value='/bin/yt-dlp'), patch('scrape_aihot.subprocess.run', side_effect=download):
             text = fetch_youtube_transcript('https://www.youtube.com/watch?v=sample')
         self.assertIn('完整中文字幕', text)
         self.assertNotIn('English words', text)
+
+    def test_a_missing_language_does_not_throw_away_the_subtitles_that_did_download(self):
+        def partial(command, **kwargs):
+            folder = Path(command[command.index('-o') + 1]).parent
+            (folder / 'clip.en.vtt').write_text('The speaker explains the workflow. ' * 50)
+            return type('R', (), {'returncode': 1, 'stdout': 'ERROR: 429 for zh-Hans'})()
+        with patch('scrape_aihot.shutil.which', return_value='/bin/yt-dlp'), patch('scrape_aihot.subprocess.run', side_effect=partial):
+            text = fetch_youtube_transcript('https://www.youtube.com/watch?v=sample')
+        self.assertIn('speaker explains', text)
     def test_reviewed_urls_are_skipped_before_expensive_reads(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / 'inbox.json'

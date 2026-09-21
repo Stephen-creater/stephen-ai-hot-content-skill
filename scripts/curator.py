@@ -273,8 +273,6 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     # Stephen writes major launches the same day straight from the official English post;
     # other English material, and official posts past the launch window, stay leads.
     official_release = bool(item.get("official_release")) and age_days is not None and age_days <= int(profile.get("time_sensitive_max_age_days", 5))
-    if language == "en" and not official_release:
-        failures.append("英文官方发布已过当天解读窗口，只作线索" if item.get("official_release") else "英文一手信息，优先用于核验")
     if official_release:
         reasons.append("官方发布原文，仍在事件时效窗口内")
     if age_days is not None and event_words and not (core_team_interview or long_interview) and age_days > int(profile.get("time_sensitive_max_age_days", 5)):

@@ -6,7 +6,7 @@
       "family": "chinese_podcasts",
       "category": "中文播客原始音频线索",
       "notes": "只作线索：命中单集先找 BestBlogs 转录或官方文字版，没有再用 local_transcribe.py 本地转写。小宇宙节目经公共 RSSHub（/xiaoyuzhou/podcast/<ID>）订阅，主实例失败时换 mirror_hosts。",
-      "defaults": {"content_form": "podcast", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "zh", "maturity": "primary", "items_limit": 8, "mirror_hosts": ["https://rsshub.imlg.co"]},
+      "defaults": {"content_form": "podcast", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "zh", "maturity": "primary", "items_limit": 8, "mirror_hosts": ["https://rsshub.imlg.co"]},
       "feeds": [
         {"name": "硅谷101 官方播客", "url": "https://feeds.fireside.fm/sv101/rss"},
         {"name": "硅谷早知道", "url": "https://feeds.fireside.fm/guiguzaozhidao/rss"},
@@ -43,7 +43,7 @@
       "family": "chinese_longform_web",
       "category": "中文一线短内容线索",
       "notes": "即刻用户（RSSHub /jike/user/<ID>）与 Telegram 频道（/telegram/channel/<名>）。短帖只作线索，命中后找作者的公众号长文或访谈。",
-      "defaults": {"priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "zh", "maturity": "primary", "items_limit": 6, "mirror_hosts": ["https://rsshub.imlg.co"]},
+      "defaults": {"priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "zh", "maturity": "primary", "items_limit": 6, "mirror_hosts": ["https://rsshub.imlg.co"]},
       "feeds": [
         {"name": "歸藏（即刻）", "url": "https://rsshub.bestblogs.dev/jike/user/0ae2afa7-9b10-4b3a-ab7e-15fbf847038d"},
         {"name": "AI产品黄叔（即刻）", "url": "https://rsshub.bestblogs.dev/jike/user/E272054E-D904-4F13-A7EC-9ABD2CBF209E"},
@@ -70,7 +70,7 @@
       "type": "rss",
       "url": "https://simonwillison.net/atom/everything/",
       "priority": 4,
-      "role": "discovery",
+      "role": "candidate",
       "cache_ttl_seconds": 86400,
       "language": "en",
       "maturity": "primary"
@@ -82,7 +82,7 @@
       "type": "rss",
       "url": "https://www.latent.space/feed",
       "priority": 4,
-      "role": "discovery",
+      "role": "candidate",
       "cache_ttl_seconds": 86400,
       "language": "en",
       "maturity": "primary"
@@ -94,7 +94,7 @@
       "type": "rss",
       "url": "https://www.oneusefulthing.org/feed",
       "priority": 4,
-      "role": "discovery",
+      "role": "candidate",
       "cache_ttl_seconds": 86400,
       "language": "en",
       "maturity": "primary"
@@ -106,7 +106,7 @@
       "type": "rss",
       "url": "https://www.lennysnewsletter.com/feed",
       "priority": 4,
-      "role": "discovery",
+      "role": "candidate",
       "cache_ttl_seconds": 86400,
       "language": "en",
       "maturity": "primary"
@@ -118,7 +118,7 @@
       "type": "rss",
       "url": "https://www.geekpark.net/rss",
       "priority": 4,
-      "role": "discovery",
+      "role": "candidate",
       "cache_ttl_seconds": 86400,
       "language": "zh",
       "maturity": "secondary"
@@ -131,7 +131,7 @@
       "data_url": "https://news.learnprompt.pro/data/latest-24h-all.json",
       "items_limit": 250,
       "priority": 4,
-      "role": "discovery",
+      "role": "candidate",
       "cache_ttl_seconds": 86400,
       "language": "unknown",
       "maturity": "unknown",
@@ -179,7 +179,7 @@
       "type": "rss",
       "url": "https://sspai.com/feed",
       "priority": 3,
-      "role": "discovery",
+      "role": "candidate",
       "cache_ttl_seconds": 86400,
       "language": "zh",
       "maturity": "secondary",
@@ -199,7 +199,7 @@
     },
     {"name": "WayToAGI 知识库精选", "family": "chinese_longform_web", "category": "中文AI精选主入口", "type": "waytoagi", "url": "https://www.waytoagi.com/zh", "days": 3, "items_limit": 30, "priority": 5, "role": "candidate", "language": "zh", "maturity": "secondary", "cache_ttl_seconds": 3600, "notes": "每天一页「知识库精选」，六到八篇人工挑选的中文文章，正文在飞书知识库页上，直连可读。和推特同级的重要来源。"},
     {"name": "BestBlogs AI 高分中文", "family": "chinese_longform_web", "category": "中文AI精选主入口", "type": "bestblogs", "url": "https://www.bestblogs.dev/zh/feeds/rss?category=ai&minScore=90&language=zh&type=article", "api_url_template": "https://www.bestblogs.dev/api/proxy/resources/{id}?language=zh", "items_limit": 60, "title_exclude_pattern": "活动|报名|招募|招聘|直播预告|周报|早报|日报|速递|快讯|融资|议程|倒计时|课程上新|限时", "priority": 5, "role": "candidate", "language": "zh", "maturity": "secondary", "notes": "主入口。官方公开 RSS（README 与 BestBlogs_RSS_Doc.md 有参数文档，每小时更新，单 feed 最多 100 条）；资源接口返回原文 URL、来源、评分、字数与正文 HTML。评分和摘要由其 AI 生成，只决定先读什么，不替代终审；交付前仍回核原文可读。2026-09-17 连续 3 次请求均 200。"},
-    {"name": "BestBlogs AI 播客转录", "family": "chinese_podcasts", "category": "中文播客整期转录", "type": "bestblogs", "url": "https://www.bestblogs.dev/zh/feeds/rss?type=podcast&category=ai&minScore=85", "api_url_template": "https://www.bestblogs.dev/api/proxy/resources/{id}?language=zh", "items_limit": 15, "skip_types": ["status", "video", "article"], "priority": 5, "role": "candidate", "language": "zh", "maturity": "primary", "notes": "覆盖张小珺、晚点聊、42章经、十字路口、AI炼金术等约 30 档节目。接口给出按说话人的 ASR 转录，抓取时合并成段落；专名可能错（如鹿客→陆客），说话人只有编号。优先找公众号官方文字版，没有时再以此为底稿，交付前必须校对专名并补上主持人/嘉宾标签。"},
+    {"name": "BestBlogs AI 播客转录", "family": "chinese_podcasts", "category": "中文播客整期转录", "type": "bestblogs", "url": "https://www.bestblogs.dev/zh/feeds/rss?type=podcast&category=ai&minScore=60", "api_url_template": "https://www.bestblogs.dev/api/proxy/resources/{id}?language=zh", "items_limit": 40, "skip_types": ["status", "video", "article"], "priority": 5, "role": "candidate", "language": "zh", "maturity": "primary", "notes": "覆盖张小珺、晚点聊、42章经、十字路口、AI炼金术等约 30 档节目。接口给出按说话人的 ASR 转录，抓取时合并成段落；专名可能错（如鹿客→陆客），说话人只有编号。优先找公众号官方文字版，没有时再以此为底稿，交付前必须校对专名并补上主持人/嘉宾标签。"},
     {"name": "BestBlogs 本周 AI 精选", "family": "chinese_longform_web", "category": "中文AI精选主入口", "type": "bestblogs", "url": "https://www.bestblogs.dev/zh/feeds/rss?category=ai&featured=y&type=article&language=zh&timeFilter=1w", "api_url_template": "https://www.bestblogs.dev/api/proxy/resources/{id}?language=zh", "items_limit": 30, "title_exclude_pattern": "活动|报名|招募|招聘|直播预告|周报|早报|日报|速递|快讯|融资|议程|倒计时|课程上新|限时", "priority": 5, "role": "candidate", "language": "zh", "maturity": "secondary"},
     {
       "name": "公众号访谈与文字稿",
@@ -340,29 +340,29 @@
         {"name": "张可", "url": "https://zhangke.space/feed", "use_feed_content": true, "priority": 3, "items_limit": 3}
       ]
     },
-    {"name": "Anthropic Engineering（镜像）", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "notes": "英文一手雷达只发现选题、不进候选。Anthropic、OpenAI、Cursor 官方无 RSS，使用 Olshansk/rss-feeds 镜像。"},
+    {"name": "Anthropic Engineering（镜像）", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_engineering.xml", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "notes": "英文一手雷达只发现选题、不进候选。Anthropic、OpenAI、Cursor 官方无 RSS，使用 Olshansk/rss-feeds 镜像。"},
     {"name": "OpenAI Developers（镜像）", "category": "官方发布（重大发布可直接作候选）", "type": "rss", "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_openai_developer.xml", "priority": 5, "role": "candidate", "official_release": true, "reader_fallback": true, "cache_ttl_seconds": 3600, "language": "en", "maturity": "primary"},
     {"name": "Claude Blog（镜像）", "category": "官方发布（重大发布可直接作候选）", "type": "rss", "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_claude.xml", "priority": 5, "role": "candidate", "official_release": true, "cache_ttl_seconds": 3600, "language": "en", "maturity": "primary", "notes": "claude.com/blog，Claude 产品功能发布多在这里而不在 Anthropic News。"},
-    {"name": "Cursor Blog（镜像）", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_cursor.xml", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "The Pragmatic Engineer", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://newsletter.pragmaticengineer.com/feed", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Hamel Husain", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://hamel.dev/index.xml", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Addy Osmani", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://addyo.substack.com/feed", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Jason Liu", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://jxnl.co/feed_rss_created.xml", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Every AI & I", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://feeds.transistor.fm/how-do-you-use-chatgpt", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Training Data（红杉）", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://feeds.megaphone.fm/trainingdata", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Y Combinator / Lightcone", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCcefcZRL2oaA_uBNeo5UOWg", "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "follow-builders（X 一线作者）", "family": "twitter_builder_graph", "category": "英文一手雷达", "type": "follow_builders", "url": "https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json", "items_limit": 60, "priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "notes": "免登录的中心化 JSON，覆盖 Claude Code、Codex 等团队一线作者，只保留最近 24 小时。命中后按宝玉、Web3天空之城、瓜哥AI新知、Z Finance、BestBlogs 顺序找中文成熟稿；都没有就是中文空白。"},
-    {"name": "Ben's Bites", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.bensbites.com/feed", "items_limit": 10, "priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Dwarkesh Patel", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.dwarkeshpatel.com/feed", "items_limit": 10, "priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Stratechery", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "http://stratechery.com/feed", "items_limit": 10, "priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "LukeW", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "http://feeds.feedburner.com/FunctioningForm", "items_limit": 10, "priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Cursor Blog（镜像）", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_cursor.xml", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "The Pragmatic Engineer", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://newsletter.pragmaticengineer.com/feed", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Hamel Husain", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://hamel.dev/index.xml", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Addy Osmani", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://addyo.substack.com/feed", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Jason Liu", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://jxnl.co/feed_rss_created.xml", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Every AI & I", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://feeds.transistor.fm/how-do-you-use-chatgpt", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Training Data（红杉）", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://feeds.megaphone.fm/trainingdata", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Y Combinator / Lightcone", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCcefcZRL2oaA_uBNeo5UOWg", "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "follow-builders（X 一线作者）", "family": "twitter_builder_graph", "category": "英文一手雷达", "type": "follow_builders", "url": "https://raw.githubusercontent.com/zarazhangrui/follow-builders/main/feed-x.json", "items_limit": 60, "priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "notes": "免登录的中心化 JSON，覆盖 Claude Code、Codex 等团队一线作者，只保留最近 24 小时。命中后按宝玉、Web3天空之城、瓜哥AI新知、Z Finance、BestBlogs 顺序找中文成熟稿；都没有就是中文空白。"},
+    {"name": "Ben's Bites", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.bensbites.com/feed", "items_limit": 10, "priority": 3, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Dwarkesh Patel", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.dwarkeshpatel.com/feed", "items_limit": 10, "priority": 3, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Stratechery", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "http://stratechery.com/feed", "items_limit": 10, "priority": 3, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "LukeW", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "http://feeds.feedburner.com/FunctioningForm", "items_limit": 10, "priority": 3, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
     {
       "name": "X 一线作者雷达",
       "type": "rss_group",
       "family": "twitter_builder_graph",
       "category": "英文一手雷达",
       "notes": "xgo.ing 生成的公开 RSS，无需登录；只能用已生成的地址。与 follow-builders 名单去重后接入。",
-      "defaults": {"priority": 4, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "items_limit": 8},
+      "defaults": {"priority": 4, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "items_limit": 8},
       "feeds": [
         {"name": "a16z", "url": "https://api.xgo.ing/rss/user/f3fedf817599470dbf8d8d11f0872475", "priority": 3, "items_limit": 4},
         {"name": "Simon Willison（X）", "url": "https://api.xgo.ing/rss/user/30ad80be93c84e44acc37d5ddf31db57"},
@@ -389,7 +389,7 @@
       "family": "youtube_global",
       "category": "英文一手雷达",
       "notes": "YouTube 官方频道 feed 对部分频道返回 404，统一走 RSSHub /youtube/channel/<频道ID>。命中后用 yt-dlp 取字幕，format_captions.py 整理。",
-      "defaults": {"priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "items_limit": 6, "mirror_hosts": ["https://rsshub.imlg.co"]},
+      "defaults": {"priority": 3, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary", "items_limit": 6, "mirror_hosts": ["https://rsshub.imlg.co"]},
       "feeds": [
         {"name": "How I AI", "url": "https://rsshub.bestblogs.dev/youtube/channel/UCRYY7IEbkHLH_ScJCu9eWDQ"},
         {"name": "AI Engineer", "url": "https://rsshub.bestblogs.dev/youtube/channel/UCLKPca3kwwd-B59HNr-_lvA"},
@@ -397,8 +397,8 @@
         {"name": "Matt Pocock", "url": "https://rsshub.bestblogs.dev/youtube/channel/UCswG6FSbgZjbWtdf_hMLaow"}
       ]
     },
-    {"name": "NN/g", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.nngroup.com/feed/rss", "items_limit": 4, "priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
-    {"name": "Evil Martians", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://evilmartians.com/chronicles.atom", "items_limit": 4, "priority": 3, "role": "discovery", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "NN/g", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://www.nngroup.com/feed/rss", "items_limit": 4, "priority": 3, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
+    {"name": "Evil Martians", "family": "global_newsletters", "category": "英文一手雷达", "type": "rss", "url": "https://evilmartians.com/chronicles.atom", "items_limit": 4, "priority": 3, "role": "candidate", "cache_ttl_seconds": 86400, "language": "en", "maturity": "primary"},
     {
       "name": "OpenAI News",
       "category": "官方发布（重大发布可直接作候选）",
@@ -435,7 +435,7 @@
       "type": "rss",
       "url": "https://github.blog/changelog/feed/",
       "priority": 4,
-      "role": "discovery", "cache_ttl_seconds": 3600,
+      "role": "candidate", "cache_ttl_seconds": 3600,
       "language": "en",
       "maturity": "primary"
     }

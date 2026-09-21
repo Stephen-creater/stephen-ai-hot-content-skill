@@ -89,7 +89,19 @@ def cache_write(settings: dict, key: str, content: bytes, encoding: str | None, 
     os.replace(temp, path)
 
 
-def http_get(url: str, settings: dict, params: dict | None = None, ttl: int | None = None):
+def request_with_retry(url: str, kwargs: dict, attempts: int = 3):
+    """本机代理在压力下会拒连。连接类错误退避重试，别把网络抖动记成“这个源抓不到”。"""
+    for attempt in range(attempts):
+        try:
+            return requests.get(url, **kwargs)
+        except (requests.ConnectionError, requests.Timeout):
+            if attempt == attempts - 1:
+                raise
+            time.sleep(3 * (attempt + 1))
+    raise requests.RequestException("unreachable")
+
+
+def http_get(url: str, settings: dict, params: dict | None = None, ttl: int | None = None, attempts: int = 2):
     """GET through a shared TTL cache; sources update hourly at best, so repeat rounds should not refetch."""
     ttl = int(settings.get("cache_ttl_seconds", 3600) if ttl is None else ttl)
     key = url + ("?" + urlencode(sorted(params.items())) if params else "")
@@ -103,7 +115,7 @@ def http_get(url: str, settings: dict, params: dict | None = None, ttl: int | No
     if params:
         kwargs["params"] = params
     try:
-        response = requests.get(url, **kwargs)
+        response = request_with_retry(url, kwargs, attempts=attempts)
         response.raise_for_status()
     except requests.RequestException as exc:
         # Remember dead endpoints briefly so repeated rounds do not wait out the same timeouts.
@@ -166,7 +178,7 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
     urls = mirror_urls(source)
     for index, url in enumerate(urls):
         try:
-            response = http_get(url, settings, ttl=source.get("cache_ttl_seconds"))
+            response = http_get(url, settings, ttl=source.get("cache_ttl_seconds"), attempts=1)
             response.raise_for_status()
         except requests.RequestException:
             if index == len(urls) - 1:
@@ -621,6 +633,14 @@ def looks_blocked(text: str) -> bool:
 READER_SLOTS = threading.Semaphore(2)  # the free Jina reader answers 429 when hit in parallel
 
 
+VIDEO_HOSTS = ("youtube.com", "youtu.be", "bilibili.com", "b23.tv")
+
+
+def is_video_link(link: str) -> bool:
+    host = urlsplit(link).netloc.lower()
+    return any(host == name or host.endswith("." + name) for name in VIDEO_HOSTS)
+
+
 def rescue_with_browser(items: list[dict], settings: dict) -> int:
     """直连和网页读取都没拿到正文的，交给 ego-browser 再取一次。
 
@@ -629,7 +649,7 @@ def rescue_with_browser(items: list[dict], settings: dict) -> int:
     """
     stuck = [
         item for item in items
-        if item.get("source_role") != "discovery" and item.get("link")
+        if item.get("link")
         and len(item.get("content") or "") < 400
         and (item.get("content_status") == "blocked" or item.get("fetch_error"))
     ]
@@ -681,14 +701,28 @@ def read_via_reader(item: dict, settings: dict) -> dict:
 
 
 def hydrate(item: dict, settings: dict) -> dict:
-    if not item.get("link") or item.get("source_role") == "discovery":
+    if not item.get("link"):
         return item
+    # 视频和播客页抓下来只有播放器，正文在字幕里。
+    if item.get("content_status") != "transcript" and is_video_link(item["link"]):
+        try:
+            transcript = fetch_youtube_transcript(item["link"])
+            if len(transcript) >= 400:
+                item.update(content=transcript, content_status="transcript", content_origin="captions",
+                            content_form="video")
+                return item
+        except Exception as exc:
+            item["fetch_error"] = f"字幕读取失败：{exc}"[:160]
     item = hydrate_direct(item, settings)
-    if item.get("reader_fallback") and len(item.get("content") or "") < 400:
+    # 直连失败（站点 500、拒绝脚本、验证页）时都试一次网页读取，不只对个别源开。
+    short = len(item.get("content") or "") < 400
+    if short and (item.get("reader_fallback") or item.get("fetch_error") or item.get("content_status") == "blocked"):
         try:
             item = read_via_reader(item, settings)
         except Exception as exc:
             item["fetch_error"] = f"{item.get('fetch_error', '')}；网页读取也失败：{exc}".lstrip("；")
+    if len(item.get("content") or "") >= 400 and item.get("content_status") == "blocked":
+        item["content_status"] = "fulltext"
     return item
 
 
@@ -708,12 +742,7 @@ def hydrate_direct(item: dict, settings: dict) -> dict:
             raw, truncated = base64.b64decode(cached["body"]), bool(cached.get("truncated"))
             text = decode_html(raw, cached.get("encoding"))
         else:
-            with requests.get(
-                item["link"],
-                headers=HEADERS,
-                timeout=settings["request_timeout_seconds"],
-                stream=True,
-            ) as response:
+            with request_with_retry(item["link"], {"headers": HEADERS, "timeout": settings["request_timeout_seconds"], "stream": True}) as response:
                 response.raise_for_status()
                 chunks = []
                 size = 0
@@ -807,25 +836,29 @@ def fetch_youtube_transcript(url: str) -> str:
         raise RuntimeError("未找到 yt-dlp")
     with tempfile.TemporaryDirectory(prefix="stephen-youtube-") as directory:
         template = str(Path(directory) / "%(id)s")
-        subprocess.check_output(
+        # 少一种语言就整体报错太脆：YouTube 常对自动翻译的中文字幕返回 429，英文字幕其实已经下好了。
+        subprocess.run(
             [
                 "yt-dlp",
+                "-i",  # 一种语言 429 就整轮中止，英文字幕会被连累
                 "--write-sub",
                 "--write-auto-sub",
                 "--sub-lang",
                 "zh-Hans,zh,en",
                 "--sub-format",
                 "vtt",
+                "--sleep-requests",
+                "1",
                 "--skip-download",
                 "-o",
                 template,
                 url,
             ],
+            capture_output=True,
             text=True,
             encoding="utf-8",
             errors="replace",
-            stderr=subprocess.STDOUT,
-            timeout=90,
+            timeout=120,
         )
         # Alphabetical order selects .en before .zh even when Chinese exists.
         paths = sorted(Path(directory).glob("*.vtt"), key=lambda p: (

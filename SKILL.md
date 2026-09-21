@@ -55,7 +55,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。输出里的 `triage.md` 列出全部合格材料（已过一票否决和查重）的标题、来源、日期、字数和开头，按来源优先级和新鲜度排列；全文在 `eligible.json`。`triage.md` 开头的“最近 3 天多源刷屏”列出几天内在很多来源同时冒出来的新名字，这是单篇文章看不出的热度，先看它：每个刷屏的名字至少挑一篇最完整的稿子读全文；中文稿都不好时，用 `add_source.py` 登记中文 X 长帖或官网原文。然后**通读 `triage.md` 全部标题，自己挑出值得读全文的**，一般是目标条数的 3 倍左右（默认 10 条选题读约 30 篇）。`candidates.json` 只是按顺序截的前 30 篇，不代表推荐。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
 - 重大发布是 Stephen 写得最多的一类，他常直接拿英文官方原文写当天解读。所以 OpenAI（含 Developers）、Anthropic、Claude、Google DeepMind 的官方博客是候选源：发布后 5 天内的原文直接进 `triage.md` 并排在前面，超过 5 天自动退回线索。官方博客里客户案例、合作、公益和政策稿占多数，这些不推荐；值得读的是三类：新模型、新产品、新功能的正式发布，厂商自己团队的一手做法和内部数据，头部实验室首次展示的新能力方向。X 上的官方发布帖或官方文档页用 `add_source.py <链接> --platform web --language en --official-release --content-file <正文>` 登记。有中文首发报道或实测时，两篇都可以读，推荐讲得更清楚的那篇。
 - **每批必跑 X**：Stephen 很多文章是在 X 上看到并二创的，这个渠道和公众号同等重要。用 ego-browser 打开他登录的 X，看首页时间线、翻重点作者主页、搜当天的关键词；长帖用 `add_source.py <链接> --platform x --creator "<作者>" --content-file <正文文件>` 登记成候选，重跑抓取走资格判定。做法见 [取材渠道手册](references/channels.md) 的“X（推特）”。交付时写明从 X 找到几条、搜了哪些词。订阅里那两个 X 源只覆盖 25 个固定账号，是补充，不能替代这一步。
-- **线索必须转成候选，不能空转**：抓完跑 `.venv/bin/python3 scripts/harvest_leads.py` 给线索补正文（直连 → 网页读取 → ego-browser 兜底），够长的登记进 inbox，播客和视频登记成对应平台由抓取脚本取字幕；再带 `--inbox .local/source_inbox.json` 重跑一次，这些材料就按普通候选判定。脚本打印每个来源看到几条、取到几条、登记几条，空转的源一眼可见。
+- **没有“只作线索”的源**：每个订阅源都抓正文，都按同一套标准判定，英文也一样（看内容，不看语言）。订阅覆盖不到的（浏览器里看到的长帖、别人给的链接）用 `harvest_leads.py` 补正文登记进 inbox，再带 `--inbox .local/source_inbox.json` 重跑。`scripts/source_audit.py --problems` 定期体检：每个源实际抓几条，报出取到几条、有正文几条、合格几条、卡在哪，不出货的当场修或去掉。
 - 抓不到正文的自动走 ego-browser 兜底（微信、知乎只对真实浏览器放行）。正文是验证页的判成“站点返回验证页”，不再报成“正文偏短”；`run.json` 记 `blocked_by_site_count` 和 `browser_rescued_count`。X 短推按点赞数排序，纯链接和纯回复不显示。
 - 按原始发布时间从新到旧读。转载、网页更新、重新上榜都不改变文章的真实年龄。
 - 登录、关注、验证码或付费后才能看到的正文直接放弃；代理或缓存抓到的隐藏文字不算公开。机器转录要合并段落、校正专名、标出说话人，不能把字幕墙交给用户。
@@ -154,7 +154,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 1. 批次 ID、审核页路径、条数与构成；
 2. 与审核页同序的列表：原题、原文链接、一句话推荐理由、改写成本；
 3. 没抓成或没覆盖的来源、剩余风险（如原文可读性待回核、转录专名待校对）；
-4. 没达到目标条数时附缺口报告：stop-check 的停止依据、各来源读了几篇和通过几篇、有英文线索但没有中文材料的题目，以及三个选项：继续扩源、换方向、调整数量。
+4. 没达到目标条数时附缺口报告：stop-check 的停止依据、各来源读了几篇和通过几篇、哪些源这批完全没出货，以及三个选项：继续扩源、换方向、调整数量。
 
 维护任务：改了哪些文件、测试和评测结果、推送回读结果、剩余风险。
 

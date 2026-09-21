@@ -225,17 +225,16 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
         self.assertIn("事件新闻已超过时效窗口", news["penalty"])
 
-    def test_english_official_release_is_a_candidate_only_inside_launch_window(self):
+    def test_english_material_is_judged_on_content_not_on_being_english(self):
         item = {"title": "Introducing GPT-6", "summary": "OpenAI releases GPT-6 for ChatGPT and the API.", "content": "GPT-6 is our new model for agentic coding and long tasks. " * 60,
                 "published": "2026-09-04", "source_name": "OpenAI News", "source_priority": 5, "source_type": "rss", "source_role": "candidate",
                 "language": "en", "maturity": "primary", "content_form": "article", "content_status": "fulltext", "link": "https://openai.com/index/gpt-6", "official_release": True}
         fresh = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
-        stale = score_item(item, self.profile, now=datetime(2026, 9, 10, tzinfo=timezone.utc))
         blog = score_item({**item, "official_release": False, "source_name": "Simon Willison"}, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
         self.assertTrue(fresh["editorial_decision"]["eligibility"]["status"] == "passed", fresh["penalty"])
-        self.assertIn("过当天解读窗口", stale["penalty"])
-        self.assertEqual(stale["editorial_decision"]["eligibility"]["status"], "failed")
-        self.assertIn("英文一手信息", blog["penalty"])
+        self.assertIn("官方发布原文", str(fresh["reason"]))
+        # 英文不再因为是英文被否决：同样一篇非官方英文长文照样进候选，由六维终审判断。
+        self.assertEqual(blog["editorial_decision"]["eligibility"]["status"], "passed", blog["penalty"])
 
     def test_official_site_that_refuses_scripts_is_read_through_web_reader(self):
         item = {"title": "Introducing GPT-6", "link": "https://openai.com/index/gpt-6", "source_role": "candidate", "reader_fallback": True, "content_status": "summary"}
@@ -649,7 +648,8 @@ Language: zh
                 for _ in range(3):
                     with self.assertRaises(requests.RequestException):
                         http_get("https://dead.example/feed", settings)
-                self.assertEqual(get.call_count, 1)
+                # 连接失败退避重试，之后由失败缓存挡住，不会每轮都去撞同一个死链接。
+                self.assertEqual(get.call_count, 2)
 
     def test_review_pool_skips_articles_too_short_to_publish(self) -> None:
         shortlisted = {"machine_disposition": "shortlist"}
