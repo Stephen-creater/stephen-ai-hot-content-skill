@@ -859,6 +859,7 @@ def inbox_item(row: dict, settings: dict) -> dict:
         "content_status": "summary",
         "github_stars": row.get("github_stars"),
         "official_release": bool(row.get("official_release")),
+        "social_post": bool(row.get("social_post")) or platform == "x",
     }
     content_file = row.get("content_file")
     if content_file:

@@ -297,7 +297,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         failures.append("材料过少")
     if content_status == "blocked":
         failures.append("站点返回验证页，没有取到正文")
-    if content_form == "article" and content_status == "fulltext" and len(content) < minimum_article_chars(profile):
+    # X 和即刻的帖子是平台原生写法，写满五百字已经是完整的一篇，不按公众号长文的尺子量。
+    minimum_chars = int(profile.get("social_minimum_article_chars", 500)) if item.get("social_post") else minimum_article_chars(profile)
+    if content_form == "article" and content_status == "fulltext" and len(content) < minimum_chars:
         failures.append("文章正文偏短，不足以支撑高质量二创")
     if any(word.lower() in haystack for word in gates.get("locked_content_terms", [])):
         failures.append("正文被登录、关注或付费墙截断，材料不完整")

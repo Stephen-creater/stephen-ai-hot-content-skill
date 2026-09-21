@@ -62,3 +62,22 @@ class HarvestTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SocialPostLengthTest(unittest.TestCase):
+    def test_a_five_hundred_character_x_post_counts_as_a_full_piece(self):
+        import json as _json
+        from curator import score_item
+        from datetime import datetime, timezone
+        profile = _json.loads((ROOT / "resources" / "editorial_profile.json").read_text(encoding="utf-8"))
+        base = {"title": "实测 Agent 的三种用法", "summary": "作者自己跑了一周", "published": "2026-09-19",
+                "source_name": "歸藏", "source_priority": 5, "source_type": "x", "source_role": "candidate",
+                "language": "zh", "maturity": "primary", "content_form": "article", "content_status": "fulltext",
+                "link": "https://x.com/a/status/1", "content": "我用 Agent 跑了一周的真实任务，记录每一步的成本和失败。" * 20}
+        now = datetime(2026, 9, 20, tzinfo=timezone.utc)
+        self.assertGreaterEqual(len(base["content"]), 500)
+        self.assertLess(len(base["content"]), 800)
+        social = score_item({**base, "social_post": True}, profile, now=now)
+        article = score_item(base, profile, now=now)
+        self.assertNotIn("正文偏短", social["penalty"])
+        self.assertIn("正文偏短", article["penalty"])

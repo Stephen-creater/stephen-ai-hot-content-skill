@@ -41,11 +41,17 @@ PLATFORMS = {
 }
 # These carry their own transcript path inside the scraper; harvesting text here would duplicate it.
 MEDIA = {"youtube", "bilibili", "xiaoyuzhou"}
+# 平台原生的长帖：X 和即刻写满五百字就是完整一篇，不按公众号长文的尺子量。
+SOCIAL_HOSTS = {"m.okjike.com", "okjike.com", "x.com", "twitter.com"}
 
 
 def platform_for(link: str) -> str:
     host = urlsplit(link).netloc.lower()
     return PLATFORMS.get(host, "web")
+
+
+def is_social(link: str) -> bool:
+    return urlsplit(link).netloc.lower() in SOCIAL_HOSTS
 
 
 def latest_run(work: Path = WORK) -> Path | None:
@@ -82,6 +88,7 @@ def pick(leads: list[dict], limit: int, skip: set[str]) -> list[dict]:
 def harvest(leads: list[dict], settings: dict, profile: dict, limit: int = DEFAULT_LIMIT,
             inbox: Path = INBOX, text_dir: Path = TEXT_DIR, use_browser: bool = True) -> dict:
     minimum = minimum_article_chars(profile)
+    social_minimum = int(profile.get("social_minimum_article_chars", 500))
     chosen = pick(leads, limit, known_urls(inbox))
     text_dir.mkdir(parents=True, exist_ok=True)
     report: dict[str, dict] = {}
@@ -99,7 +106,7 @@ def harvest(leads: list[dict], settings: dict, profile: dict, limit: int = DEFAU
             continue
         item = hydrate({**lead, "source_role": "candidate", "content_status": "summary"}, settings)
         text = clean_text(item.get("content"))
-        if len(text) < minimum:
+        if len(text) < (social_minimum if is_social(lead["link"]) else minimum):
             pending.append({"lead": lead, "platform": platform, "source": source})
             continue
         stats["取到正文"] += 1
@@ -111,7 +118,7 @@ def harvest(leads: list[dict], settings: dict, profile: dict, limit: int = DEFAU
         for row in pending:
             got = clean_text((fetched.get(row["lead"]["link"]) or {}).get("text", ""))
             stats = report[row["source"]]
-            if len(got) < minimum:
+            if len(got) < (social_minimum if is_social(row["lead"]["link"]) else minimum):
                 continue
             stats["取到正文"] += 1
             _register(row["lead"], row["platform"], _store(row["lead"], got, text_dir), inbox)
@@ -138,6 +145,7 @@ def _register(lead: dict, platform: str, content_file: str, inbox: Path) -> None
         "published": lead.get("published", ""),
         "notes": f"线索转候选；{lead.get('engagement', '')} 赞" if lead.get("engagement") else "线索转候选",
         "maturity": "primary" if platform == "x" else "secondary",
+        "social_post": is_social(lead["link"]),
         "language": lead.get("language", "zh"),
         "official_release": False,
         "transcript_path": "",
