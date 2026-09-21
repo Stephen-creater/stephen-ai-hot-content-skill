@@ -215,6 +215,11 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if source_role == "verification":
         failures.append("核验来源，不进入默认选题")
 
+    # Stephen 二创要重做配图：十二张以上，写再多“图怎么办”也没用（2026-09-20 三篇都写了 image_plan 仍被拒）。
+    image_count = item.get("image_count")
+    if isinstance(image_count, int) and image_count >= int(profile.get("maximum_images_hard", 12)):
+        failures.append(f"配图 {image_count} 张，超过二创能承受的数量")
+
     # Exact topic state: written, deferred, disfavored, retired, excluded, blocked
     covered_pattern = any(re.search(pattern, title_summary, re.I) for pattern in profile.get("covered_topic_patterns", []))
     karpathy_wiki = any(term in title_summary for term in ("karpathy", "卡帕西", "卡帕斯")) and "知识库" in title_summary
@@ -224,7 +229,8 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
         failures.append("WorkBuddy 常规岗位基础应用暂缓推荐")
     # Leaving or replacing a retired tool is a different subject from promoting it.
     migration_context = bool(MIGRATION_CONTEXT_RE.search(title_summary))
-    if not migration_context and any(term.lower() in title_summary for term in profile.get("disfavored_product_subject_terms", [])):
+    # 只看标题：顺带提到（三款产品对比里的一款）不等于文章在讲它。
+    if not migration_context and any(term.lower() in title.lower() for term in profile.get("disfavored_product_subject_terms", [])):
         failures.append("用户当前不认可该产品，不推荐其主体实测或介绍")
     if not migration_context and any(term.lower() in title_summary for term in profile.get("retired_workflow_platform_subject_terms", [])):
         failures.append("传统节点式 Workflow 平台已被用户明确淘汰，不再作为选题主体")

@@ -50,6 +50,7 @@ HARD_FAILURE_MARKERS = {
     "核验来源，不进入默认选题": "verification_only_source",
     "缺少完整文字材料": "incomplete_text",
     "站点返回验证页": "blocked_by_site",
+    "超过二创能承受的数量": "too_many_images",
     "材料过少": "incomplete_text",
     "不足以支撑高质量二创": "insufficient_source_material",
     "只有版本号": "invalid_material",
