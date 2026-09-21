@@ -28,7 +28,7 @@
 | `v2ex` | V2EX | 热门帖、节点、帖子详情 | `curl -s https://www.v2ex.com/api/topics/hot.json` | 可用 |
 | `zhihu` | 知乎 | 搜索、读回答和专栏、看作者文章 | 见下文“知乎” | 需要浏览器登录态 |
 | `browser` | 默认浏览器 | X、小红书、Reddit、知乎；抓不到正文时自动兜底；国内海外都能开 | `ego-browser`（隔离浏览器） | 可用 |
-| `local_transcribe` | 播客音频 | 本机离线转文字 | 见下文“音视频转文字” | 需要本地模型 |
+| `transcribe` | 播客音频 | 本机离线转文字（whisper.cpp，约 27 倍速） | `scripts/transcribe_audio.py <音频链接>`；批量挑选用 `transcribe_podcasts.py` | 可用，模型在 ~/.cache/whisper-cpp/ |
 
 ## 国内站点的网络
 
@@ -129,15 +129,17 @@ console.log(await page.evaluate(() => {
 1. 节目方或公众号发布的中文文字版。
 2. BestBlogs 的播客转录。说话人只有编号、专名可能错，交付前补上主持人和嘉宾名字，校对专名。
 3. 平台字幕：YouTube 用 `yt-dlp`，B 站用 `bili`。字幕和发布者文字版都有时，用 `scripts/format_captions.py <字幕> <文字版> <输出>` 生成可读稿：只借文字版的标点和分段，不改字幕原词。
-4. 本机离线转写（Apple Silicon，本地已有 MLX Whisper 模型时）：
+4. 本机转写（whisper.cpp + ffmpeg，模型在 `~/.cache/whisper-cpp/ggml-large-v3-turbo.bin`）：
 
 ```bash
-HF_HUB_OFFLINE=1 uv run --with mlx-whisper==0.4.3 python scripts/local_transcribe.py \
-  本地音频.wav --model 本地模型目录 --output .local/work/转写.json \
-  --initial-prompt "发布者给出的人名、公司名和术语"
+.venv/bin/python3 scripts/transcribe_audio.py "<音频直链>" --title "<节目标题>"
+.venv/bin/python3 scripts/transcribe_podcasts.py .local/work/<批次ID>/<时间戳> --limit 2
 ```
 
-转写结果没有标点、专名错得多。正式使用前要核对音频时长、结尾是否转完、专名和数字。样本转写不能当完整逐字稿。没有可读文字稿的音视频只算线索。
+2026-09-20 实测：约 27 倍速，10 分钟音频连下载 55 秒，154 分钟的一期约 8 分钟；带标点。
+`transcribe_podcasts.py` 按来源优先级和新鲜度挑没有逐字稿的几期，转完写进 inbox，重跑抓取即按候选判定。
+
+机器稿专名会错、没有说话人（“曾鸣”转成了“曾敏”）。交付前校对专名和数字，补上主持人与嘉宾标签。
 
 字幕为空、太短或读取失败的视频，不进候选。关键内容只在画面里（“点这里”“可以看到”一类操作演示）的视频，在审稿时重点核实文字能不能单独讲清楚。
 
