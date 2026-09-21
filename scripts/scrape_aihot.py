@@ -167,6 +167,20 @@ def count_images(value: str | None) -> int:
     return len(BeautifulSoup(value or "", "html.parser").find_all("img"))
 
 
+VIDEO_EMBED_RE = re.compile(r"<video\b|class=\"video_iframe\"|data-mpvid=|wxv_[0-9]{8,}|player\.bilibili\.com|youtube\.com/embed|<mpvideo", re.I)
+
+
+def count_videos(value: str | None) -> int:
+    """Embedded videos vanish from the text too; Stephen rejects articles that lean on several of them."""
+    soup = BeautifulSoup(value or "", "html.parser")
+    found = len(soup.find_all("video"))
+    found += len([tag for tag in soup.find_all("iframe") if re.search(r"bilibili\.com/player|youtube\.com/embed|v\.qq\.com", tag.get("src") or "", re.I)])
+    # 微信一段视频同时以 wxv_ 编号和 video_iframe/mpvideo 标签出现，两种数法取大的，不重复计。
+    wechat_tags = len(soup.find_all("iframe", class_=re.compile("video", re.I))) + len(soup.find_all(["mpvideo", "mp-common-mpvideo"]))
+    found += max(wechat_tags, len(set(re.findall(r"wxv_[0-9]{8,}", value or ""))))
+    return found
+
+
 def mirror_urls(source: dict) -> list[str]:
     """The source URL, then the same path on each mirror host (public RSSHub instances go down)."""
     parts = urlsplit(source["url"])
@@ -192,7 +206,7 @@ def fetch_rss(source: dict, settings: dict) -> list[dict]:
     for entry in feed.entries[: int(source.get("items_limit", settings["rss_items_per_source"]))]:
         raw_body = (entry.get("content") or [{}])[0].get("value") if source.get("use_feed_content") else ""
         body = html_to_text(raw_body) if raw_body else ""
-        extra = {"content": body, "content_status": "fulltext", "content_origin": "feed_fulltext", "image_count": count_images(raw_body)} if len(body) >= 200 else {}
+        extra = {"content": body, "content_status": "fulltext", "content_origin": "feed_fulltext", "image_count": count_images(raw_body), "video_count": count_videos(raw_body)} if len(body) >= 200 else {}
         items.append(
             {
                 "title": clean_text(entry.get("title")),
@@ -789,6 +803,7 @@ def hydrate_direct(item: dict, settings: dict) -> dict:
             item["content"] = extracted.strip()
             with_images = trafilatura.extract(text, include_comments=False, include_images=True, output_format="xml") or ""
             item["image_count"] = with_images.count("<graphic")
+            item["video_count"] = count_videos(text)
             item["content_truncated"] = truncated
             item["content_status"] = "partial" if truncated else ("shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext")
             if urlparse(item["link"]).netloc.lower().endswith("jxxy.net"):
@@ -1050,6 +1065,7 @@ def render_triage_markdown(rows: list[dict]) -> str:
             f"{index}. [{row.get('source_title') or row.get('title')}]({row.get('link', '')}) "
             f"· {row.get('source_name', '')} · {str(row.get('published', ''))[:10]} · {len(row.get('content') or '')} 字"
             f"{' · 图 ' + str(row['image_count']) + ' 张' if row.get('image_count') is not None else ''}"
+            f"{' · 视频 ' + str(row['video_count']) + ' 段' if row.get('video_count') else ''}"
             f"{' · 可能已写过《' + row['written_topic_hint'] + '》' if row.get('written_topic_hint') else ''} · id {row.get('id')}"
         )
         if opening:

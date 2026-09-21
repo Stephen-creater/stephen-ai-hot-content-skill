@@ -17,7 +17,8 @@ ARTICLES = ROOT / ".local" / "articles"
 
 WORD = re.compile(r"[A-Za-z][A-Za-z0-9]*(?:[.\-][A-Za-z0-9]+)*")
 CJK_RUN = re.compile(r"[\u4e00-\u9fff]+")
-COMMON_WORDS = {"the", "and", "for", "with", "you", "your", "how", "what", "why", "ai", "app", "api", "llm", "agent", "agents"}
+COMMON_WORDS = {"the", "and", "for", "with", "you", "your", "how", "what", "why", "ai", "app", "api", "llm", "agent", "agents",
+                "chatgpt", "openai", "claude", "anthropic", "codex", "gemini", "gpt"}  # 产品名单独不构成一个题：ChatGPT 进 Word 曾被对到 Grok Bot 那篇
 COMMON_AT_LEAST = 4  # a name in this many article titles names the field, not one article's topic
 MINIMUM_ARTICLE_CHARS = 300
 
@@ -62,12 +63,31 @@ def written_about(title: str, index: dict[str, list[str]]) -> str:
     return max(hits, key=hits.get) if hits else ""
 
 
+def topic_aliases(directory: Path = ARTICLES) -> dict[str, list[str]]:
+    """Private file: {已写文章标题: [别名, ...]}. Stephen counts "AI OS 对比" as his 豆包手机 article; titles alone never match."""
+    try:
+        data = json.loads((directory / "topic_aliases.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return {str(article): [str(alias).lower() for alias in aliases if str(alias).strip()] for article, aliases in data.items() if isinstance(aliases, list)}
+
+
+def written_by_alias(title: str, aliases: dict[str, list[str]]) -> str:
+    lowered = title.lower()
+    for article, names_ in aliases.items():
+        if any(alias in lowered for alias in names_):
+            return article
+    return ""
+
+
 def annotate(items: list[dict], directory: Path = ARTICLES) -> list[dict]:
     index = build_index(article_titles(directory))
-    if not index:
+    aliases = topic_aliases(directory)
+    if not index and not aliases:
         return items
     for item in items:
-        match = written_about(str(item.get("title") or ""), index)
+        title = str(item.get("title") or "")
+        match = written_by_alias(title, aliases) or written_about(title, index)
         if match:
             item["written_topic_hint"] = match
     return items

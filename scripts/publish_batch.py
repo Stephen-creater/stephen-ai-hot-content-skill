@@ -5,7 +5,10 @@ import argparse
 import fcntl
 import json
 import os
+import socket
 import tempfile
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 from curator import canonical_url, deduplicate, minimum_article_chars
@@ -17,9 +20,32 @@ from report import generate_report
 from scrape_aihot import is_historical_content_duplicate
 
 ROOT = Path(__file__).resolve().parents[1]
+LINK_CHECK_TIMEOUT = 15
 
 
-def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool = False, allow_stale: bool = False) -> Path:
+def unreachable_links(rows: list[dict], timeout: int = LINK_CHECK_TIMEOUT) -> list[tuple[str, str]]:
+    """Links whose site does not answer at all right now. Stephen opened a 觉醒AI 链接 on 2026-09-21 and got nothing.
+
+    Only connection failures and timeouts count. An HTTP error code (403 from 知乎, 404 after a takedown) still means
+    the site is up, and a real browser may get through where a script does not, so those are left to the Agent.
+    """
+    failed = []
+    for row in rows:
+        link = str(row.get("link") or "")
+        if not link.startswith("http"):
+            continue
+        request = urllib.request.Request(link, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+        try:
+            urllib.request.urlopen(request, timeout=timeout).close()
+        except urllib.error.HTTPError:
+            continue
+        except (urllib.error.URLError, socket.timeout, TimeoutError, ConnectionError, OSError) as error:
+            failed.append((str(row.get("title") or link), str(getattr(error, "reason", error))))
+    return failed
+
+
+def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool = False, allow_stale: bool = False,
+                  check_links: bool = True) -> Path:
     folder = folder.resolve()
     if not allow_stale:
         missing = behind_remote(root)
@@ -92,6 +118,10 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool 
         for row in rows:
             if row.get("id") in old_ids or canonical_url(row.get("link", "")) in old_urls or is_historical_content_duplicate(row, history):
                 raise ValueError(f"另一任务或历史批次已推送/审核：{row.get('title')}")
+        if check_links:
+            dead = unreachable_links(rows)
+            if dead:
+                raise ValueError("发布前回读链接打不开，先换成能打开的原文链接或剔掉这条：" + "；".join(f"{title}（{reason}）" for title, reason in dead))
         if check_only:
             # Render once into a throwaway file so report-time failures surface before registration.
             with tempfile.TemporaryDirectory() as scratch:
@@ -124,6 +154,7 @@ if __name__ == "__main__":
     parser.add_argument("--owner", choices=["主力", "主力2"], required=True)
     parser.add_argument("--check-only", action="store_true", help="只执行全部发布前校验，不写文件、不登记交付")
     parser.add_argument("--allow-stale", action="store_true", help="跳过 Skill 版本检查，只在确实断网时使用")
+    parser.add_argument("--skip-link-check", action="store_true", help="不回读链接，只在确实断网时使用")
     args = parser.parse_args()
-    result = publish_batch(args.folder, args.owner, check_only=args.check_only, allow_stale=args.allow_stale)
+    result = publish_batch(args.folder, args.owner, check_only=args.check_only, allow_stale=args.allow_stale, check_links=not args.skip_link_check)
     print(f"校验通过，未登记：{result}" if args.check_only else result)

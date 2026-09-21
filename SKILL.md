@@ -108,8 +108,8 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 **机器标记**：抓取脚本会自己对照已发布文章和图片数，标出两种情况，`triage.md` 的标题行里能看到，发布脚本会拦：
 
-- 标题和某篇已发布文章同名（`written_topic_hint`）：要在终审卡里加 `new_progress`，写明这次有什么新进展。2026-09-20 一批 20 条里有 9 条是写过的主题，靠 Agent 自己对照清单没拦住，所以改成机械标记。
-- 配图 10 张及以上（`many_images`）：要在终审卡里加 `image_plan`，写明二创时这些图怎么办。图只是展示界面、文字讲得清的，写清楚就能过。
+- 标题和某篇已发布文章同名，或命中它登记的别名（`written_topic_hint`）：要在终审卡里加 `new_progress`，写明这次有什么新进展。2026-09-20 一批 20 条里有 9 条是写过的主题，靠 Agent 自己对照清单没拦住，所以改成机械标记。别名登记在本机私有的 `.local/articles/topic_aliases.json`（文章标题对应一组别名），Stephen 说某条“写过了”而标题对不上时，就把那个说法登记成别名；读稿时仍要自己认题，机器只按字面对。
+- 配图 7 张及以上（`many_images`）或嵌了视频（`has_video`）：要在终审卡里加 `image_plan`，写明二创时这些图和视频怎么办。图只是展示界面、文字讲得清的，写清楚就能过（9 张界面图的 ChatGPT 进 Word 被选中过）。10 张及以上、或 2 段及以上视频，抓取时直接一票否决，阈值在口味档案（2026-09-21 b 批三篇正好 10 张的全被拒，写了 image_plan 也没用）。
 
 标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。
 
@@ -120,7 +120,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 .venv/bin/python3 scripts/publish_batch.py topics/<批次ID> --owner 主力
 ```
 
-并行任务用 `--owner 主力2`。发布脚本在文件锁下复核理由、认领和跨窗口去重，失败就剔掉那条，不绕过脚本。抓取脚本的 `--include-rejected` 只用于调试。
+并行任务用 `--owner 主力2`。发布脚本在文件锁下复核理由、认领和跨窗口去重，并把每条链接再打开一次，站点没响应的（2026-09-21 觉醒AI 整站打不开，Stephen 点开一条是“打不开”）拒绝发布：换成能打开的原文链接（转述站的稿子附原始出处）或剔掉那条，不绕过脚本；`--skip-link-check` 只在确实断网时用。抓取脚本的 `--include-rejected` 只用于调试。
 
 审核卡写给没看过过程的人：原文讲了什么、为什么值得看、可以怎么写、改写成本多高。不展示内部代码、去重术语或分数。
 

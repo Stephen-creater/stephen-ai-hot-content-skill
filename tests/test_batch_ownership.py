@@ -10,7 +10,20 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import import_feedback as feedback
+import publish_batch as publish_batch_module
 from publish_batch import publish_batch, delivered_candidates
+
+
+def setUpModule():
+    # 这些测试用的是假链接，发布前回读链接的网络检查单独在 test_media_and_links 里测。
+    global _link_patch
+    _link_patch = patch.object(publish_batch_module, "unreachable_links", return_value=[])
+    _link_patch.start()
+
+
+def tearDownModule():
+    _link_patch.stop()
+
 from curator import score_item
 
 

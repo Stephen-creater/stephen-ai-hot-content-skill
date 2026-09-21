@@ -215,10 +215,14 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     if source_role == "verification":
         failures.append("核验来源，不进入默认选题")
 
-    # Stephen 二创要重做配图：十二张以上，写再多“图怎么办”也没用（2026-09-20 三篇都写了 image_plan 仍被拒）。
+    # Stephen 二创要重做配图：阈值见口味档案。2026-09-20 三篇 13 到 23 张的写了 image_plan 仍被拒；
+    # 2026-09-21 b 批三篇正好 10 张的也全被拒，其中一篇的备注是“图片、视频太多了”。
     image_count = item.get("image_count")
-    if isinstance(image_count, int) and image_count >= int(profile.get("maximum_images_hard", 12)):
+    if isinstance(image_count, int) and image_count >= int(profile.get("maximum_images_hard", 10)):
         failures.append(f"配图 {image_count} 张，超过二创能承受的数量")
+    video_count = item.get("video_count")
+    if isinstance(video_count, int) and video_count >= int(profile.get("maximum_videos_hard", 2)):
+        failures.append(f"嵌入视频 {video_count} 段，超过二创能承受的数量")
 
     # Exact topic state: written, deferred, disfavored, retired, excluded, blocked
     covered_pattern = any(re.search(pattern, title_summary, re.I) for pattern in profile.get("covered_topic_patterns", []))

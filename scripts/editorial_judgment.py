@@ -135,6 +135,7 @@ def build_decision_contract(
 FLAG_FIELDS = {
     "written_topic_hint": ("new_progress", "与已写文章《{value}》同名，要在 new_progress 写明这次的新进展"),
     "many_images": ("image_plan", "配图 {value} 张，要在 image_plan 写明二创时图怎么办"),
+    "has_video": ("image_plan", "正文嵌了 {value} 段视频，要在 image_plan 写明二创时视频演示怎么办"),
 }
 
 
@@ -146,6 +147,9 @@ def flags_for(row: dict, *, maximum_images: int = 10) -> dict[str, object]:
     count = row.get("image_count")
     if isinstance(count, int) and count >= maximum_images:
         flags["many_images"] = count
+    videos = row.get("video_count")
+    if isinstance(videos, int) and videos >= 1:
+        flags["has_video"] = videos
     return flags
 
 
