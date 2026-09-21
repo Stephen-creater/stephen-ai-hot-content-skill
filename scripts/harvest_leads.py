@@ -42,7 +42,7 @@ PLATFORMS = {
 # These carry their own transcript path inside the scraper; harvesting text here would duplicate it.
 MEDIA = {"youtube", "bilibili", "xiaoyuzhou"}
 # 平台原生的长帖：X 和即刻写满五百字就是完整一篇，不按公众号长文的尺子量。
-SOCIAL_HOSTS = {"m.okjike.com", "okjike.com", "x.com", "twitter.com"}
+SOCIAL_HOSTS = {"m.okjike.com", "okjike.com", "x.com", "twitter.com", "t.me", "telegram.me"}
 
 
 def platform_for(link: str) -> str:

@@ -634,6 +634,13 @@ READER_SLOTS = threading.Semaphore(2)  # the free Jina reader answers 429 when h
 
 
 VIDEO_HOSTS = ("youtube.com", "youtu.be", "bilibili.com", "b23.tv")
+# 平台原生短内容：写满五百字就算完整一篇，和公众号长文不是一把尺子。
+SOCIAL_LINK_HOSTS = ("x.com", "twitter.com", "m.okjike.com", "okjike.com", "t.me", "telegram.me")
+
+
+def is_social_link(link: str) -> bool:
+    host = urlsplit(link).netloc.lower()
+    return any(host == name or host.endswith("." + name) for name in SOCIAL_LINK_HOSTS)
 
 
 def is_video_link(link: str) -> bool:
@@ -703,6 +710,8 @@ def read_via_reader(item: dict, settings: dict) -> dict:
 def hydrate(item: dict, settings: dict) -> dict:
     if not item.get("link"):
         return item
+    if is_social_link(item["link"]):
+        item["social_post"] = True
     # 视频和播客页抓下来只有播放器，正文在字幕里。
     if item.get("content_status") != "transcript" and is_video_link(item["link"]):
         try:

@@ -318,7 +318,6 @@
         {"name": "Joway", "url": "https://blog.joway.io/index.xml", "use_feed_content": true},
         {"name": "wklken", "url": "https://wklken.me/posts/index.xml", "use_feed_content": true},
         {"name": "Sagasu", "url": "https://www.sagasu.art/rss.xml", "use_feed_content": true},
-        {"name": "XINDOO", "url": "https://zxs.io/feed", "use_feed_content": true},
         {"name": "明立非", "url": "https://mingnify.com/zh/blog/atom.xml", "use_feed_content": true},
         {"name": "谢乾坤-青南", "url": "https://www.kingname.info/atom.xml", "use_feed_content": true},
         {"name": "创见思考", "url": "https://www.fengcan.net/feed/", "use_feed_content": true},
