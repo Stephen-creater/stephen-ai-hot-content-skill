@@ -23,6 +23,7 @@ REVIEW = {
     "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 2, "durability": 1, "rewrite_effort": 1},
     **{field: "正文给出了具体证据，足够支撑这一项的判断" for field in
        ("topic_appeal", "reader_change", "material_increment", "re_authorability", "durability", "rewrite_effort", "counterargument", "decision_driver")},
+    "reader_access": "国内能直接下载和使用",
 }
 
 
@@ -124,3 +125,29 @@ class PaywallAndDoubtTest(unittest.TestCase):
         self.assertTrue(allowed.ok, allowed.errors)
         plain = validate_manual_review({**REVIEW, "counterargument": "数据来自厂商自述，没有第三方实测"})
         self.assertTrue(plain.ok, plain.errors)
+
+
+class SelfVetoTest(unittest.TestCase):
+    """2026-09-22 a 批：终审疑点里写了否决理由又放行，五条全被拒。"""
+
+    def test_doubt_that_names_its_own_veto_blocks_delivery(self):
+        for doubt in ("三项只拿 1 分，属于勉强过线；放行是因为对上了一类",
+                      "实测偏 3D 游戏 demo，效果有一部分靠画面"):
+            result = validate_manual_review({**REVIEW, "counterargument": doubt})
+            self.assertFalse(result.ok, doubt)
+            self.assertTrue(any("否决理由" in error for error in result.errors))
+
+    def test_reader_access_and_score_floors(self):
+        self.assertFalse(validate_manual_review({k: v for k, v in REVIEW.items() if k != "reader_access"}).ok)
+        weak = {**REVIEW, "scores": {**REVIEW["scores"], "topic_appeal": 1}}
+        self.assertTrue(any("选题吸引力不满 2 分" in e for e in validate_manual_review(weak).errors))
+        thin = {**REVIEW, "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 1, "re_authorability": 1, "durability": 1, "rewrite_effort": 2}}
+        self.assertTrue(any("3 项只有 1 分" in e for e in validate_manual_review(thin).errors))
+        self.assertTrue(validate_manual_review(REVIEW).ok)
+
+    def test_lazy_loaded_body_images_are_counted(self):
+        from scrape_aihot import count_body_images
+        body = "<p>" + "正文" * 200 + "</p>"
+        page = ('<div class="article"><img src="/wp-content/themes/liangziwei/imagesnew/head.jpg">' + body
+                + "".join(f'<img data-src="https://mmbiz.qpic.cn/mmbiz_png/{i}">' for i in range(13)) + "</div>")
+        self.assertEqual(count_body_images(page), 13)

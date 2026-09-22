@@ -167,6 +167,29 @@ def count_images(value: str | None) -> int:
     return len(BeautifulSoup(value or "", "html.parser").find_all("img"))
 
 
+BODY_SELECTORS = ("#js_content", ".rich_media_content", ".article-content", ".entry-content", ".post-content", ".article", "article", "main")
+DECORATIVE_IMAGE_RE = re.compile(r"avatar|logo|icon|qrcode|erweima|/themes/|head\.(jpg|png)|emoji|placeholder|loading", re.I)
+
+
+def count_body_images(html: str | None) -> int:
+    """Images inside the article body, including lazy-loaded ones.
+
+    trafilatura drops images that only have data-src (量子位转载的微信图、动图): 2026-09-22 阶跃 Step 5
+    实测正文 13 张图，它只数出 5 张，10 张一票否决没拦住，Stephen 的备注是“全是图片”。
+    """
+    soup = BeautifulSoup(html or "", "html.parser")
+    body = next((node for selector in BODY_SELECTORS if (node := soup.select_one(selector)) and len(node.get_text(strip=True)) >= 300), None)
+    if body is None:
+        return 0
+    count = 0
+    for tag in body.find_all("img"):
+        src = tag.get("data-src") or tag.get("data-original") or tag.get("src") or ""
+        if not src or src.startswith("data:") or DECORATIVE_IMAGE_RE.search(src):
+            continue
+        count += 1
+    return count
+
+
 VIDEO_EMBED_RE = re.compile(r"<video\b|class=\"video_iframe\"|data-mpvid=|wxv_[0-9]{8,}|player\.bilibili\.com|youtube\.com/embed|<mpvideo", re.I)
 
 
@@ -802,7 +825,7 @@ def hydrate_direct(item: dict, settings: dict) -> dict:
         if extracted:
             item["content"] = extracted.strip()
             with_images = trafilatura.extract(text, include_comments=False, include_images=True, output_format="xml") or ""
-            item["image_count"] = with_images.count("<graphic")
+            item["image_count"] = max(with_images.count("<graphic"), count_body_images(text))
             item["video_count"] = count_videos(text)
             item["content_truncated"] = truncated
             item["content_status"] = "partial" if truncated else ("shownotes" if item.get("content_form") in {"video", "podcast"} else "fulltext")

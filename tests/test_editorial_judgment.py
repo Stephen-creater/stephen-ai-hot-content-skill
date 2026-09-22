@@ -31,6 +31,7 @@ def evidence_review(**overrides):
         "counterargument": "案例只有一位作者，结论可能存在样本偏差。",
         "decision_driver": "完整失败链和可回查原文的动作构成决定性证据。",
         "rewrite_effort": "结构和论证可以沿用，只需去掉作者个人信息并换成 Stephen 的语气。",
+        "reader_access": "方法不依赖具体产品，国内读者直接能用。",
         "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 1, "durability": 1, "rewrite_effort": 2},
     }
     review.update(overrides)

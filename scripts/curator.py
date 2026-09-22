@@ -30,6 +30,23 @@ SECRET_PATTERNS = (
 
 TRADITIONAL_MARKERS = set("體學這為與從讓個裡實過開關點臺檔寫讀據動應處別進還題會時發現種選擇轉換價務圖頁製後設產")
 MIGRATION_CONTEXT_RE = re.compile(r"迁移|迁出|离开|告别|替代|取代|弃用|换掉|不再用|转向|迁到|换到")
+# 一行像代码：以关键字、赋值、调用、括号收尾，且不含中文（中文注释行不算）。
+CODE_LINE_RE = re.compile(
+    r"^\s*(const |let |var |function |def |class |import |from \S+ import|return |if \(|for \(|\}|\{$|\$ |npm |pip |npx |git |curl |cd |export |"
+    r"SELECT |FROM |WHERE |#include|public |private |async |await |print\(|console\.|</?[a-z]+[ >]|[A-Za-z_][\w.]*\s*=\s*\S|[A-Za-z_][\w.]*\(.*\);?$|\"[\w-]+\"\s*:)"
+)
+
+
+def count_code_lines(text: str) -> int:
+    """How many lines of the body are code. Measured on the extracted text, so it works for every source."""
+    count = 0
+    for line in (text or "").splitlines():
+        stripped = line.strip()
+        if not stripped or (re.search(r"[\u4e00-\u9fff]", stripped) and not stripped.startswith(("#", "//"))):
+            continue
+        if CODE_LINE_RE.match(line) or (stripped.endswith((";", "{", "}", "),")) and len(stripped) < 120):
+            count += 1
+    return count
 
 def contains_term(text: str, term: str) -> bool:
     if re.fullmatch(r"[a-z0-9 .+-]+", term):
@@ -226,6 +243,15 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
     video_count = item.get("video_count")
     if isinstance(video_count, int) and video_count >= int(profile.get("maximum_videos_hard", 2)):
         failures.append(f"嵌入视频 {video_count} 段，超过二创能承受的数量")
+    # 代码：2026-09-02 到 09-22 七次被拒的备注都是“大量代码”，正文 5 行代码以上的 9 篇全被拒，选中的最多 2 行。
+    code_lines = count_code_lines(raw_content or "")
+    if code_lines >= int(profile.get("maximum_code_lines_hard", 5)):
+        failures.append(f"正文有 {code_lines} 行代码，读者看不懂也没法二创")
+    # 英文原文：Stephen 要改一改就能发的中文材料。历史上 7 条英文候选全被拒（Grok 4.7、阶跃 Step 5 官方稿标“改写成本高”）。
+    # 例外是 OpenAI、Anthropic、Google 的官方发布稿（Codex Harness 开源、KV Cache 都是拿英文官方稿写成的）；Grok、阶跃的英文官方稿都被拒了。
+    top_lab_release = item.get("official_release") and any(source_domain == d or source_domain.endswith("." + d) for d in profile.get("english_release_domains", []))
+    if source_role != "verification" and not top_lab_release and len(content) >= 400 and len(re.findall(r"[\u4e00-\u9fff]", content)) < 200:
+        failures.append("正文是英文原文，二创要从头翻译，改写成本高")
 
     # Exact topic state: written, deferred, disfavored, retired, excluded, blocked
     covered_pattern = any(re.search(pattern, title_summary, re.I) for pattern in profile.get("covered_topic_patterns", []))

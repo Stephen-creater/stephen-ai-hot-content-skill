@@ -27,6 +27,8 @@
   "maximum_images": 7,
   "maximum_images_hard": 10,
   "maximum_videos_hard": 2,
+  "maximum_code_lines_hard": 5,
+  "english_release_domains": ["openai.com", "anthropic.com", "claude.com", "deepmind.google", "blog.google"],
   "discovery_max_age_days": 14,
   "minimum_article_chars": 800,
   "social_minimum_article_chars": 500,

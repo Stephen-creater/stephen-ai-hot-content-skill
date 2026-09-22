@@ -37,6 +37,18 @@ REVIEW_FIELD_LABELS = {
 CORE_DIMENSIONS = DIMENSIONS[:5]
 PASS_TOTAL = 6  # of 10, over the five core dimensions
 MUST_NOT_BE_ZERO = ("reader_change", "material_increment")
+# 2026-09-22 回看 92 条有终审分的审核：选题吸引力或读者改变不满 2 分的 34 条全被拒，六维里三项及以上 1 分的 30 条全被拒。
+# 以前写成“勉强过线要对上选过的类型才推荐”，评审每次都说“对上了”放行，所以改成机器拦。
+MUST_BE_FULL = ("topic_appeal", "reader_change")
+MAX_ONE_POINT_SCORES = 2
+# 评审自己在疑点里写出来的否决理由。2026-09-22 a 批五条全被拒，疑点里写着“三项只拿 1 分，属于勉强过线”
+# “效果有一部分靠画面”，后面接一句“放行是因为……”照样发布了。“国内用不上”不在这里：Stephen 写过国内用不了的 Ditto，
+# 海外 App 靠打分下限和读稿判断拦（Muse 那条选题吸引力只有 1 分）。
+SELF_VETO_PATTERNS = (
+    (r"勉强过线|勉强及格|放行是因为|虽然.{0,20}但.{0,6}放行", "疑点已经说了不够格，不能再找理由放行"),
+    (r"靠(?:画面|截图|视频|动图|效果图)", "效果靠图和视频展示"),
+    (r"大量代码|代码(?:较多|很多|偏多)", "正文代码多"),
+)
 
 HARD_FAILURE_MARKERS = {
     "正文缺少中文内容": "body_language_mismatch",
@@ -51,6 +63,8 @@ HARD_FAILURE_MARKERS = {
     "缺少完整文字材料": "incomplete_text",
     "站点返回验证页": "blocked_by_site",
     "超过二创能承受的数量": "too_many_images",
+    "行代码，读者看不懂也没法二创": "too_much_code",
+    "正文是英文原文": "english_original",
     "材料过少": "incomplete_text",
     "不足以支撑高质量二创": "insufficient_source_material",
     "只有版本号": "invalid_material",
@@ -174,6 +188,14 @@ def validate_manual_review(review: dict, *, require_v2: bool = True, flags: dict
     doubt = str(review.get("counterargument", ""))
     if re.search(r"写过|已写|写了.{0,6}篇|已经写", doubt) and len(str(review.get("new_progress", "")).strip()) < 12:
         errors.append("疑点里说 Stephen 写过同题，要在 new_progress 写明这次的新事实（新功能、新数据、新结果），不能只是换个人再说一遍")
+    evidence_text = " ".join(str(review.get(key, "")) for key in (*DIMENSIONS, "counterargument"))
+    for pattern, label in SELF_VETO_PATTERNS:
+        text = doubt if label.startswith("疑点") else evidence_text
+        if re.search(pattern, text):
+            errors.append(f"终审自己写了否决理由（{label}），不能推荐")
+    access = str(review.get("reader_access", "")).strip()
+    if len(access) < 6:
+        errors.append("要在 reader_access 写明读者在国内能不能直接用上文章讲的产品或方法")
     scores = review.get("scores")
     if not isinstance(scores, dict) or any(scores.get(key) not in (0, 1, 2) for key in DIMENSIONS):
         errors.append("六个维度都要打 0、1 或 2 分")
@@ -184,6 +206,12 @@ def validate_manual_review(review: dict, *, require_v2: bool = True, flags: dict
         for key in MUST_NOT_BE_ZERO:
             if scores[key] == 0:
                 errors.append(f"{REVIEW_FIELD_LABELS[key]}为 0 分")
+        for key in MUST_BE_FULL:
+            if scores[key] != 2:
+                errors.append(f"{REVIEW_FIELD_LABELS[key]}不满 2 分")
+        ones = sum(1 for key in DIMENSIONS if scores[key] == 1)
+        if ones > MAX_ONE_POINT_SCORES:
+            errors.append(f"六个维度里 {ones} 项只有 1 分")
     return ReviewValidation(not errors, tuple(errors))
 
 

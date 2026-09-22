@@ -225,16 +225,25 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("事件新闻已超过时效窗口", interview["penalty"])
         self.assertIn("事件新闻已超过时效窗口", news["penalty"])
 
-    def test_english_material_is_judged_on_content_not_on_being_english(self):
+    def test_english_original_is_rejected_and_code_heavy_body_too(self):
         item = {"title": "Introducing GPT-6", "summary": "OpenAI releases GPT-6 for ChatGPT and the API.", "content": "GPT-6 is our new model for agentic coding and long tasks. " * 60,
                 "published": "2026-09-04", "source_name": "OpenAI News", "source_priority": 5, "source_type": "rss", "source_role": "candidate",
                 "language": "en", "maturity": "primary", "content_form": "article", "content_status": "fulltext", "link": "https://openai.com/index/gpt-6", "official_release": True}
         fresh = score_item(item, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
         blog = score_item({**item, "official_release": False, "source_name": "Simon Willison"}, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
-        self.assertTrue(fresh["editorial_decision"]["eligibility"]["status"] == "passed", fresh["penalty"])
-        self.assertIn("官方发布原文", str(fresh["reason"]))
-        # 英文不再因为是英文被否决：同样一篇非官方英文长文照样进候选，由六维终审判断。
-        self.assertEqual(blog["editorial_decision"]["eligibility"]["status"], "passed", blog["penalty"])
+        # 2026-09-22：七条英文候选全被拒，Grok 4.7 官方稿标“改写成本高”。英文只当线索，要找中文整理稿再推。
+        # OpenAI 的官方发布稿是例外；xAI 的官方稿和非官方英文长文都否决。
+        self.assertEqual(fresh["editorial_decision"]["eligibility"]["status"], "passed", fresh["penalty"])
+        self.assertEqual(blog["editorial_decision"]["eligibility"]["status"], "failed")
+        self.assertIn("英文原文", str(blog["editorial_decision"]["eligibility"]["failures"]))
+        grok = score_item({**item, "link": "https://x.ai/news/grok-4-7", "source_name": "SpaceXAI"}, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
+        self.assertEqual(grok["editorial_decision"]["eligibility"]["status"], "failed")
+        code = "\n".join(["const db = new DatabaseSync(path);", "const rows = db.prepare(sql).all(since);", "console.table(report);", "}", "return rows;", "import fs from 'node:fs';"])
+        chinese = {**item, "language": "zh", "official_release": False, "source_name": "掘金", "title": "我删掉了 23 个 Skill",
+                   "content": "这是一篇中文复盘，讲作者怎么清理自己的技能库。" * 40}
+        self.assertEqual(score_item(chinese, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))["editorial_decision"]["eligibility"]["status"], "passed")
+        heavy = score_item({**chinese, "content": chinese["content"] + "\n" + code}, self.profile, now=datetime(2026, 9, 5, tzinfo=timezone.utc))
+        self.assertIn("行代码", str(heavy["editorial_decision"]["eligibility"]["failures"]))
 
     def test_official_site_that_refuses_scripts_is_read_through_web_reader(self):
         item = {"title": "Introducing GPT-6", "link": "https://openai.com/index/gpt-6", "source_role": "candidate", "reader_fallback": True, "content_status": "summary"}

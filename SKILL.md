@@ -53,9 +53,9 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 ### 2. 抓取与找原文
 
 - 运行 `.venv/bin/python3 scripts/scrape_aihot.py --batch <批次ID> --round <轮次> --output-root .local/work/<批次ID>`。输出里的 `triage.md` 列出全部合格材料（已过一票否决和查重）的标题、来源、日期、字数和开头，按来源优先级和新鲜度排列；全文在 `eligible.json`。`triage.md` 开头的“最近 3 天多源刷屏”列出几天内在很多来源同时冒出来的新名字，这是单篇文章看不出的热度，先看它：每个刷屏的名字至少挑一篇最完整的稿子读全文；中文稿都不好时，用 `add_source.py` 登记中文 X 长帖或官网原文。然后**通读 `triage.md` 全部标题，自己挑出值得读全文的**，一般是目标条数的 3 倍左右（默认 10 条选题读约 30 篇）。`candidates.json` 只是按顺序截的前 30 篇，不代表推荐。缓存 1 小时（文章页 7 天，英文源 1 天），`--no-cache` 强制刷新。
-- 重大发布是 Stephen 写得最多的一类，他常直接拿英文官方原文写当天解读。所以 OpenAI（含 Developers）、Anthropic、Claude、Google DeepMind 的官方博客是候选源：发布后 5 天内的原文直接进 `triage.md` 并排在前面，超过 5 天自动退回线索。官方博客里客户案例、合作、公益和政策稿占多数，这些不推荐；值得读的是三类：新模型、新产品、新功能的正式发布，厂商自己团队的一手做法和内部数据，头部实验室首次展示的新能力方向。X 上的官方发布帖或官方文档页用 `add_source.py <链接> --platform web --language en --official-release --content-file <正文>` 登记。有中文首发报道或实测时，两篇都可以读，推荐讲得更清楚的那篇。
+- 重大发布是 Stephen 写得最多的一类。OpenAI（含 Developers）、Anthropic、Claude、Google DeepMind 的官方博客是候选源，发布后 5 天内的原文直接进 `triage.md` 并排在前面；其他英文正文抓取脚本直接否决（Grok 4.7、阶跃 Step 5 的英文官方稿都标“改写成本高”），这类发布去找中文稿。只重排官方分数和价格的短帖、快讯算通稿。
 - **每批必跑 X**：Stephen 很多文章是在 X 上看到并二创的，这个渠道和公众号同等重要。用 ego-browser 打开他登录的 X，看首页时间线、翻重点作者主页、搜当天的关键词；长帖用 `add_source.py <链接> --platform x --creator "<作者>" --content-file <正文文件>` 登记成候选，重跑抓取走资格判定。做法见 [取材渠道手册](references/channels.md) 的“X（推特）”。交付时写明从 X 找到几条、搜了哪些词。订阅里那两个 X 源只覆盖 25 个固定账号，是补充，不能替代这一步。
-- **没有“只作线索”的源**：每个订阅源都抓正文，都按同一套标准判定，英文也一样（看内容，不看语言）。订阅覆盖不到的（浏览器里看到的长帖、别人给的链接）用 `harvest_leads.py` 补正文登记进 inbox，再带 `--inbox .local/source_inbox.json` 重跑。`scripts/source_audit.py --problems` 定期体检：每个源实际抓几条，报出取到几条、有正文几条、合格几条、卡在哪，不出货的当场修或去掉。
+- **每个订阅源都抓正文**，都按同一套标准判定；三家官方博客以外的英文源只能当线索（英文正文会被否决）。订阅覆盖不到的（浏览器里看到的长帖、别人给的链接）用 `harvest_leads.py` 补正文登记进 inbox，再带 `--inbox .local/source_inbox.json` 重跑。`scripts/source_audit.py --problems` 定期体检：每个源实际抓几条，报出取到几条、有正文几条、合格几条、卡在哪，不出货的当场修或去掉。
 - 抓不到正文的自动走 ego-browser 兜底（微信、知乎只对真实浏览器放行）。正文是验证页的判成“站点返回验证页”，不再报成“正文偏短”；`run.json` 记 `blocked_by_site_count` 和 `browser_rescued_count`。X 短推按点赞数排序，纯链接和纯回复不显示。
 - 按原始发布时间从新到旧读。转载、网页更新、重新上榜都不改变文章的真实年龄。
 - **播客要有逐字稿才算数**：BestBlogs 覆盖的约三十档自带转录，没覆盖的用 `scripts/transcribe_podcasts.py <抓取输出目录> --limit 2` 本机转写（约 27 倍速，一期 154 分钟约 8 分钟），转完自动登记进 inbox。登录、关注、验证码或付费才能看的正文直接放弃；机器转录要校正专名、标出说话人，不能把字幕墙交给用户。
@@ -99,19 +99,18 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
   "rewrite_effort": "离能发还有多远：沿用结构只换语气，还是要重组或重写",
   "counterargument": "最大疑点",
   "decision_driver": "最终放行的关键证据",
+  "reader_access": "读者在国内能不能直接用上文章讲的产品或方法",
   "source_sha256": "当前完整正文的 SHA-256",
   "source_anchors": [{"dimension": "material_increment", "quote": "正文原句"}, {"dimension": "re_authorability", "quote": "正文原句"}]
 }
 ```
 
-程序只检查打分、字段和原句是否存在，不能证明判断正确。原句必须真的支撑推荐理由。正文变了要重审。
-
-**机器标记**：抓取脚本会自己对照已发布文章和图片数，标出两种情况，`triage.md` 的标题行里能看到，发布脚本会拦：
+程序只检查打分、字段和原句是否存在，不能证明判断正确。原句必须真的支撑推荐理由。正文变了要重审。**机器标记**：抓取脚本会自己对照已发布文章和图片数，标出两种情况，`triage.md` 的标题行里能看到，发布脚本会拦：
 
 - 标题和某篇已发布文章同名，或命中它登记的别名（`written_topic_hint`）：要在终审卡里加 `new_progress`，写明这次有什么新进展。2026-09-20 一批 20 条里有 9 条是写过的主题，靠 Agent 自己对照清单没拦住，所以改成机械标记。别名登记在本机私有的 `.local/articles/topic_aliases.json`（文章标题对应一组别名），Stephen 说某条“写过了”而标题对不上时，就把那个说法登记成别名；读稿时仍要自己认题，机器只按字面对。
 - 配图 7 张及以上（`many_images`）或嵌了视频（`has_video`）：要在终审卡里加 `image_plan`，写明二创时这些图和视频怎么办。图只是展示界面、文字讲得清的，写清楚就能过（9 张界面图的 ChatGPT 进 Word 被选中过）。10 张及以上、或 2 段及以上视频，抓取时直接一票否决，阈值在口味档案（2026-09-21 b 批三篇正好 10 张的全被拒，写了 image_plan 也没用）。
 
-标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。另外，终审卡的 `counterargument` 里自己写了“Stephen 写过”，发布脚本同样要求 `new_progress`，而且写的必须是新事实，不是换个人再说一遍；疑点里点名了正反例的某个“不选”类型，那就是不推荐，见判断标准的“判断纪律”。
+标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。另外，终审卡的 `counterargument` 里自己写了“Stephen 写过”，发布脚本同样要求 `new_progress`，而且写的必须是新事实，不是换个人再说一遍；疑点里点名了正反例的某个“不选”类型，那就是不推荐，见判断标准的“判断纪律”。**发布脚本还直接拦这些**（2026-09-22 a 批五条全被拒后加的，历史回放没有误伤 Stephen 选过的稿）：选题吸引力或读者改变不满 2 分；六维里超过两项 1 分；疑点或证据里自己写了“勉强过线”“放行是因为”“靠画面/截图”“大量代码”；没填 `reader_access`。抓取阶段直接否决：正文 5 行以上代码、英文正文（OpenAI、Anthropic、Google 官方发布稿除外）、正文图 10 张以上。**凑不够条数就交缺口报告，不要改写疑点绕过检查。**
 
 ### 6. 发布
 

@@ -38,6 +38,7 @@ def complete_review():
         'counterargument': '材料来自单一作者，存在经验外推过度的风险。',
         'decision_driver': '决定放行的是完整失败链与可复用的核验动作。',
         'rewrite_effort': '结构和论证可以沿用，只需去掉作者个人信息并换成 Stephen 的语气。',
+        'reader_access': '方法不依赖具体产品，国内读者直接能用。',
         'scores': {'topic_appeal': 2, 'reader_change': 2, 'material_increment': 2, 're_authorability': 1, 'durability': 1, 'rewrite_effort': 2},
     }
 
