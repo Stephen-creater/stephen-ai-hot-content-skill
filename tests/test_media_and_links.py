@@ -105,3 +105,22 @@ class LinkReadbackTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PaywallAndDoubtTest(unittest.TestCase):
+    def test_paywalled_site_is_rejected_outright(self):
+        from curator import score_item as score
+        wired = failures_of(score(article(link="https://www.wired.com/story/how-to-use-memory-in-chatgpt", title="ChatGPT memory 怎么管"), PROFILE))
+        self.assertTrue(any("付费墙" in failure for failure in wired), wired)
+        clean = failures_of(score(article(link="https://www.qbitai.com/2026/09/492973.html", title="剪映发了个大的"), PROFILE))
+        self.assertFalse(any("付费墙" in failure for failure in clean), clean)
+
+    def test_doubt_naming_a_written_topic_requires_new_facts(self):
+        doubted = {**REVIEW, "counterargument": "Stephen 9 月 15 日已经写过 RSI，那篇的结论和这篇一样；后半段是安全议题"}
+        blocked = validate_manual_review(doubted)
+        self.assertFalse(blocked.ok)
+        self.assertTrue(any("new_progress" in error for error in blocked.errors), blocked.errors)
+        allowed = validate_manual_review({**doubted, "new_progress": "这次官方公开了 1 万个智能体 88 小时的协作日志和成本数据，上一篇写时只有结论"})
+        self.assertTrue(allowed.ok, allowed.errors)
+        plain = validate_manual_review({**REVIEW, "counterargument": "数据来自厂商自述，没有第三方实测"})
+        self.assertTrue(plain.ok, plain.errors)

@@ -214,6 +214,9 @@ def score_item(item: dict, profile: dict, now: datetime | None = None) -> dict:
             failures.append("原文为繁体中文，要求简体中文材料")
     if source_role == "verification":
         failures.append("核验来源，不进入默认选题")
+    # 付费墙站点：Stephen 点开要充钱（2026-09-21 Wired 的 ChatGPT 记忆一文，“要充钱才可以看啊”），和登录墙一样算打不开。
+    if any(source_domain == domain or source_domain.endswith("." + domain) for domain in profile.get("paywalled_domains", [])):
+        failures.append("付费墙站点，Stephen 打不开")
 
     # Stephen 二创要重做配图：阈值见口味档案。2026-09-20 三篇 13 到 23 张的写了 image_plan 仍被拒；
     # 2026-09-21 b 批三篇正好 10 张的也全被拒，其中一篇的备注是“图片、视频太多了”。

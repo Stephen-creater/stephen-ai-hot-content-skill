@@ -70,7 +70,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 已写过、已审过、已被另一个窗口认领；
 - 即时新闻超过 5 天，深度材料超过画像的时间窗；
 - GitHub 项目实时 Star 少于 100，或近 7 天没有实质更新；
-- 屏蔽的来源、作者或已写主题；
+- 屏蔽的来源、作者或已写主题；付费墙站点（画像 `paywalled_domains`，Wired 一篇 Stephen 说“要充钱才可以看”）；
 - 文章自己说明由 AI 生成；关键内容在缺失的图片里。
 
 ### 4. 判断只来自读全文
@@ -111,7 +111,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - 标题和某篇已发布文章同名，或命中它登记的别名（`written_topic_hint`）：要在终审卡里加 `new_progress`，写明这次有什么新进展。2026-09-20 一批 20 条里有 9 条是写过的主题，靠 Agent 自己对照清单没拦住，所以改成机械标记。别名登记在本机私有的 `.local/articles/topic_aliases.json`（文章标题对应一组别名），Stephen 说某条“写过了”而标题对不上时，就把那个说法登记成别名；读稿时仍要自己认题，机器只按字面对。
 - 配图 7 张及以上（`many_images`）或嵌了视频（`has_video`）：要在终审卡里加 `image_plan`，写明二创时这些图和视频怎么办。图只是展示界面、文字讲得清的，写清楚就能过（9 张界面图的 ChatGPT 进 Word 被选中过）。10 张及以上、或 2 段及以上视频，抓取时直接一票否决，阈值在口味档案（2026-09-21 b 批三篇正好 10 张的全被拒，写了 image_plan 也没用）。
 
-标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。
+标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。另外，终审卡的 `counterargument` 里自己写了“Stephen 写过”，发布脚本同样要求 `new_progress`，而且写的必须是新事实，不是换个人再说一遍；疑点里点名了正反例的某个“不选”类型，那就是不推荐，见判断标准的“判断纪律”。
 
 ### 6. 发布
 

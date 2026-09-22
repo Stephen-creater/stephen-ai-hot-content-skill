@@ -170,6 +170,10 @@ def validate_manual_review(review: dict, *, require_v2: bool = True, flags: dict
         field, message = FLAG_FIELDS[flag]
         if len(str(review.get(field, "")).strip()) < 12:
             errors.append(message.format(value=value))
+    # 疑点里自己写了“Stephen 写过”，就按已写主题对待：2026-09-21 c 批四条这样放行的全被标“过时或已写过”“对读者没用”。
+    doubt = str(review.get("counterargument", ""))
+    if re.search(r"写过|已写|写了.{0,6}篇|已经写", doubt) and len(str(review.get("new_progress", "")).strip()) < 12:
+        errors.append("疑点里说 Stephen 写过同题，要在 new_progress 写明这次的新事实（新功能、新数据、新结果），不能只是换个人再说一遍")
     scores = review.get("scores")
     if not isinstance(scores, dict) or any(scores.get(key) not in (0, 1, 2) for key in DIMENSIONS):
         errors.append("六个维度都要打 0、1 或 2 分")
