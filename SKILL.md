@@ -134,7 +134,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 .venv/bin/python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <批次ID> --owner 主力
 ```
 
-导入成功并回读后才删除下载的 JSON，失败就保留。按钮决定结果，原因标签和备注决定能学什么。`feedback_audit.py` 的 `batch_level` 是北极星：每批通过几条、多少批至少通过一条、通过的题在审核页排第几。冲突、含义不清时按 [反馈学习规则](references/feedback-learning-protocol.md) 处理，不要猜。
+导入成功并回读后才删除下载的 JSON，失败就保留。按钮决定结果，原因标签和备注决定能学什么。`feedback_audit.py` 的 `batch_level` 是北极星：每批通过几条、多少批至少通过一条。每批固定 10 条不减，标准也不降。冲突、含义不清时按 [反馈学习规则](references/feedback-learning-protocol.md) 处理，不要猜。
 
 ### 8. 改判断规则之前和之后都要跑评测
 
