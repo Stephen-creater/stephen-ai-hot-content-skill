@@ -81,7 +81,9 @@ class EvalReplayTest(unittest.TestCase):
 
     def test_regression_warning_compares_same_benchmark_and_split(self) -> None:
         history = [{"kind": "judge", "benchmark": "v1", "split": "dev", "metrics": {"selected_recall": 0.95}}]
-        entry = {"kind": "judge", "benchmark": "v1", "split": "dev", "metrics": {"selected_recall": 0.8}}
+        # 判断层不再看百分比，看逐篇翻转：选中的有两篇从推荐翻成淘汰才算退步。
+        entry = {"kind": "judge", "benchmark": "v1", "split": "dev", "metrics": {"selected_recall": 0.8},
+                 "flips": {"selected_to_reject": 2, "rejected_to_recommend": 0, "ids": {"selected_to_reject": ["a", "b"]}}}
         self.assertTrue(eval_replay.regression_warnings(entry, history))
         self.assertFalse(eval_replay.regression_warnings({**entry, "split": "holdout"}, history))
         # A baseline run with a different judge label is not a regression of this one.
@@ -148,3 +150,76 @@ class LeakCheckTest(unittest.TestCase):
             doc.write_text("KiKi、Claude Code 团队、千问办公都是例子。\n例如“让AI学会挑选合适的中文字体”这篇。", encoding="utf-8")
             leaks = eval_replay.leak_check(items, [doc])
         self.assertEqual([leak["label"] for leak in leaks], ["selected"])
+
+
+class ForwardAndSamplingTest(unittest.TestCase):
+    """2026-09-22 评测体系整改：前瞻检验、分层抽样、强标签指标、逐篇翻转、已写清单按审核日截断。"""
+
+    def items(self) -> list[dict]:
+        body = "完整中文材料。" * 200
+        def item(item_id, batch, label, strength, position):
+            return {"id": item_id, "batch": batch, "split": "dev", "label": label, "label_strength": strength, "reasons": [],
+                    "note": "", "judgeable": True, "reviewed_at": "2026-09-21", "position": position,
+                    "candidate": {"id": item_id, "title": item_id, "link": f"https://example.com/{item_id}", "content": body, "language": "zh", "content_status": "fulltext"}}
+        return [item("s1", "b1", "selected", "strong", 1), item("s2", "b1", "selected", "strong", 4),
+                item("r1", "b1", "rejected", "strong", 2), item("w1", "b1", "rejected", "weak", 3),
+                item("r2", "b2", "rejected", "strong", 1), item("s3", "b2", "selected", "adopted", 2)]
+
+    def test_weak_negatives_stay_out_of_the_main_metrics(self) -> None:
+        result = eval_replay.score_verdicts(self.items(), [
+            {"id": "s1", "verdict": "recommend"}, {"id": "s2", "verdict": "reject"},
+            {"id": "r1", "verdict": "reject"}, {"id": "w1", "verdict": "recommend"}, {"id": "r2", "verdict": "recommend"}, {"id": "s3", "verdict": "recommend"}])
+        self.assertEqual(result["confusion"], {"agree_selected": 2, "agent_only": 1, "missed_selected": 1, "agree_rejected": 1})
+        self.assertEqual(result["weak_negatives"], {"recommended": 1})
+        self.assertEqual(result["per_item"]["w1"], "recommend")
+
+    def test_flips_count_articles_not_percent(self) -> None:
+        items = self.items()
+        previous = {"s1": "recommend", "s2": "recommend", "r1": "reject", "r2": "reject"}
+        current = {"s1": "reject", "s2": "reject", "r1": "reject", "r2": "recommend"}
+        flips = eval_replay.verdict_flips(current, previous, items)
+        self.assertEqual((flips["selected_to_reject"], flips["rejected_to_recommend"]), (2, 1))
+        entry = {"kind": "judge", "benchmark": "v1", "split": "dev", "judge": "j", "metrics": {}, "flips": flips}
+        history = [{"kind": "judge", "benchmark": "v1", "split": "dev", "judge": "j", "metrics": {"selected_recall": 1.0}}]
+        self.assertTrue(any("2 篇" in w for w in eval_replay.regression_warnings(entry, history)))
+        one = {**entry, "flips": {**flips, "selected_to_reject": 1}}
+        self.assertFalse(eval_replay.regression_warnings(one, history))
+
+    def test_stratified_sample_is_deterministic_and_keeps_the_ratio(self) -> None:
+        rows = [{"id": f"s{i}", "batch": "b", "label": "selected"} for i in range(20)] + [{"id": f"r{i}", "batch": "b", "label": "rejected"} for i in range(40)]
+        first = eval_replay.stratified_sample(rows, 30, "seed-a")
+        second = eval_replay.stratified_sample(rows, 30, "seed-a")
+        other = eval_replay.stratified_sample(rows, 30, "seed-b")
+        self.assertEqual([r["id"] for r in first], [r["id"] for r in second])
+        self.assertNotEqual([r["id"] for r in first], [r["id"] for r in other])
+        self.assertEqual(sum(r["label"] == "selected" for r in first), 10)
+
+    def test_written_list_is_cut_at_review_date_and_hides_this_batch_article(self) -> None:
+        articles = [("2026-08-17", "Codex 支持百万上下文"), ("2026-09-16", "腾讯会议重磅升级"), ("2026-09-25", "ChatGPT 进 Word 了")]
+        seen = eval_replay.written_before("2026-09-20", set(), articles)
+        self.assertEqual(seen, ["Codex 支持百万上下文", "腾讯会议重磅升级"])
+        hidden = eval_replay.written_before("2026-09-30", {"腾讯会议重磅升级"}, articles)
+        self.assertNotIn("腾讯会议重磅升级", hidden)
+        self.assertIn("ChatGPT 进 Word 了", hidden)
+
+    def test_published_articles_parse_dates_and_week_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "published_topics.md"
+            path.write_text("| 日期 | 标题 | 类型 |\n|---|---|---|\n| 8.17 | Codex 百万上下文 | 发布 |\n| 第九周 | 一文讲透本体 | 科普 |\n", encoding="utf-8")
+            rows = eval_replay.published_articles(path)
+        self.assertEqual(rows, [("2026-08-17", "Codex 百万上下文"), ("2026-09-21", "一文讲透本体")])
+
+    def test_forward_record_and_report(self) -> None:
+        items = self.items()
+        with tempfile.TemporaryDirectory() as tmp:
+            a = Path(tmp) / "a.json"; b = Path(tmp) / "b.json"
+            a.write_text(json.dumps([{"id": "s1", "verdict": "recommend"}, {"id": "s2", "verdict": "reject"}, {"id": "r1", "verdict": "recommend"}, {"id": "w1", "verdict": "reject"}]), encoding="utf-8")
+            b.write_text(json.dumps([{"id": "s1", "verdict": "recommend"}, {"id": "s2", "verdict": "recommend"}, {"id": "r1", "verdict": "reject"}, {"id": "w1", "verdict": "reject"}]), encoding="utf-8")
+            entry = eval_replay.forward_record(items, "b1", [a, b], None, "claude-test")
+        self.assertEqual(entry["stephen_selected"], 2)
+        self.assertEqual(entry["judges"][0], {"file": "a.json", "recommended": 2, "hits": 1, "missed_selected": 1})
+        self.assertEqual(entry["agreement"], {"items": 4, "agree": 2})
+        report = eval_replay.forward_report([entry])
+        self.assertEqual(report["forward_precision"], 0.5)
+        self.assertEqual(report["forward_recall"], 0.5)
+        self.assertEqual(report["agreement_last"], {"items": 4, "rate": 0.5})

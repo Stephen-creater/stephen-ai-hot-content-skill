@@ -8,12 +8,15 @@
   export   导出不带结论的盲评材料，交给 Agent 按当前 SKILL 重新判断
   score    把 Agent 的判断和你的结论对比，记录到评测历史
   history  查看历次评测结果，发现退步
+  forward  前瞻检验：新一批反馈到达、改规则之前，先用主干最新规则盲判这批，记下判决和 Stephen 的结果
 """
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import random
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -49,6 +52,8 @@ def label_strength(review: dict) -> str:
 
 
 ADOPTIONS = EVAL_DIR / "adoptions.json"
+FORWARD = EVAL_DIR / "forward.jsonl"
+PUBLISHED_TOPICS = ROOT / ".local" / "articles" / "published_topics.md"
 TOPICS = ROOT / "topics"
 WORK = ROOT / ".local" / "work"
 
@@ -95,15 +100,19 @@ def collect(feedback: Path = FEEDBACK, adoptions: dict[str, dict] | None = None,
     """
     candidates: dict[str, tuple[dict, str]] = {}
     decisions: dict[str, tuple[dict, str]] = {}
+    reviewed_at: dict[str, str] = {}
+    positions: dict[str, int] = {}
     for line in feedback.read_text(encoding="utf-8").splitlines():
         try:
             record = json.loads(line)
         except json.JSONDecodeError:
             continue
         batch = str(record.get("generated_at", ""))
-        for row in record.get("candidates", []):
+        reviewed_at[batch] = str(record.get("exported_at") or record.get("imported_at") or "")[:10]
+        for position, row in enumerate(record.get("candidates", []), 1):
             if isinstance(row, dict) and row.get("id"):
                 candidates[str(row["id"])] = (row, batch)
+                positions[str(row["id"])] = position  # 审核页上的顺序
         for item_id, review in record.get("reviews", {}).items():
             if isinstance(review, dict):
                 decisions[str(item_id)] = (review, batch)
@@ -132,6 +141,8 @@ def collect(feedback: Path = FEEDBACK, adoptions: dict[str, dict] | None = None,
             "reasons": review.get("reasons", []),
             "note": str(review.get("note", "")).strip(),
             "judgeable": len(content) >= MIN_JUDGEABLE_CHARS,
+            "reviewed_at": reviewed_at.get(candidate_batch or batch, ""),
+            "position": positions.get(item_id),
             "candidate": row,
         })
     items.sort(key=lambda item: (item["batch"], item["id"]))
@@ -243,21 +254,64 @@ def leak_check(items: list[dict], docs: list[Path]) -> list[dict]:
     return leaks
 
 
-def export_blind(items: list[dict], split: str, limit: int | None) -> list[dict]:
+def published_articles(path: Path = PUBLISHED_TOPICS) -> list[tuple[str, str]]:
+    """(发布日期, 标题) from the private published-topics table. 行首是 8.17 这种月.日；写“第九周”这类没具体日期的按 2026-09-21 算。"""
+    if not path.exists():
+        return []
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) < 2 or cells[0] in {"日期", ""} or cells[0].startswith("-"):
+            continue
+        match = re.fullmatch(r"(\d{1,2})\.(\d{1,2})", cells[0])
+        day = f"2026-{int(match.group(1)):02d}-{int(match.group(2)):02d}" if match else ("2026-09-21" if cells[0].startswith("第") else "")
+        if day:
+            rows.append((day, cells[1]))
+    return rows
+
+
+def written_before(review_date: str, exclude: set[str], articles: list[tuple[str, str]]) -> list[str]:
+    """Articles Stephen had published by the day he reviewed this batch. 后来才写的不能让评审看到，
+    不然评审会把当时的正样本判成“已写过”。"""
+    return [title for day, title in articles if day <= review_date and not any(marker and marker in title for marker in exclude)]
+
+
+def stratified_sample(rows: list[dict], limit: int | None, seed: str) -> list[dict]:
+    """Same seed, same sample: 选中和淘汰按比例抽，不再取文件前 N 条。"""
+    if not limit or limit >= len(rows):
+        return rows
+    rng = random.Random(seed)
+    groups = {"selected": [row for row in rows if row["label"] == "selected"], "rejected": [row for row in rows if row["label"] != "selected"]}
+    share = limit / len(rows)
+    picked = []
+    for label in ("selected", "rejected"):
+        take = round(len(groups[label]) * share)
+        picked.extend(rng.sample(groups[label], min(take, len(groups[label]))))
+    picked.sort(key=lambda row: (row["batch"], row["id"]))
+    return picked[:limit]
+
+
+def export_blind(items: list[dict], split: str, limit: int | None, seed: str = "benchmark", adoptions: dict[str, dict] | None = None) -> list[dict]:
     rows = [item for item in items if item["judgeable"] and (split == "all" or item["split"] == split)]
-    if limit:
-        rows = rows[:limit]
-    return [
-        {
+    rows = stratified_sample(rows, limit, seed)
+    adoptions = load_adoptions() if adoptions is None else adoptions
+    articles = published_articles()
+    exported = []
+    for item in rows:
+        exclude = {str(adoptions.get(item["id"], {}).get("article", ""))[-12:]} if item["id"] in adoptions else set()
+        exported.append({
             "id": item["id"],
             "title": item["candidate"].get("source_title") or item["candidate"].get("title"),
             "link": item["candidate"].get("link"),
             "source_name": item["candidate"].get("source_name"),
             "published": item["candidate"].get("published"),
+            "image_count": item["candidate"].get("image_count"),
+            "video_count": item["candidate"].get("video_count"),
+            "review_date": item.get("reviewed_at", ""),
+            "written_before_review": written_before(item.get("reviewed_at") or "9999", exclude, articles) if articles else None,
             "content": item["candidate"].get("content"),
-        }
-        for item in rows
-    ]
+        })
+    return exported
 
 
 def gate_blocked(item: dict, profile: dict) -> bool:
@@ -276,6 +330,8 @@ def score_verdicts(items: list[dict], verdicts: list[dict], profile: dict | None
     tp = fp = fn = tn = 0
     misses, false_alarms = [], []
     strong = Counter()
+    weak_negatives = Counter()
+    per_item: dict[str, str] = {}
     for verdict in verdicts:
         item = by_id.get(str(verdict.get("id")))
         if not item:
@@ -283,6 +339,11 @@ def score_verdicts(items: list[dict], verdicts: list[dict], profile: dict | None
         predicted = verdict.get("verdict") == "recommend" and not (profile and gate_blocked(item, profile))
         actual = item["label"] == "selected"
         title = item["candidate"].get("title")
+        per_item[item["id"]] = "recommend" if predicted else "reject"
+        # 没给理由的淘汰不一定是“不好”，可能只是那天没轮到：只单独记，不进主指标。
+        if not actual and item["label_strength"] == "weak":
+            weak_negatives["recommended" if predicted else "rejected"] += 1
+            continue
         if predicted and actual:
             tp += 1
         elif predicted and not actual:
@@ -315,9 +376,28 @@ def score_verdicts(items: list[dict], verdicts: list[dict], profile: dict | None
         "accuracy": round((tp + tn) / total, 3) if total else None,
         "confusion": {"agree_selected": tp, "agent_only": fp, "missed_selected": fn, "agree_rejected": tn},
         "strong_label_agreement": dict(strong),
+        "weak_negatives": dict(weak_negatives),
+        "per_item": per_item,
         "missed_selected": misses,
         "agent_only_recommendations": false_alarms,
     }
+
+
+def verdict_flips(current: dict[str, str], previous: dict[str, str], items: list[dict]) -> dict:
+    """Which articles changed verdict since the last run of the same judge. 一篇翻转是噪声，两篇选中的翻成淘汰要解释。"""
+    labels = {item["id"]: item["label"] for item in items}
+    flipped = {"selected_to_reject": [], "rejected_to_recommend": [], "other": []}
+    for item_id, now in current.items():
+        before = previous.get(item_id)
+        if before is None or before == now:
+            continue
+        if labels.get(item_id) == "selected" and now == "reject":
+            flipped["selected_to_reject"].append(item_id)
+        elif labels.get(item_id) != "selected" and now == "recommend":
+            flipped["rejected_to_recommend"].append(item_id)
+        else:
+            flipped["other"].append(item_id)
+    return {"compared": sum(1 for item_id in current if item_id in previous), **{k: len(v) for k, v in flipped.items()}, "ids": flipped}
 
 
 def git_head() -> str:
@@ -345,13 +425,71 @@ def regression_warnings(entry: dict, history: list[dict]) -> list[str]:
         return []
     last = previous[-1]["metrics"]
     warnings = []
-    # Reading order is informational only; the machine layer is judged on keeping selected items.
-    keys = ("selected_kept_rate",) if entry["kind"] == "machine" else ("selected_recall", "recommend_precision", "balanced_accuracy")
-    for key in keys:
-        old, new = last.get(key), entry["metrics"].get(key)
+    if entry["kind"] == "machine":
+        # Reading order is informational only; the machine layer is judged on keeping selected items.
+        old, new = last.get("selected_kept_rate"), entry["metrics"].get("selected_kept_rate")
         if isinstance(old, (int, float)) and isinstance(new, (int, float)) and new < old - 0.02:
-            warnings.append(f"{key} 从 {old} 降到 {new}")
+            warnings.append(f"selected_kept_rate 从 {old} 降到 {new}")
+        return warnings
+    # 判断层看逐篇翻转，不看百分比：24 个正样本里一篇就是 4%，比原来的 0.02 门槛还大。
+    flips = entry.get("flips") or {}
+    if flips.get("selected_to_reject", 0) >= 2:
+        warnings.append(f"上次推荐、这次淘汰的选中文章有 {flips['selected_to_reject']} 篇：{flips['ids']['selected_to_reject']}")
+    if flips.get("rejected_to_recommend", 0) >= 4:
+        warnings.append(f"上次淘汰、这次推荐的淘汰稿有 {flips['rejected_to_recommend']} 篇，放宽过头了")
     return warnings
+
+
+def forward_record(items: list[dict], batch: str, verdict_files: list[Path], profile: dict, model: str) -> dict:
+    """新一批反馈到达、改规则之前，用主干最新规则盲判这批，逐批累计成前瞻成绩。两个评审时顺手算一致率。"""
+    subset = [item for item in items if item["batch"] == batch]
+    if not subset:
+        raise SystemExit(f"基准里没有批次 {batch}，先导入反馈并 build")
+    judges = []
+    per_judge: list[dict[str, str]] = []
+    for path in verdict_files:
+        verdicts = json.loads(path.read_text(encoding="utf-8"))
+        result = score_verdicts(subset, verdicts, profile)
+        per_judge.append(result["per_item"])
+        recommended = sum(1 for v in result["per_item"].values() if v == "recommend")
+        hits = result["confusion"]["agree_selected"]
+        judges.append({"file": path.name, "recommended": recommended, "hits": hits, "missed_selected": result["confusion"]["missed_selected"]})
+    agreement = None
+    if len(per_judge) >= 2:
+        shared = [item_id for item_id in per_judge[0] if item_id in per_judge[1]]
+        agreement = {"items": len(shared), "agree": sum(per_judge[0][i] == per_judge[1][i] for i in shared)}
+    return {
+        "at": datetime.now(timezone.utc).isoformat(), "commit": git_head(), "model": model, "batch": batch,
+        "reviewed": len(subset), "stephen_selected": sum(item["label"] == "selected" for item in subset),
+        "judges": judges, "agreement": agreement,
+    }
+
+
+def forward_report(rows: list[dict], window: int = 50) -> dict:
+    """累计前瞻命中率和最近 window 条的双评审一致率。"""
+    recommended = sum(j["recommended"] for row in rows for j in row["judges"][:1])
+    hits = sum(j["hits"] for row in rows for j in row["judges"][:1])
+    selected = sum(row["stephen_selected"] for row in rows)
+    agree = items = 0
+    for row in reversed(rows):
+        if row.get("agreement"):
+            take = min(row["agreement"]["items"], window - items)
+            if take <= 0:
+                break
+            agree += round(row["agreement"]["agree"] * take / row["agreement"]["items"])
+            items += take
+    return {
+        "batches": len(rows),
+        "stephen_selected": selected,
+        "judge_recommended": recommended,
+        "judge_hits": hits,
+        "forward_precision": round(hits / recommended, 3) if recommended else None,
+        "forward_recall": round(hits / selected, 3) if selected else None,
+        "agreement_last": {"items": items, "rate": round(agree / items, 3) if items else None},
+        "per_batch": [{"batch": r["batch"], "commit": r["commit"], "selected": r["stephen_selected"],
+                       "judges": [(j["recommended"], j["hits"]) for j in r["judges"]],
+                       "agreement": r.get("agreement")} for r in rows],
+    }
 
 
 def read_history() -> list[dict]:
@@ -375,9 +513,17 @@ def main() -> None:
     score_parser = sub.add_parser("score")
     score_parser.add_argument("verdicts", type=Path)
     score_parser.add_argument("--split", choices=["dev", "holdout", "all"], default="dev")
-    score_parser.add_argument("--judge", default="agent", help="谁做的判断，例如 claude-opus-5")
+    score_parser.add_argument("--judge", required=True, help="这次评测的名字，同名的才互相比较，例如 dev-v11")
+    score_parser.add_argument("--model", required=True, help="评审用的模型版本，例如 claude-fable-5-1；模型换了数字就不能比")
     score_parser.add_argument("--no-gate", action="store_true", help="只看 Agent 本身，不叠加一票否决")
     sub.add_parser("history")
+    forward_parser = sub.add_parser("forward")
+    forward_sub = forward_parser.add_subparsers(dest="forward_command", required=True)
+    record_parser = forward_sub.add_parser("record", help="记下改规则前主干最新规则对这批的判决")
+    record_parser.add_argument("--batch", required=True)
+    record_parser.add_argument("--model", required=True)
+    record_parser.add_argument("--verdicts", type=Path, nargs="+", required=True, help="一个或两个评审的 verdicts.json")
+    forward_sub.add_parser("report", help="累计前瞻命中率和双评审一致率")
     args = parser.parse_args()
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
 
@@ -408,22 +554,38 @@ def main() -> None:
         print(json.dumps(leaks, ensure_ascii=False, indent=2))
         sys.exit(1 if leaks else 0)
     if args.command == "export":
-        rows = export_blind(items, args.split, args.limit)
+        rows = export_blind(items, args.split, args.limit, seed=path.name)
         args.output.write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8")
-        print(f"已导出 {len(rows)} 条盲评材料（不含你的结论）：{args.output}")
+        print(f"已导出 {len(rows)} 条盲评材料（不含你的结论，已写清单按审核日截断）：{args.output}")
     elif args.command == "score":
         verdicts = json.loads(args.verdicts.read_text(encoding="utf-8"))
         subset = [item for item in items if args.split == "all" or item["split"] == args.split]
         result = score_verdicts(subset, verdicts, None if args.no_gate else profile)
+        history = read_history()
+        previous = [row for row in history if row.get("kind") == "judge" and row.get("benchmark") == path.name
+                    and row.get("split") == args.split and row.get("judge") == args.judge and row.get("per_item")]
+        flips = verdict_flips(result["per_item"], previous[-1]["per_item"], subset) if previous else None
         entry = {
-            "at": datetime.now(timezone.utc).isoformat(), "commit": git_head(), "kind": "judge", "judge": args.judge,
+            "at": datetime.now(timezone.utc).isoformat(), "commit": git_head(), "kind": "judge", "judge": args.judge, "model": args.model,
             "benchmark": path.name, "split": args.split,
             "metrics": {k: result[k] for k in ("judged", "selected_recall", "recommend_precision", "estimated_real_precision", "balanced_accuracy", "accuracy")},
+            "weak_negatives": result["weak_negatives"], "flips": flips, "per_item": result["per_item"],
         }
-        print(json.dumps(result, ensure_ascii=False, indent=2))
-        for warning in regression_warnings(entry, read_history()):
+        shown = {k: v for k, v in result.items() if k != "per_item"}
+        shown["flips_since_last_run"] = flips
+        print(json.dumps(shown, ensure_ascii=False, indent=2))
+        for warning in regression_warnings(entry, history):
             print(f"退步：{warning}")
         append_history(entry)
+    elif args.command == "forward":
+        if args.forward_command == "record":
+            entry = forward_record(items, args.batch, args.verdicts, profile, args.model)
+            with FORWARD.open("a", encoding="utf-8") as out:
+                out.write(json.dumps(entry, ensure_ascii=False) + "\n")
+            print(json.dumps(entry, ensure_ascii=False, indent=2))
+        else:
+            rows = [json.loads(line) for line in FORWARD.read_text(encoding="utf-8").splitlines() if line.strip()] if FORWARD.exists() else []
+            print(json.dumps(forward_report(rows), ensure_ascii=False, indent=2))
 
 
 if __name__ == "__main__":

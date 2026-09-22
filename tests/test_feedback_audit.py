@@ -106,3 +106,20 @@ class SourceYieldTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BatchLevelTest(unittest.TestCase):
+    def test_batch_level_counts_passes_and_positions(self):
+        records = [
+            {"generated_at": "b1", "candidates": [{"id": "a"}, {"id": "b"}, {"id": "c"}], "reviews": {"a": {"status": "rejected"}, "b": {"status": "rejected"}, "c": {"status": "selected", "reasons": ["干货足"]}}},
+            {"generated_at": "b2", "candidates": [{"id": "d"}, {"id": "e"}], "reviews": {"d": {"status": "rejected"}, "e": {"status": "rejected"}}},
+        ]
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "feedback.jsonl"
+            path.write_text("\n".join(json.dumps(r, ensure_ascii=False) for r in records) + "\n", encoding="utf-8")
+            report = audit_feedback(path)
+        level = report["batch_level"]
+        self.assertEqual((level["batches"], level["batches_with_a_pass"], level["effective_batch_rate"]), (2, 1, 0.5))
+        self.assertEqual(level["selected_per_batch"], 0.5)
+        self.assertEqual((level["selected_in_top_5"], level["selected_positions_known"]), (1, 1))
+        self.assertEqual(report["batches"][0]["selected_positions"], [3])

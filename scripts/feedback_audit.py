@@ -95,7 +95,11 @@ def audit_feedback(path: Path) -> dict:
                     "reason": "selected button with negative note language",
                 })
         reason_counts.update(f"batch:{reason}" for reason in record.get("batch_reasons", []) if str(reason).strip())
-        batches.append({"batch": batch, "owner": owner, "reviews": sum(batch_counts.values()), "statuses": dict(batch_counts)})
+        order = [str(row.get("id")) for row in record.get("candidates", []) if isinstance(row, dict) and row.get("id")]
+        selected_positions = sorted(order.index(str(item_id)) + 1 for item_id, review in reviews.items()
+                                    if isinstance(review, dict) and review.get("status") == "selected" and str(item_id) in order)
+        batches.append({"batch": batch, "owner": owner, "reviews": sum(batch_counts.values()), "statuses": dict(batch_counts),
+                        "selected_positions": selected_positions})
 
     repeated = []
     for item_id, decisions in seen_decisions.items():
@@ -108,8 +112,21 @@ def audit_feedback(path: Path) -> dict:
             })
 
     decided = status_counts["selected"] + status_counts["rejected"]
+    # 北极星是批次级的：每批通过几条、多少批至少通过一条、通过的题在审核页排第几。
+    passes = [row["statuses"].get("selected", 0) for row in batches]
+    positions = [pos for row in batches for pos in row["selected_positions"]]
+    batch_level = {
+        "batches": len(batches),
+        "selected_per_batch": round(sum(passes) / len(batches), 2) if batches else None,
+        "batches_with_a_pass": sum(1 for count in passes if count),
+        "effective_batch_rate": round(sum(1 for count in passes if count) / len(batches), 3) if batches else None,
+        "recent_10_selected_per_batch": round(sum(passes[-10:]) / len(passes[-10:]), 2) if passes else None,
+        "selected_in_top_5": sum(1 for pos in positions if pos <= 5),
+        "selected_positions_known": len(positions),
+    }
     return {
         "contract_version": 1,
+        "batch_level": batch_level,
         "selected_rate": round(status_counts["selected"] / decided, 4) if decided else None,
         "recent_batches": batches[-10:],
         "source": str(path),
