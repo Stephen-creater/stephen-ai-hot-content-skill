@@ -128,12 +128,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 审核页的用法：只点想要的那几条，原因点标签，标签说不清时再写一句；导出时没点的默认记为“不要”。
 
-**导入之前先做前瞻检验**：把这批候选去掉终审字段存成 `.local/eval/check-<批次ID>/batch.json`，用主干最新规则（不是跑这批时的旧版）开两个互不可见的子 Agent 盲判，各写一份 verdicts。这一步必须在改任何规则之前做，它记录的是“改规则前的判决和 Stephen 的结果对不对得上”，逐批累计就是真正的前瞻成绩；两个评审的一致率顺手得到。导入并 build 之后：
-
-```bash
-.venv/bin/python3 scripts/eval_replay.py forward record --batch <批次ID> --model <评审模型> --verdicts a.json b.json
-.venv/bin/python3 scripts/eval_replay.py forward report
-```
+**改任何规则之前先做前瞻检验**：把这批候选去掉终审字段，用主干最新规则开两个互不可见的子 Agent 盲判，导入并 build 后 `eval_replay.py forward record --batch <批次ID> --model <评审模型> --verdicts a.json b.json`，`forward report` 看累计前瞻命中率和双评审一致率。这是唯一不考原题的数字，做法见 [评测方法](references/evaluation.md)。
 
 先核对批次 ID、认领、候选 ID、标题、链接和顺序，再导入：
 
