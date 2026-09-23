@@ -42,11 +42,11 @@ REASON_MAP = SUITE_DIR / "reason_map.json"
 SUITES = SUITE_DIR / "suites.json"
 RUNS = SUITE_DIR / "runs"
 REPORT = SUITE_DIR / "report.html"
-# 改了这些文件，AI 评审的判断就可能变，回归测试集要重跑。
+# AI 评审答题时读的文件，加上把答案算成结论的代码。改了这些，回归测试集要让评审重判。
+# 脚本检查（curator.py、口味档案里的阈值）评审不读，改了只用代码重算：放出来的用例补判，选中的不能被误拦。
 RULE_FILES = (
     "SKILL.md", "references/editorial-judgment.md", "references/editorial-calibration-cases.md",
-    "resources/review_questions.json", "resources/editorial_profile.json",
-    "scripts/editorial_judgment.py", "scripts/curator.py",
+    "resources/review_questions.json", "scripts/editorial_judgment.py",
 )
 # 写成文章的对应关系，这几种算确定，进回归测试集；probable 只进能力测试集。
 SURE_ADOPTION = {"sure", "certain", "already_written"}
@@ -304,6 +304,38 @@ def build_suites(run: dict, items: list[dict], reason_map: dict[str, dict], prev
 
 # ---------- 上线前检查 ----------
 
+def rescore(run: dict, items: list[dict], profile: dict) -> dict:
+    """按现在的脚本检查重算一次运行的结论：现在被脚本拦下的算不推；以前被脚本拦下、现在放出来的没有评审答案，记为待补判。"""
+    by_id = {item["id"]: item for item in items}
+    trials = []
+    for trial in run["trials"]:
+        results = {}
+        for item_id, result in trial["results"].items():
+            item = by_id.get(item_id)
+            if item is None:
+                continue
+            if script_blocked(item, profile):
+                results[item_id] = {"verdict": "reject", "by": ["script"], "answers": {}}
+            elif result.get("by") == ["script"] or result.get("verdict") == "missing":
+                results[item_id] = {"verdict": "missing", "by": [], "answers": {}}
+            else:
+                hits = vetoes(result.get("answers") or {}) + (["self_veto"] if "self_veto" in result.get("by", []) else [])
+                results[item_id] = {"verdict": "reject" if hits else "recommend", "by": hits, "answers": result.get("answers") or {}}
+        trials.append({**trial, "results": results})
+    return {**run, "trials": trials}
+
+
+def fill_missing(run: dict, others: list[dict]) -> dict:
+    """待补判的用例，用同一版规则后来补判的那次运行的答案补上。"""
+    trial = run["trials"][0] if run["trials"] else {"judge": "", "results": {}}
+    results = dict(trial["results"])
+    for other in sorted(others, key=lambda r: r["run_id"]):
+        for item_id, result in (other["trials"][0]["results"] if other["trials"] else {}).items():
+            if results.get(item_id, {}).get("verdict") == "missing" and result.get("verdict") != "missing":
+                results[item_id] = result
+    return {**run, "trials": [{**trial, "results": results}, *run["trials"][1:]]}
+
+
 def gate(items: list[dict], suites: dict, runs: list[dict], reason_map: dict[str, dict], profile: dict) -> list[str]:
     problems = []
     if not suites.get("regression"):
@@ -316,10 +348,15 @@ def gate(items: list[dict], suites: dict, runs: list[dict], reason_map: dict[str
             problems.append(f"脚本检查误拦了回归测试集里的好稿：{item['candidate'].get('title')}")
     # 2. 规则改了，就必须用现在的规则重跑回归测试集，而且全部通过。
     fingerprint = rules_fingerprint()
-    covering = [run for run in runs if run["suite"] != "negative_batch" and run["fingerprint"] == fingerprint and set(suites["regression"]) <= set(run["case_ids"])]
+    runs = [rescore(run, items, profile) for run in runs]
+    same = [run for run in runs if run["suite"] != "negative_batch" and run["fingerprint"] == fingerprint]
+    covering = [fill_missing(run, same) for run in same if set(suites["regression"]) <= set(run["case_ids"])]
     if not covering:
         problems.append("规则文件改过了，还没有用现在的规则重跑回归测试集（export --suite regression，评审答完后 record）")
     else:
+        pending = sorted(i for i in suites["regression"] if (covering[-1]["trials"][0]["results"].get(i) or {}).get("verdict") == "missing")
+        if pending:
+            problems.append(f"脚本检查放松后，有 {len(pending)} 条回归用例不再被脚本拦下，要让评审补判（export --suite needs_judging）")
         # AI 评审每次答案有波动（同一条跑三次约九成结论一致），所以不要求 100%：按 Anthropic 对非确定性任务的建议，
         # 通过率不低于口味档案的 regression_pass_rate_min；写成文章的必须全对；同一条连续两次回归都判错，算真退步。
         regression = set(suites["regression"])
@@ -530,6 +567,11 @@ def main() -> None:
             return set(suites.get(name, [])) & judgeable
         if name == "negative_batch":
             return negative_batch_ids(items, suites, profile)
+        if name == "needs_judging":
+            fp = rules_fingerprint()
+            same = [rescore(r, items, profile) for r in load_runs() if r["fingerprint"] == fp and r["suite"] != "negative_batch"]
+            answered = {i for r in same for t in r["trials"] for i, x in t["results"].items() if x["verdict"] != "missing"}
+            return {i for i in suites.get("regression", []) if i in judgeable and i not in answered}
         if name == "all":
             return {item["id"] for item in items if item["judgeable"] and case_kind(item, reason_map, adoptions) != "weak"}
         if name in eval_replay.SPLITS:
@@ -578,8 +620,9 @@ def main() -> None:
         for problem in problems:
             print(f"不通过：{problem}")
         if not problems:
-            runs = [run for run in load_runs() if run["suite"] != "negative_batch" and run["fingerprint"] == rules_fingerprint()]
-            failed = [i for i in score_run(runs[-1], items, reason_map)["failed"] if i in set(suites["regression"])] if runs else []
+            same = [rescore(run, items, profile) for run in load_runs() if run["suite"] != "negative_batch" and run["fingerprint"] == rules_fingerprint()]
+            full = [fill_missing(run, same) for run in same if set(suites["regression"]) <= set(run["case_ids"])]
+            failed = [i for i in score_run(full[-1], items, reason_map)["failed"] if i in set(suites["regression"])] if full else []
             print(f"上线前检查通过：回归测试集 {len(suites['regression'])} 条判错 {len(failed)} 条（通过率 {1 - len(failed) / len(suites['regression']):.1%}），写成文章的全对，负向用例没有凑数，规则指纹 {rules_fingerprint()}")
         sys.exit(1 if problems else 0)
     elif args.command == "sources":

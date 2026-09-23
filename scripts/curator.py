@@ -16,8 +16,11 @@ from editorial_judgment import build_decision_contract
 TAG_RE = re.compile(r"<[^>]+>")
 VERSION_ONLY_RE = re.compile(r"^(?:[a-z-]+-)?v?\d+\.\d+(?:\.\d+)?(?:[-.][a-z0-9.]+)?$", re.I)
 PACKAGE_VERSION_RE = re.compile(r"^[a-z0-9_.-]+\s+v?\d+\.\d+(?:\.\d+)?(?:[-.][a-z0-9.]+)?$", re.I)
+# 2026-09-23 补了模型名：《Introducing GPT-6 Sol and Luna》《What a task costs on Opus 5.5》标题里只有模型名、摘要又长，
+# 被当成“缺少明确 AI 对象”拦掉，当天最大的两个发布一篇没进候选。
 CORE_AI_TERMS = (
     "ai", "agent", "llm", "model", "codex", "claude", "openai", "anthropic",
+    "gpt", "opus", "sonnet", "haiku", "grok", "deepseek", "qwen", "llama", "mistral", "gemma", "glm", "minimax", "千问", "大模型",
     "gemini", "deepmind", "skill", "mcp", "prompt", "inference", "training",
     "reasoning", "kimi", "workbuddy", "qoder", "cursor", "copilot", "openclaw", "chatgpt", "chatbox",
     "人工智能", "模型", "智能体", "推理", "训练", "上下文", "缓存", "豆包",
@@ -69,12 +72,11 @@ def minimum_article_chars(profile: dict) -> int:
 
 
 def ai_subject_in_body(summary: str, content: str) -> bool:
-    """Feeds without a real summary (most WeChat RSS) leave only the title to judge.
+    """标题和摘要里找不到 AI 词时，看正文：开头要提到，全文要反复出现，顺带一提的不算。
 
-    Then the opening paragraphs stand in for the summary, and strong AI terms must
-    keep recurring in the body so a passing mention cannot qualify an unrelated piece.
+    以前摘要够长就不看正文，官方博客的摘要常常只写产品名，会被误判成和 AI 无关。
     """
-    if len(summary) >= 80 or not content:
+    if not content:
         return False
     lowered = content.lower()
     if not any(contains_term(lowered[:600], term) for term in STRONG_AI_TERMS):

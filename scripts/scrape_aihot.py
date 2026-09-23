@@ -38,6 +38,14 @@ from skill_version import behind_remote, current_commit
 ROOT = Path(__file__).resolve().parents[1]
 RESOURCES = ROOT / "resources"
 HEADERS = {"User-Agent": "StephenTopicCurator/1.0 (+https://github.com/Stephen-creater)"}
+# 这些站不认脚本的 UA，要用完整的浏览器 UA（53AI 只写 Mozilla/5.0 也会被断开）。
+BROWSER_HEADERS = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0 Safari/537.36",
+                   "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8", "Accept-Language": "zh-CN,zh;q=0.9"}
+BROWSER_UA_HOSTS = {"www.53ai.com", "53ai.com"}
+
+
+def headers_for(url: str) -> dict:
+    return BROWSER_HEADERS if urlparse(url).netloc.lower() in BROWSER_UA_HOSTS else HEADERS
 
 
 def parse_feed(content: bytes):
@@ -112,7 +120,7 @@ def http_get(url: str, settings: dict, params: dict | None = None, ttl: int | No
     failure = cache_read(settings, "failed:" + key, int(settings.get("failure_cache_ttl_seconds", 0)))
     if failure is not None:
         raise requests.RequestException(f"最近已失败，暂不重试：{failure.get('error', '')}")
-    kwargs = {"headers": HEADERS, "timeout": settings["request_timeout_seconds"]}
+    kwargs = {"headers": headers_for(url), "timeout": settings["request_timeout_seconds"]}
     if params:
         kwargs["params"] = params
     try:
@@ -213,6 +221,15 @@ def mirror_urls(source: dict) -> list[str]:
 
 
 def fetch_rss(source: dict, settings: dict) -> list[dict]:
+    """一个 RSS 源；extra_urls 是它的后几页（人人都是产品经理 AI 分类 ?paged=2..4，一页 15 条只覆盖一两个小时）。"""
+    if source.get("extra_urls"):
+        rows, seen = [], set()
+        for url in [source["url"], *source["extra_urls"]]:
+            for row in fetch_rss({**source, "url": url, "extra_urls": None}, settings):
+                if row["link"] not in seen:
+                    seen.add(row["link"])
+                    rows.append(row)
+        return rows[: int(source.get("items_limit", settings["rss_items_per_source"]))]
     urls = mirror_urls(source)
     for index, url in enumerate(urls):
         try:
@@ -421,18 +438,34 @@ def follow_original(item: dict, settings: dict) -> dict:
 
 
 def fetch_paged_web_index(source: dict, settings: dict) -> list[dict]:
-    """Walk numbered list pages so a high-yield library is not limited to its homepage."""
+    """Walk numbered list pages so a high-yield library is not limited to its homepage.
+
+    网址里有 {date} 的（觉醒AI 的每日发布清单 /ai/updates/2026/09/22/），往回看 days_back 天，每天从第 1 页翻到
+    某一页不再出新文章为止。觉醒AI 一天发 250 到 700 篇，以前只抓文章库前 60 条（还是按更新时间排的），只看到一两成。
+    """
     limit = int(source.get("items_limit", settings["web_links_per_source"]))
-    page_settings = {**settings, "web_links_per_source": limit}
+    page_settings = {**settings, "web_links_per_source": 200}
     rows, seen = [], set()
-    for page in range(1, int(source.get("pages", 1)) + 1):
-        url = source["url"] if page == 1 else source["page_url_template"].format(page=page)
-        for row in fetch_web_index({**source, "url": url}, page_settings):
-            if row["link"] not in seen:
+    dates = [None]
+    if "{date}" in source["url"]:
+        today = datetime.now()
+        dates = [(today - timedelta(days=offset)).strftime("%Y/%m/%d") for offset in range(int(source.get("days_back", 1)))]
+    for day in dates:
+        for page in range(1, int(source.get("pages", 1)) + 1):
+            template = source["url"] if page == 1 else source["page_url_template"]
+            url = template.format(page=page, date=day) if day else template.format(page=page)
+            try:
+                found = fetch_web_index({**source, "url": url}, page_settings)
+            except requests.RequestException:
+                break  # 翻过了最后一页，站点返回 404
+            fresh = [row for row in found if row["link"] not in seen]
+            if not fresh:
+                break
+            for row in fresh:
                 seen.add(row["link"])
                 rows.append(row)
-        if len(rows) >= limit:
-            break
+            if len(rows) >= limit:
+                return rows[:limit]
     return rows[:limit]
 
 
@@ -503,7 +536,7 @@ def fetch_web_index(source: dict, settings: dict) -> list[dict]:
     response = http_get(source["url"], settings, ttl=source.get("cache_ttl_seconds"))
     response.raise_for_status()
     soup = BeautifulSoup(decode_html(response.content, response.encoding), "html.parser")
-    selectors = "article a[href], main a[href], div.bg-card a[href]"
+    selectors = source.get("link_selector") or "article a[href], main a[href], div.bg-card a[href]"
     include_path_prefix = source.get("include_path_prefix", "")
     seen = set()
     items = []
@@ -621,6 +654,35 @@ def fetch_learnprompt_radar(source: dict, settings: dict) -> list[dict]:
     return rows
 
 
+def fetch_sitemap_watch(source: dict, settings: dict) -> list[dict]:
+    """盯官网网站地图，新出现的网址就是新发布。
+
+    2026-09-22 Claude Opus 5.5 的发布页在 anthropic.com/claude-opus-5-5，不在 /news 栏目，新闻订阅（还是第三方镜像，
+    停在 9.18）收不到。网站地图没有更新时间，只能记下见过的网址：第一次运行只记账不出候选，之后新增的才算。
+    见过的网址存在 .local/cache/sitemap_seen/，不提交。
+    """
+    response = http_get(source["url"], settings, ttl=0)
+    response.raise_for_status()
+    urls = re.findall(r"<loc>\s*([^<\s]+)\s*</loc>", response.text)
+    include = re.compile(source.get("path_include_pattern", "."))
+    exclude = re.compile(source["path_exclude_pattern"]) if source.get("path_exclude_pattern") else None
+    urls = [u for u in urls if include.search(urlparse(u).path) and not (exclude and exclude.search(urlparse(u).path))]
+    directory = Path(settings.get("cache_dir") or ROOT / ".local" / "cache" / "http").parent / "sitemap_seen"
+    directory.mkdir(parents=True, exist_ok=True)
+    seen_path = directory / (re.sub(r"[^a-z0-9]+", "_", urlparse(source["url"]).netloc.lower()) + ".json")
+    seen = set(json.loads(seen_path.read_text(encoding="utf-8"))) if seen_path.exists() else None
+    new = [] if seen is None else [u for u in urls if u not in seen]
+    seen_path.write_text(json.dumps(sorted(set(urls) | (seen or set())), ensure_ascii=False), encoding="utf-8")
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return [{
+        "title": urlparse(u).path.strip("/").split("/")[-1].replace("-", " "), "link": u, "summary": "",
+        "published": today, "source_name": source["name"], "source_category": source["category"],
+        "source_priority": source["priority"], "source_type": "web", "source_role": source.get("role", "candidate"),
+        "language": source.get("language", "en"), "maturity": source.get("maturity", "primary"),
+        "content_form": "article", "content_status": "summary",
+    } for u in new[: int(source.get("items_limit", 30))]]
+
+
 def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
     try:
         if source["type"] == "rss":
@@ -639,6 +701,8 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
             rows = fetch_bestblogs(source, settings)
         elif source["type"] == "follow_builders":
             rows = fetch_follow_builders(source, settings)
+        elif source["type"] == "sitemap_watch":
+            rows = fetch_sitemap_watch(source, settings)
         else:
             rows = fetch_web_index(source, settings)
         for row in rows:
@@ -789,7 +853,7 @@ def hydrate_direct(item: dict, settings: dict) -> dict:
             raw, truncated = base64.b64decode(cached["body"]), bool(cached.get("truncated"))
             text = decode_html(raw, cached.get("encoding"))
         else:
-            with request_with_retry(item["link"], {"headers": HEADERS, "timeout": settings["request_timeout_seconds"], "stream": True}) as response:
+            with request_with_retry(item["link"], {"headers": headers_for(item["link"]), "timeout": settings["request_timeout_seconds"], "stream": True}) as response:
                 response.raise_for_status()
                 chunks = []
                 size = 0
@@ -838,6 +902,10 @@ def hydrate_direct(item: dict, settings: dict) -> dict:
         meta = metadata.as_dict() if hasattr(metadata, "as_dict") else metadata or {}
         if not item.get("published") and isinstance(meta, dict):
             item["published"] = meta.get("date") or ""
+        # 53AI 的文章网址里带发布日期（/news/LargeLanguageModel/2026092352418.html），页面元数据里取不到时用它。
+        url_date = re.search(r"/(20\d{2})(\d{2})(\d{2})\d{5}\.html$", item.get("link", ""))
+        if not item.get("published") and url_date:
+            item["published"] = "-".join(url_date.groups())
         if not item.get("title") and isinstance(meta, dict):
             item["title"] = clean_text(meta.get("title"))
     except Exception as exc:

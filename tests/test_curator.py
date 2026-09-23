@@ -282,7 +282,10 @@ class CuratorTest(unittest.TestCase):
         self.assertNotIn("标题与摘要缺少明确 AI 对象", score_item({**base, "content": ai_body}, self.profile, now=now)["penalty"])
         self.assertIn("标题与摘要缺少明确 AI 对象", score_item({**base, "content": passing_mention}, self.profile, now=now)["penalty"])
         self.assertIn("标题与摘要缺少明确 AI 对象", score_item({**base, "content": database}, self.profile, now=now)["penalty"])
-        self.assertIn("标题与摘要缺少明确 AI 对象", score_item({**base, "summary": "一篇关于团队发布节奏和配置检查的复盘文章，讲清楚怎么把一周一次发布改成一天多次发布的过程与代价，以及中间踩过的坑、团队怎么分工、最后保留下来的检查清单和每次发布前必须确认的三件事情。", "content": ai_body}, self.profile, now=now)["penalty"])
+        # 摘要没提 AI、正文开头提到并且反复出现的，也算 AI 材料：官方博客的摘要常常只写产品名（2026-09-23 GPT-6 Sol 发布稿被误拦）。
+        self.assertNotIn("标题与摘要缺少明确 AI 对象", score_item({**base, "summary": "一篇关于团队发布节奏和配置检查的复盘文章，讲清楚怎么把一周一次发布改成一天多次发布的过程与代价，以及中间踩过的坑、团队怎么分工、最后保留下来的检查清单和每次发布前必须确认的三件事情。", "content": ai_body}, self.profile, now=now)["penalty"])
+        release = {**base, "title": "Introducing GPT-6 Sol and Luna", "summary": "Two new frontier models that balance capability and cost for everyday work, with lower API prices than the previous generation and new options for developers.", "content": ai_body}
+        self.assertNotIn("标题与摘要缺少明确 AI 对象", score_item(release, self.profile, now=now)["penalty"])
 
     def test_long_founder_interview_is_not_expired_event_news(self):
         item = {"title": "对谈快看创始人：漫画编辑怎样和 AI 一起做分镜", "summary": "创始人讲团队怎样发布 AI 功能并调整流程", "content": "我们先让编辑用 AI 做分镜，再看读者反馈调整流程。" * 120, "published": "2026-08-10", "source_name": "中文访谈", "source_priority": 4, "source_type": "rss", "source_role": "candidate", "language": "zh", "maturity": "secondary", "content_form": "article", "content_status": "fulltext", "link": "https://example.com/founder"}
@@ -1641,3 +1644,23 @@ class WayToAGITest(unittest.TestCase):
         self.assertEqual(rows[0]["content_status"], "fulltext")
         self.assertEqual(rows[1]["link"], "https://mp.weixin.qq.com/s/abc")
         self.assertEqual(rows[1]["wiki_link"], "https://waytoagi.feishu.cn/wiki/STUB")
+
+
+class SitemapWatchTest(unittest.TestCase):
+    def test_first_run_only_records_then_new_pages_become_candidates(self):
+        import tempfile
+        from unittest.mock import patch
+        import scrape_aihot
+        source = {"name": "Anthropic 官网新页面", "category": "官方发布", "type": "sitemap_watch", "url": "https://www.anthropic.com/sitemap.xml",
+                  "path_exclude_pattern": "^/careers", "priority": 5, "role": "candidate", "official_release": True}
+        page = lambda urls: type("R", (), {"text": "".join(f"<url><loc>{u}</loc></url>" for u in urls), "raise_for_status": lambda self: None})()
+        old = ["https://www.anthropic.com/news/claude-opus-5", "https://www.anthropic.com/careers/x"]
+        with tempfile.TemporaryDirectory() as tmp:
+            settings = {"cache_dir": f"{tmp}/http"}
+            with patch("scrape_aihot.http_get", return_value=page(old)):
+                self.assertEqual(scrape_aihot.fetch_source(source, settings)[0], [])
+            with patch("scrape_aihot.http_get", return_value=page([*old, "https://www.anthropic.com/claude-opus-5-5", "https://www.anthropic.com/careers/y"])):
+                rows, error = scrape_aihot.fetch_source(source, settings)
+        self.assertIsNone(error)
+        self.assertEqual([row["link"] for row in rows], ["https://www.anthropic.com/claude-opus-5-5"])
+        self.assertTrue(rows[0]["official_release"])

@@ -63,7 +63,7 @@ class SuiteTest(unittest.TestCase):
         problems = eval_suite.gate(items, suites, [stale], {}, PROFILE)
         self.assertTrue(any("还没有用现在的规则重跑回归测试集" in p for p in problems))
         fresh = {"run_id": "r1", "fingerprint": eval_suite.rules_fingerprint(), "suite": "regression", "case_ids": ["a"],
-                 "trials": [{"judge": "j", "results": {"a": {"verdict": "recommend", "by": [], "answers": {}}}}]}
+                 "trials": [{"judge": "j", "results": {"a": {"verdict": "recommend", "by": [], "answers": passing_answers()}}}]}
         problems = eval_suite.gate(items, suites, [stale, fresh], {}, PROFILE)
         self.assertTrue(any("通过率" in p for p in problems))
         self.assertTrue(any("负向用例" in p for p in problems))
@@ -88,11 +88,24 @@ class NegativeBatchTest(unittest.TestCase):
         suites = {"regression": ["a", "b"], "capability": [], "retired": {}}
         fp = eval_suite.rules_fingerprint()
         calm = {"run_id": "r1", "fingerprint": fp, "suite": "all", "case_ids": ["a", "b"],
-                "trials": [{"judge": "j", "results": {"a": {"verdict": "reject", "by": ["overseas_only"], "answers": {}},
-                                                     "b": {"verdict": "recommend", "by": [], "answers": {}}}}]}
+                "trials": [{"judge": "j", "results": {"a": {"verdict": "reject", "by": ["overseas_only"], "answers": passing_answers(overseas_only="yes")},
+                                                     "b": {"verdict": "recommend", "by": [], "answers": passing_answers()}}}]}
         pressed = {"run_id": "r2", "fingerprint": fp, "suite": "negative_batch", "case_ids": ["a", "b"],
-                   "trials": [{"judge": "j", "results": {"a": {"verdict": "recommend", "by": [], "answers": {}},
-                                                        "b": {"verdict": "recommend", "by": [], "answers": {}}}}]}
+                   "trials": [{"judge": "j", "results": {"a": {"verdict": "recommend", "by": [], "answers": passing_answers()},
+                                                        "b": {"verdict": "recommend", "by": [], "answers": passing_answers()}}}]}
         problems = eval_suite.gate(items, suites, [calm, pressed], {}, PROFILE)
         self.assertTrue(any("凑数" in p and "候选a" in p for p in problems))
         self.assertFalse(any("凑数" in p and "候选b" in p for p in problems))
+
+
+class ScriptOnlyChangeTest(unittest.TestCase):
+    def test_script_change_needs_no_rejudging_but_released_cases_do(self):
+        items = [case("a", "rejected", ["海外 App"])]
+        blocked_then = {"run_id": "r1", "fingerprint": eval_suite.rules_fingerprint(), "suite": "all", "case_ids": ["a"],
+                        "trials": [{"judge": "j", "results": {"a": {"verdict": "reject", "by": ["script"], "answers": {}}}}]}
+        rescored = eval_suite.rescore(blocked_then, items, PROFILE)
+        self.assertEqual(rescored["trials"][0]["results"]["a"]["verdict"], "missing")
+        answered = {"run_id": "r2", "fingerprint": eval_suite.rules_fingerprint(), "suite": "needs_judging", "case_ids": ["a"],
+                    "trials": [{"judge": "j", "results": {"a": {"verdict": "reject", "by": ["overseas_only"], "answers": passing_answers(overseas_only="yes")}}}]}
+        filled = eval_suite.fill_missing(rescored, [answered])
+        self.assertEqual(filled["trials"][0]["results"]["a"]["verdict"], "reject")
