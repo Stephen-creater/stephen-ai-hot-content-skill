@@ -1,0 +1,250 @@
+{
+ "说明": "X 中文作者巡检名单，x_sweep.py 每批逐个翻主页，只收中文长帖。英文研究员和官方账号不在这里（它们的帖子是英文，会被英文正文否决）。新发现写得好的中文作者加进来；连续几周一条都没过的，按信息源质量统计定期删。",
+ "authors": [
+  {
+   "handle": "dotey",
+   "name": "宝玉",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "op7418",
+   "name": "歸藏(guizang.ai)",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "vista8",
+   "name": "向阳乔木",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "Khazix0918",
+   "name": "数字生命卡兹克",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "oran_ge",
+   "name": "Orange AI",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "bourneliu66",
+   "name": "刘小排",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "lifesinger",
+   "name": "Frank Wang 玉伯",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "zhang_benita",
+   "name": "张小珺 Xiaojun Zhang",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "indigox",
+   "name": "indigo",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "canghe",
+   "name": "苍何",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "berryxia",
+   "name": "Berryxia.AI",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "fkysly",
+   "name": "马天翼",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "tech_shrimp",
+   "name": "技术爬爬虾",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "nash_su",
+   "name": "nash_su - e/acc",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "ChaoSpacecallum",
+   "name": "奇思妙想CYC",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "iamai_omni",
+   "name": "✧ 𝕀𝔸𝕄𝔸𝕀 ✧",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "aicookie_tech",
+   "name": "电波曲奇",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "mengxi_ream",
+   "name": "梦溪睡了吗",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "GoSailGlobal",
+   "name": "Jason Zhu",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "skaas777",
+   "name": "Jason Lee",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "eze_is_1",
+   "name": "一泽Eze",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "zuozizhen",
+   "name": "左子祯",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "cholf5",
+   "name": "周尔复",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "wangdefou",
+   "name": "得否",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "codeo4",
+   "name": "东波(dongbo.ai)",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "gkxspace",
+   "name": "余温",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "lorjia6598",
+   "name": "珞珈Lorjia",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "fankaishuoai",
+   "name": "范凯说AI",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "xiaoerzhan",
+   "name": "小耳👂Jane｜Xiaoer",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "iamzhihui",
+   "name": "志辉",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "AI_Whisper_X",
+   "name": "AI Dance",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "yang24zhi",
+   "name": "羊上上",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "mike_chong_zh",
+   "name": "迈克 Mike Chong",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "Zihan_dev",
+   "name": "天不生邹子Zihan",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "yucheng",
+   "name": "YC (Yucheng)",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "gengdaJ",
+   "name": "逸尘",
+   "why": "写中文 AI 内容的作者"
+  },
+  {
+   "handle": "lixinbao_X",
+   "name": "李新宝",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者，9.23 a 批交付了他的 Opus 5.5 与 GPT-6 Sol 选型帖"
+  },
+  {
+   "handle": "HiTw93",
+   "name": "Tw93",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "vikingmute",
+   "name": "Viking",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "goan999999",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "realchendahuang",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "AYi_AInotes",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "zhouluobo",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "pengchujin",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "caiziboshi",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "galaxy1025850",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "kongge_space",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "xmglab",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  },
+  {
+   "handle": "don_tech1",
+   "name": "",
+   "why": "历史上系统抓到或登记过的中文 AI 长帖作者"
+  }
+ ]
+}

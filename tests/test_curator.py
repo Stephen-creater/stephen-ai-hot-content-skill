@@ -1664,3 +1664,28 @@ class SitemapWatchTest(unittest.TestCase):
         self.assertIsNone(error)
         self.assertEqual([row["link"] for row in rows], ["https://www.anthropic.com/claude-opus-5-5"])
         self.assertTrue(rows[0]["official_release"])
+
+
+class XSweepTest(unittest.TestCase):
+    def test_long_posts_become_candidates_and_cache_is_reused(self):
+        import tempfile
+        import x_sweep
+        calls = []
+
+        def runner(handles, hours, max_details, timeout):
+            calls.append(handles)
+            return {"scanned": [], "results": [{"author": "lixinbao_X", "time": "2026-09-23T02:00:00Z",
+                                                "link": "https://x.com/lixinbao_X/status/1", "text": "Claude 冲上 58 分\n" + "正文" * 200},
+                                               {"author": "lixinbao_X", "time": "2026-09-23T03:00:00Z", "link": "https://x.com/lixinbao_X/status/2", "text": ""},
+                                               {"author": "op7418", "time": "2026-09-23T03:00:00Z", "link": "https://x.com/op7418/status/3", "preview": "English translation by Grok", "text": "", "error": "timed out"}]}
+        with tempfile.TemporaryDirectory() as tmp:
+            cache = Path(tmp) / "x.json"
+            with patch("x_sweep.load_authors", return_value=["lixinbao_X"]):
+                rows = x_sweep.fetch({"cache_hours": 3}, cache=cache, runner=runner)
+                again = x_sweep.fetch({"cache_hours": 3}, cache=cache, runner=runner)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual([r["link"] for r in rows], ["https://x.com/lixinbao_X/status/1"])
+        self.assertEqual(rows[0]["title"], "Claude 冲上 58 分")
+        self.assertTrue(rows[0]["social_post"])
+        self.assertEqual(rows[0]["content_status"], "fulltext")
+        self.assertEqual(len(again), 1)

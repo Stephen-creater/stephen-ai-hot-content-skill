@@ -20,12 +20,12 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ## 交付规则
 
-- **条数**：用户说了要几条就按用户的，没说就是 10 条。只交通过终审的；够不上就继续找，不降标准凑数。
+- **条数**：每天一批，最多 10 条（口味档案 `default_topic_count`），**能过几条交几条，不凑数**。2026-09-23 Stephen 定的：按现在的标准，全网一天能过的中文稿大约 2 到 4 条（实验见评测方法的“信息源实验”），为凑 10 条连扩六七轮只会把标准磨松。用户说了要几条，按用户的。
 - **构成**：不限文章、播客、GitHub 的比例。GitHub 项目必须附一篇中文文章解读，并写清中文用户能不能用、配置和付费成本、安全检查，发布脚本会检查。
-- **轮次**：第 1 轮是完整抓取。第 2 轮起按缺口换渠道、换作者、换查询词去找；找到的原文用 `add_source.py` 登记，再带 `--round <n>` 重跑抓取（缓存会让没变的来源秒回）。读完这一轮再开下一轮。
+- **轮次**：一般两轮。第 1 轮完整抓取，已经包括 X 中文作者巡检（`x_sweep.py`）、觉醒AI 最近两天的全部清单和各精选站，读完合格池里值得读的。第 2 轮只补两件事：当天多源刷屏的名字还没有中文好稿的，去 X、公众号、53AI 搜；X 首页时间线看一遍。找到的原文用 `add_source.py` 登记，再带 `--round 2` 重跑抓取。只有当天有重大发布、两轮后还没有中文实测时，才开第 3 轮专门找它。
 - **记账**：抓取带 `--batch <批次ID> --round <轮次>` 会自动记账。手动搜索用 `.venv/bin/python3 scripts/discovery_ledger.py record --batch <批次ID> --owner 主力 --family <渠道类别> --channel <渠道> --query <查询> --status success --operation search --round <轮次> --result-count <结果数> --eligible-key <原文链接>`；没权限或没工具的渠道记 `--status blocked --failure-type <原因>`，结果数为 0。
-- **什么时候可以停**：以 `.venv/bin/python3 scripts/discovery_ledger.py stop-check --batch <批次ID>` 的 `should_stop` 为准。它要求：权重不低于 8 的候选渠道类别都搜过或记为搜不了（不能全都搜不了）；至少两轮；最近两轮至少用了 2 个常规抓取以外、有结果的渠道；最近两轮没找到新的合格材料。另外，连续 3 轮终审一条没过，也停下交缺口报告。
-- **停下以后**：有几条通过就发布几条，报告里写清缺口；一条都没有就只交缺口报告。用户暂停、取消或遇到真实权限问题时立即停。
+- **什么时候可以停**：两轮读完就停，发布通过的。`discovery_ledger.py stop-check --batch <批次ID>` 用来确认高权重渠道都跑过了，没跑到的在缺口说明里写一句。
+- **停下以后**：有几条通过就发布几条，附一段三五行的缺口说明；一条都没有就只交这段说明。用户暂停、取消或遇到真实权限问题时立即停。
 - **批次与进度文件**：批次 ID 形如 `2026-09-19-main-a`。每轮抓取输出到 `.local/work/<批次ID>/<时间戳>/`。通过终审的条目按原文链接去重，组装成 `topics/<批次ID>/candidates.json`（抓取字段加 `manual_editorial_review`）和 `run.json`（至少含 `batch_id`、`requested_count`、`candidate_count`）。进度文件 `.local/work/<批次ID>/checkpoint.json` 至少写 `batch`、`owner`、`target_count`、`round`、`passed`（id、link、source_sha256）、`rejected_links`、`next_step`，中断后照它续跑。
 
 ## 读哪些文件
@@ -128,7 +128,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 .venv/bin/python3 scripts/import_feedback.py /path/to/selection_feedback.json --expected-batch <批次ID> --owner 主力
 ```
 
-导入成功并回读后才删除下载的 JSON，失败就保留。按钮决定结果，原因标签和备注决定能学什么。`feedback_audit.py` 的 `batch_level` 是北极星：每批通过几条、多少批至少通过一条。每批固定 10 条不减，标准也不降。冲突、含义不清时按 [反馈学习规则](references/feedback-learning-protocol.md) 处理，不要猜。
+导入成功并回读后才删除下载的 JSON，失败就保留。按钮决定结果，原因标签和备注决定能学什么。`feedback_audit.py` 的 `batch_level` 是北极星：每批通过几条、多少批至少通过一条。每天一批、能过几条交几条，标准不降。冲突、含义不清时按 [反馈学习规则](references/feedback-learning-protocol.md) 处理，不要猜。
 
 ### 8. 改判断规则之前和之后都要跑评测
 
@@ -149,7 +149,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 1. 批次 ID、审核页路径、条数与构成；
 2. 与审核页同序的列表：原题、原文链接、一句话推荐理由、改写成本；
 3. 没抓成或没覆盖的来源、剩余风险（如原文可读性待回核、转录专名待校对）；
-4. 没达到目标条数时附缺口报告：stop-check 的停止依据、各来源读了几篇和通过几篇、哪些源这批完全没出货，以及三个选项：继续扩源、换方向、调整数量。
+4. 缺口说明，三五行就够：合格池多少条、读了多少、通过几条；今天刷屏的事里哪件没找到能用的中文稿；哪个源抓取出了故障。不列选项清单。
 
 维护任务：改了哪些文件、测试和评测结果、推送回读结果、剩余风险。
 

@@ -703,6 +703,9 @@ def fetch_source(source: dict, settings: dict) -> tuple[list[dict], str | None]:
             rows = fetch_follow_builders(source, settings)
         elif source["type"] == "sitemap_watch":
             rows = fetch_sitemap_watch(source, settings)
+        elif source["type"] == "x_authors":
+            import x_sweep
+            rows = x_sweep.fetch(source)
         else:
             rows = fetch_web_index(source, settings)
         for row in rows:

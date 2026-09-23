@@ -472,6 +472,22 @@
       "maturity": "primary"
     },
     {
+      "name": "X 中文作者巡检",
+      "family": "twitter_builder_graph",
+      "category": "X 中文长帖",
+      "type": "x_authors",
+      "url": "https://x.com/",
+      "hours": 48,
+      "max_details": 30,
+      "cache_hours": 3,
+      "timeout_seconds": 900,
+      "priority": 5,
+      "role": "candidate",
+      "language": "zh",
+      "maturity": "secondary",
+      "notes": "名单在 resources/x_authors.json（写中文 AI 内容的作者，加历史上抓到过的）。用 ego-browser 逐个翻主页，只收最近 48 小时的长帖并取作者自己那一串全文；结果缓存 3 小时。"
+    },
+    {
       "name": "Anthropic 官网新页面",
       "category": "官方发布（重大发布可直接作候选）",
       "type": "sitemap_watch",

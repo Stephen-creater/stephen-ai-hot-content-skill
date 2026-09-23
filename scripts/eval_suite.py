@@ -56,11 +56,18 @@ ARTICLE_TRACE = SUITE_DIR / "article_trace.json"
 
 
 def rules_fingerprint(root: Path = ROOT) -> str:
+    """评审读的规则的指纹。SKILL.md 只算“终审”一节：交付条数、抓取轮次这些流程评审不读，改了不用重判。"""
     digest = hashlib.sha256()
     for name in RULE_FILES:
         path = root / name
+        content = path.read_bytes() if path.exists() else b""
+        if name == "SKILL.md":
+            text = content.decode("utf-8")
+            start = text.find("### 5. 终审")
+            end = text.find("### 6.", start)
+            content = text[start:end].encode("utf-8") if start >= 0 else content
         digest.update(name.encode())
-        digest.update(path.read_bytes() if path.exists() else b"")
+        digest.update(content)
     return digest.hexdigest()[:16]
 
 
