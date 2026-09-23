@@ -1,0 +1,26 @@
+{
+  "说明": "终审的是/否题和脚本检查。发布脚本、评测脚本、审核页原因按钮共用这一份。每道题只答 yes、no、unsure；答到 veto_if 的那个答案就不推荐，任何一题答 unsure 也不推荐。reasons 是审核页上对应的原因按钮，Stephen 点了哪个按钮，就等于给哪道题一个标准答案。",
+  "questions": [
+    {"id": "reader_meets_it", "text": "目标读者自己会用到这个产品，或者自己会遇到这个问题吗？", "veto_if": "no", "reasons": ["题目没意思"], "select_reasons": ["读者痛点强"]},
+    {"id": "overseas_only", "text": "文章主角是国内读者下载不了、注册不了的海外产品或服务吗？国内还没有的新产品形态（Stephen 写过 Ditto）答 no。", "veto_if": "yes", "reasons": ["海外 App"]},
+    {"id": "vertical_industry", "text": "文章的场景是普通读者不接触的垂直行业吗？主流产品用在垂直场景，仍然答 yes。", "veto_if": "yes", "reasons": ["太垂直小众"]},
+    {"id": "already_written", "text": "它的核心结论，在审核日之前 Stephen 已写的文章里说过吗？按核心结论算，不按标题算；答 yes 要写出是哪一篇。", "veto_if": "yes", "reasons": ["过时或已写过"]},
+    {"id": "reader_takeaway", "text": "读者读完，能说出一件自己可以去做、或者改变看法的具体的事吗？知道一个故事、了解一个趋势不算。", "veto_if": "no", "reasons": ["对读者没用", "太浅太泛"]},
+    {"id": "not_reader_business", "text": "文章主体是融资、合作、人事、厂商的成本账、实验室安全与对齐、行业格局这类读者没有行动可做的事吗？", "veto_if": "yes", "reasons": ["对读者没用"]},
+    {"id": "promo_or_rehash", "text": "它是在给某个产品或公司做宣传，或者只是把官方的分数、价格、参数、公告重新排了一遍，没有作者自己的实测或判断吗？", "veto_if": "yes", "reasons": ["广告或新闻通稿"]},
+    {"id": "text_stands_alone", "text": "把图片、动图和视频全部去掉，文字还能讲清楚做了什么、结果怎样吗？", "veto_if": "no", "reasons": ["全是图片"]},
+    {"id": "needs_engineering", "text": "读者要懂编程、看得懂代码或系统架构，才能读懂文章主线吗？", "veto_if": "yes", "reasons": ["太技术", "代码多"]},
+    {"id": "author_bound", "text": "去掉作者身份、私人数据、专属项目和截图以后，核心论证还成立吗？", "veto_if": "no", "reasons": ["太依赖作者个人经历"]},
+    {"id": "ai_written", "text": "按判断标准里的 AI 写作检查，五项里命中两项及以上，或者小标题是反复出现的工整对仗句吗？", "veto_if": "yes", "reasons": ["AI 味重"]},
+    {"id": "has_substance", "text": "原文有别处看不到的东西吗：作者上手实测、一手数据、完整访谈或逐字稿，或者把正在被讨论的概念讲成大白话？", "veto_if": "no", "reasons": ["太浅太泛"], "select_reasons": ["干货足", "访谈或文字稿质量高"]},
+    {"id": "easy_rewrite", "text": "结构和论证基本能沿用，换成 Stephen 的语气、补一两处说明就能发吗？", "veto_if": "no", "reasons": ["改写成本高"], "select_reasons": ["改一改就能发"]}
+  ],
+  "script_checks": [
+    {"id": "too_many_images", "text": "正文图片或视频超过口味档案的上限", "reasons": ["全是图片"]},
+    {"id": "too_much_code", "text": "正文代码行数超过口味档案的上限", "reasons": ["代码多", "太技术"]},
+    {"id": "english_original", "text": "英文正文（三家大厂官方发布稿除外）", "reasons": ["改写成本高"]},
+    {"id": "locked_or_unreachable", "text": "付费墙、登录墙或链接打不开", "reasons": []},
+    {"id": "written_or_stale", "text": "标题或别名命中已写文章，或者超过时效", "reasons": ["过时或已写过"]},
+    {"id": "excluded_by_rules", "text": "已经审过的候选、和 AI 无关、Stephen 说过暂缓的主题（WorkBuddy 基础用法等）", "reasons": []}
+  ]
+}

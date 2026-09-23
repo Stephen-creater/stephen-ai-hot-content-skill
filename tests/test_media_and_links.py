@@ -13,6 +13,7 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from curator import score_item  # noqa: E402
 from editorial_judgment import flags_for, validate_manual_review  # noqa: E402
+from review_answers import passing_answers  # noqa: E402
 from publish_batch import unreachable_links  # noqa: E402
 from published import annotate  # noqa: E402
 from scrape_aihot import count_videos, render_triage_markdown  # noqa: E402
@@ -20,10 +21,9 @@ from scrape_aihot import count_videos, render_triage_markdown  # noqa: E402
 PROFILE = json.loads((ROOT / "resources/editorial_profile.json").read_text(encoding="utf-8"))
 REVIEW = {
     "status": "passed",
-    "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 2, "durability": 1, "rewrite_effort": 1},
-    **{field: "正文给出了具体证据，足够支撑这一项的判断" for field in
-       ("topic_appeal", "reader_change", "material_increment", "re_authorability", "durability", "rewrite_effort", "counterargument", "decision_driver")},
-    "reader_access": "国内能直接下载和使用",
+    "answers": passing_answers(),
+    "counterargument": "正文给出了具体证据，但数据只来自一次实测",
+    "decision_driver": "正文给出了具体证据，足够支撑推荐",
 }
 
 
@@ -132,17 +132,17 @@ class SelfVetoTest(unittest.TestCase):
 
     def test_doubt_that_names_its_own_veto_blocks_delivery(self):
         for doubt in ("三项只拿 1 分，属于勉强过线；放行是因为对上了一类",
-                      "实测偏 3D 游戏 demo，效果有一部分靠画面"):
+                      "虽然篇幅偏短，但对上了选过的一类，所以放行"):
             result = validate_manual_review({**REVIEW, "counterargument": doubt})
             self.assertFalse(result.ok, doubt)
             self.assertTrue(any("否决理由" in error for error in result.errors))
 
-    def test_reader_access_and_score_floors(self):
-        self.assertFalse(validate_manual_review({k: v for k, v in REVIEW.items() if k != "reader_access"}).ok)
-        weak = {**REVIEW, "scores": {**REVIEW["scores"], "topic_appeal": 1}}
-        self.assertTrue(any("选题吸引力不满 2 分" in e for e in validate_manual_review(weak).errors))
-        thin = {**REVIEW, "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 1, "re_authorability": 1, "durability": 1, "rewrite_effort": 2}}
-        self.assertTrue(any("3 项只有 1 分" in e for e in validate_manual_review(thin).errors))
+    def test_veto_answer_in_any_question_blocks_delivery(self):
+        # 09-22 那五条，换成逐题回答后各自落在哪道题上。
+        for question in ("overseas_only", "promo_or_rehash", "needs_engineering"):
+            self.assertFalse(validate_manual_review({**REVIEW, "answers": passing_answers(**{question: "yes"})}).ok, question)
+        for question in ("text_stands_alone", "easy_rewrite", "reader_meets_it"):
+            self.assertFalse(validate_manual_review({**REVIEW, "answers": passing_answers(**{question: "no"})}).ok, question)
         self.assertTrue(validate_manual_review(REVIEW).ok)
 
     def test_lazy_loaded_body_images_are_counted(self):

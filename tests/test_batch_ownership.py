@@ -25,21 +25,17 @@ def tearDownModule():
     _link_patch.stop()
 
 from curator import score_item
+from review_answers import passing_answers
+
+QUOTE = '作者核对了错误原文，修正后读者能独立验证结果。'
 
 
 def complete_review():
     return {
         'status': 'passed',
-        'topic_appeal': '目标读者每天都会遇到这个具体 AI 工作问题。',
-        'reader_change': '读者会从直接相信结果改为先核对事实和来源。',
-        'material_increment': '正文提供失败案例、调整过程和可核验结果。',
-        're_authorability': '移除作者身份和截图后，公共事实与方法链仍成立。',
-        'durability': '方法不依赖短期版本，热点消失后仍可以复用。',
+        'answers': passing_answers(reader_takeaway={'quote': QUOTE}, has_substance={'quote': QUOTE}),
         'counterargument': '材料来自单一作者，存在经验外推过度的风险。',
         'decision_driver': '决定放行的是完整失败链与可复用的核验动作。',
-        'rewrite_effort': '结构和论证可以沿用，只需去掉作者个人信息并换成 Stephen 的语气。',
-        'reader_access': '方法不依赖具体产品，国内读者直接能用。',
-        'scores': {'topic_appeal': 2, 'reader_change': 2, 'material_increment': 2, 're_authorability': 1, 'durability': 1, 'rewrite_effort': 2},
     }
 
 
@@ -186,9 +182,6 @@ class BatchOwnershipTest(unittest.TestCase):
         for row in rows:
             row['content'] = row['content'] + '作者核对了错误原文，修正后读者能独立验证结果。'
             row['manual_editorial_review']['source_sha256'] = hashlib.sha256(row['content'].encode()).hexdigest()
-            row['manual_editorial_review']['source_anchors'] = [
-                {'dimension': dimension, 'quote': '作者核对了错误原文，修正后读者能独立验证结果。'}
-                for dimension in ('material_increment', 're_authorability')]
         (folder / 'candidates.json').write_text(json.dumps(rows))
         (folder / 'run.json').write_text(json.dumps({'delivery_ready':False}))
         return folder, rows
@@ -245,15 +238,9 @@ class BatchOwnershipTest(unittest.TestCase):
         self.assertIn('[编辑判断标准]', skill)
         self.assertIn('[反馈学习规则]', skill)
         self.assertIn('[评测方法]', skill)
-        for preserved_rule in (
-            '选题吸引力',
-            '读者改变',
-            '干货含量',
-            '可重写性',
-            '长期价值',
-            '改写成本',
-        ):
-            self.assertIn(preserved_rule, judgments)
+        questions = json.loads((ROOT / 'resources/review_questions.json').read_text(encoding='utf-8'))['questions']
+        for question in questions:
+            self.assertIn(question['id'], judgments)
         self.assertIn('“良配”访谈', calibration)
         self.assertIn('换掉产品名、作者名和标题措辞', protocol)
 

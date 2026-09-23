@@ -25,7 +25,8 @@ Stephen 的个人 AI 选题系统：找能改写成文章的简体中文 AI 材�
 ```bash
 .venv/bin/python3 scripts/eval_replay.py build     # 冻结一版基准集
 .venv/bin/python3 scripts/eval_replay.py machine   # 程序层回放
-.venv/bin/python3 scripts/eval_replay.py leak-check   # 规则里不能引用留出集文章
+.venv/bin/python3 scripts/eval_replay.py leak-check   # 规则里不能引用验证集、测试集文章
+.venv/bin/python3 scripts/eval_suite.py gate          # 上线前检查：回归测试集至少 95% 判对、写成文章的全对、负向用例一条不推
 ```
 
 真正衡量效果的指标是 Stephen 的采纳率：`scripts/feedback_audit.py` 看历史结果，`scripts/source_yield.py` 看每个来源的采纳情况。
@@ -68,7 +69,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 - `publish_batch.py`：发布前总检查，`--check-only` 只检查不登记；`report.py`：生成审核页。
 - `import_feedback.py`：导入审核结果；`feedback_audit.py`：入选率、原因标签统计，找出没给原因或自相矛盾的反馈。
 - `discovery_ledger.py`：搜索记录本和收工检查；`channel_check.py`：渠道能不能用。
-- `eval_replay.py`：历史回放评测；`quality_audit.py`：仓库结构检查，只说明文件齐不齐，不代表选题好不好。
+- `eval_replay.py`：历史回放和时间外测试；`eval_suite.py`：回归测试集、能力测试集、逐题一致率、上线前检查和评测报告；`batch_trace.py`：一批的执行轨迹；`quality_audit.py`：仓库结构检查，只说明文件齐不齐，不代表选题好不好。
 - `format_captions.py`、`local_transcribe.py`：整理字幕、本机离线转写。
 
 私有目录（不提交）：`.local/`（反馈、评测、搜索记录、缓存、工作文件）、`topics/`（每批审核页）、`.config/`（密钥）。

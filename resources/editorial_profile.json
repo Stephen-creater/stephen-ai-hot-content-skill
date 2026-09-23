@@ -4,13 +4,13 @@
   "target_readers": ["中文偏小白 AI 使用者", "产品、运营与管理者", "知识工作者与内容创作者"],
   "decision_model": {
     "purpose": "选择能让目标读者产生具体行动或认知改变、且 Stephen 可以独立二创的高增量 AI 材料",
-    "dimensions_in_order": ["topic_appeal", "reader_change", "material_increment", "re_authorability", "durability", "rewrite_effort"],
+    "questions_file": "resources/review_questions.json",
     "manual_review_required": true,
     "require_counterargument": true,
     "require_decision_driver": true,
     "keywords_affect_judgment": false,
     "objective_hard_failures_only": true,
-    "pass_rule": "六维各打 0/1/2 分；前五维总分至少 6 分（满分 10），且读者改变、干货含量都不是 0 分；改写成本只作参考，不参与门槛"
+    "pass_rule": "逐题回答是/否题；任何一题答到否决的那个答案，或者答说不清，就不推荐"
   },
   "feedback_learning": {
     "types": ["invariant", "conditional_preference", "operational_rule", "topic_state", "case_only", "unexplained_decision", "hypothesis"],
@@ -28,6 +28,7 @@
   "maximum_images_hard": 10,
   "maximum_videos_hard": 2,
   "maximum_code_lines_hard": 5,
+  "regression_pass_rate_min": 0.95,
   "english_release_domains": ["openai.com", "anthropic.com", "claude.com", "deepmind.google", "blog.google"],
   "discovery_max_age_days": 14,
   "minimum_article_chars": 800,

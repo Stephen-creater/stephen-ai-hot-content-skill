@@ -75,42 +75,37 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 4. 判断只来自读全文
 
-程序不做任何“好不好”的判断：没有关键词打分，也没有关键词提示。挑稿看标题清单，推荐看读完全文后的六维打分。
+程序不做任何“好不好”的判断：没有关键词打分，也没有关键词提示。挑稿看标题清单，推荐看读完全文后逐题回答的是 / 否题。
 
-### 5. 六维终审
+### 5. 终审：13 道是 / 否题
 
 先看原文标题，分成三类：明显不对、值得读、看不出来。标题好只决定先读，不决定通过。原页面标题存 `source_title`，自拟切口存 `editorial_angle`；不能用改标题掩盖原文的题材和受众。
 
-读完全文，六个维度各打 0、1、2 分（2 分：明显做到，有正文证据；1 分：部分做到或有明显短板；0 分：基本没做到）。判定标准见 [编辑判断标准](references/editorial-judgment.md)，打分前先对照 [正反例](references/editorial-calibration-cases.md) 开头“Stephen 选过什么”。
-
-**前五维（除改写成本外）总分至少 6 分（满分 10），且“读者改变”“干货含量”都不是 0 分，就推荐。** 击中大部分要求就够；但前五维有三项及以上只拿 1 分的算勉强过线，要能对上正反例里 Stephen 选过的某一类才推荐，见判断标准。改写成本照样打分写给 Stephen 看，不参与门槛。整篇明显由 AI 写、关键内容靠大量截图或视频画面、主体是实验室安全风险，这三种读完确认后不推荐。待读材料多时，按来源拆给子 Agent 并行读全文、起草打分和原文引用，主 Agent 逐条复核后再放行。
+读完全文，逐题回答 `resources/review_questions.json` 里的 13 道题，每题只能答 yes、no 或 unsure，写一句为什么。**任何一题答到否决的那个答案，或者答 unsure，就不推荐；13 题全部答对才推荐。**没有总分可以拿来抵。每题怎么判、有哪些例子，见 [编辑判断标准](references/editorial-judgment.md)；答题前先对照 [正反例](references/editorial-calibration-cases.md) 开头“Stephen 选过什么”。待读材料多时，按来源拆给子 Agent 并行读全文、起草答案和原文引用，主 Agent 逐条复核后再放行。
 
 每条推荐写入 `manual_editorial_review`。字段缺失、只有空泛好评或没有原文证据的，不能发布：
 
 ```json
 {
   "status": "passed",
-  "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 1, "durability": 1, "rewrite_effort": 2},
-  "topic_appeal": "为什么目标读者会关心，引用正文事实",
-  "reader_change": "读完具体会改变什么：之前怎么做，之后怎么做",
-  "material_increment": "原文独有的新事实、方法或取舍",
-  "re_authorability": "去掉作者身份、截图和公司后，论证是否还成立",
-  "durability": "热度过去后为什么还有人看",
-  "rewrite_effort": "离能发还有多远：沿用结构只换语气，还是要重组或重写",
+  "answers": {
+    "reader_meets_it": {"answer": "yes", "note": "为什么这样答，写正文里的事实"},
+    "reader_takeaway": {"answer": "yes", "note": "读完能做的那件事", "quote": "正文原句"},
+    "has_substance": {"answer": "yes", "note": "别处看不到的是什么", "quote": "正文原句"},
+    "...": "13 道题每道一条，题号见题目文件"
+  },
   "counterargument": "最大疑点",
   "decision_driver": "最终放行的关键证据",
-  "reader_access": "读者在国内能不能直接用上文章讲的产品或方法",
-  "source_sha256": "当前完整正文的 SHA-256",
-  "source_anchors": [{"dimension": "material_increment", "quote": "正文原句"}, {"dimension": "re_authorability", "quote": "正文原句"}]
+  "source_sha256": "当前完整正文的 SHA-256"
 }
 ```
 
-程序只检查打分、字段和原句是否存在，不能证明判断正确。原句必须真的支撑推荐理由。正文变了要重审。**机器标记**：抓取脚本会自己对照已发布文章和图片数，标出两种情况，`triage.md` 的标题行里能看到，发布脚本会拦：
+程序只检查答案、字段和原句是否存在，不能证明判断正确。原句必须真的支撑推荐理由。正文变了要重审。**机器标记**：抓取脚本会自己对照已发布文章和图片数，标出两种情况，`triage.md` 的标题行里能看到，发布脚本会拦：
 
 - 标题和某篇已发布文章同名，或命中它登记的别名（`written_topic_hint`）：要在终审卡里加 `new_progress`，写明这次有什么新进展。2026-09-20 一批 20 条里有 9 条是写过的主题，靠 Agent 自己对照清单没拦住，所以改成机械标记。别名登记在本机私有的 `.local/articles/topic_aliases.json`（文章标题对应一组别名），Stephen 说某条“写过了”而标题对不上时，就把那个说法登记成别名；读稿时仍要自己认题，机器只按字面对。
 - 配图 7 张及以上（`many_images`）或嵌了视频（`has_video`）：要在终审卡里加 `image_plan`，写明二创时这些图和视频怎么办。图只是展示界面、文字讲得清的，写清楚就能过（9 张界面图的 ChatGPT 进 Word 被选中过）。10 张及以上、或 2 段及以上视频，抓取时直接一票否决，阈值在口味档案（2026-09-21 b 批三篇正好 10 张的全被拒，写了 image_plan 也没用）。
 
-标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。另外，终审卡的 `counterargument` 里自己写了“Stephen 写过”，发布脚本同样要求 `new_progress`，而且写的必须是新事实，不是换个人再说一遍；疑点里点名了正反例的某个“不选”类型，那就是不推荐，见判断标准的“判断纪律”。**发布脚本还直接拦这些**（2026-09-22 a 批五条全被拒后加的，历史回放没有误伤 Stephen 选过的稿）：选题吸引力或读者改变不满 2 分；六维里超过两项 1 分；疑点或证据里自己写了“勉强过线”“放行是因为”“靠画面/截图”“大量代码”；没填 `reader_access`。抓取阶段直接否决：正文 5 行以上代码、英文正文（OpenAI、Anthropic、Google 官方发布稿除外）、正文图 10 张以上。**凑不够条数就交缺口报告，不要改写疑点绕过检查。**
+标记不等于淘汰，但不写这两句就发布不了。宁可标多，也不要放过。另外，终审卡的 `counterargument` 里自己写了“Stephen 写过”，发布脚本同样要求 `new_progress`，而且写的必须是新事实，不是换个人再说一遍；疑点里点名了正反例的某个“不选”类型，那就是不推荐，见判断标准的“判断纪律”。**发布脚本还直接拦这些**：任何一题答到否决答案或答 unsure；疑点里写了“勉强过线”“放行是因为”这类放行说辞。抓取阶段直接否决：正文 5 行以上代码、英文正文（OpenAI、Anthropic、Google 官方发布稿除外）、正文图 10 张以上。**凑不够条数就交缺口报告，不要改写疑点绕过检查。**
 
 ### 6. 发布
 
@@ -125,7 +120,7 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 7. 导入反馈
 
-审核页的用法：只点想要的那几条，原因点标签，标签说不清时再写一句；导出时没点的默认记为“不要”。**改任何规则之前先做前瞻检验**：把这批候选去掉终审字段，用主干最新规则开两个互不可见的子 Agent 盲判，导入并 build 后 `eval_replay.py forward record --batch <批次ID> --model <评审模型> --verdicts a.json b.json`，`forward report` 看累计前瞻命中率和双评审一致率。这是唯一不考原题的数字，做法见 [评测方法](references/evaluation.md)。
+审核页的用法：只点想要的那几条，原因点按钮，按钮说不清时再写一句；导出时没点的默认记为“不要”。每个原因按钮对应一道或几道是 / 否题。**改任何规则之前先做时间外测试**：用当前规则开两个互不可见的子 Agent 盲判这批（`eval_suite.py export --suite <批次ID>`），导入并 build 后 `eval_replay.py forward record`。这是唯一没见过答案的考试，做法见 [评测方法](references/evaluation.md)。
 
 先核对批次 ID、认领、候选 ID、标题、链接和顺序，再导入：
 
@@ -137,15 +132,16 @@ python3 -m venv .venv && .venv/bin/pip install -r scripts/requirements.txt
 
 ### 8. 改判断规则之前和之后都要跑评测
 
-改口味档案、一票否决、打分或终审标准时，按 [评测方法](references/evaluation.md) 用历史审核回放：
+改口味档案、脚本检查、是 / 否题、正反例或终审标准时，按 [评测方法](references/evaluation.md) 走：Stephen 每条带理由的拒稿先对应到题目（`eval_suite.py unmapped`、`map-reasons`），改完用现在的规则重跑回归测试集和负向用例，再过上线前检查：
 
 ```bash
-.venv/bin/python3 scripts/eval_replay.py build     # 有新反馈时冻结一版新基准
-.venv/bin/python3 scripts/eval_replay.py machine   # 你选中过的文章不能被拦下
-.venv/bin/python3 scripts/eval_replay.py leak-check   # 规则里不能引用留出集文章
+.venv/bin/python3 scripts/eval_replay.py build        # 有新反馈时冻结一版新基准
+.venv/bin/python3 scripts/eval_replay.py machine      # 你选中过的文章不能被脚本拦下
+.venv/bin/python3 scripts/eval_replay.py leak-check   # 规则里不能引用验证集、测试集文章
+.venv/bin/python3 scripts/eval_suite.py gate          # 回归测试集至少 95% 判对且写成文章的全对，负向用例一条不推
 ```
 
-`machine` 或 `leak-check` 报错时不能提交。改终审标准时，还要用盲评集让子 Agent 重新判断，再用 `eval_replay.py score` 对照结论。
+任何一条报错都不能提交；`gate` 已经装成 git 提交前自动运行（`sh scripts/hooks/install.sh`）。`eval_suite.py report` 出一页评测报告。
 
 ## 交付时怎么回复
 

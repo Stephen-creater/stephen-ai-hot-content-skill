@@ -10,7 +10,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from editorial_judgment import DIMENSIONS, HARD_FAILURE_MARKERS
+from editorial_judgment import HARD_FAILURE_MARKERS, QUESTION_SET
 
 ROOT = Path(__file__).resolve().parents[1]
 # Words that make the Skill unreadable to Stephen; see AGENTS.md 写作规范.
@@ -48,6 +48,7 @@ def audit() -> dict:
     publisher = read("scripts/publish_batch.py")
     importer = read("scripts/import_feedback.py")
     curator = read("scripts/curator.py")
+    report_page = read("scripts/report.py")
     ignore = read(".gitignore")
     subjective_codes = {
         "implementation_dominates_article", "specialist_language_dominates", "complex_technical_case",
@@ -57,8 +58,9 @@ def audit() -> dict:
     links = [missing for doc in HUMAN_DOCS for missing in broken_links(doc)]
 
     checks = [
-        Check("判断标准写全六个维度", all(term in judgment for term in ("选题吸引力", "读者改变", "干货含量", "可重写性", "长期价值", "改写成本")), "references/editorial-judgment.md"),
-        Check("打分规则和代码一致", profile["decision_model"].get("dimensions_in_order") == list(DIMENSIONS) and "至少 6 分" in skill and "至少 6 分" in judgment, "六维与总分门槛"),
+        Check("判断标准讲到每一道是/否题", all(q["id"] in judgment for q in QUESTION_SET["questions"]), "references/editorial-judgment.md"),
+        Check("审核页原因按钮都对得上题目", all(r in report_page for q in [*QUESTION_SET["questions"], *QUESTION_SET["script_checks"]] for r in q.get("reasons", [])), "scripts/report.py"),
+        Check("口味档案指向题目文件", profile["decision_model"].get("questions_file") == "resources/review_questions.json" and "review_questions.json" in skill, "口味档案与 SKILL.md"),
         Check("反馈有七种归类", all(term in protocol for term in ("invariant", "conditional_preference", "case_only", "unexplained_decision", "hypothesis")), "feedback-learning-protocol.md"),
         Check("正反例成对", calibration.count("### 可选") >= 5 and calibration.count("### 不选") >= 5, "editorial-calibration-cases.md"),
         Check("关键词不参与判断", profile["decision_model"].get("keywords_affect_judgment") is False and "risk_signal_lexicon" not in profile, "口味档案"),

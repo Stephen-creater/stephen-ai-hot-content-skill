@@ -1,14 +1,15 @@
 """回放评测：用 Stephen 审核过的历史批次检查新规则有没有退步。
 
 基准集来自 .local/editorial_feedback.jsonl，只在本机，不提交。
+按批次切成训练集（写规则时可以看、可以引用）、验证集（比较版本用，不许在规则里引用）和测试集（大改后才跑）。
 
-  build    冻结一版基准集（按批次切分出开发集和留出集）
+  build    冻结一版基准集（按批次切分出训练集、验证集、测试集）
   machine  用当前打分规则回放基准集：你选中的文章有没有被拦下或排到后面
-  leak-check  检查规则文档有没有引用留出集的文章
+  leak-check  检查规则文档有没有引用验证集、测试集的文章
   export   导出不带结论的盲评材料，交给 Agent 按当前 SKILL 重新判断
   score    把 Agent 的判断和你的结论对比，记录到评测历史
   history  查看历次评测结果，发现退步
-  forward  前瞻检验：新一批反馈到达、改规则之前，先用主干最新规则盲判这批，记下判决和 Stephen 的结果
+  forward  时间外测试：新一批反馈到达、改规则之前，先用主干最新规则盲判这批，记下判决和 Stephen 的结果
 """
 from __future__ import annotations
 
@@ -32,14 +33,19 @@ FEEDBACK = ROOT / ".local" / "editorial_feedback.jsonl"
 EVAL_DIR = ROOT / ".local" / "eval"
 PROFILE = ROOT / "resources" / "editorial_profile.json"
 MIN_JUDGEABLE_CHARS = 800
-HOLDOUT_SHARE = 3  # of 10 batch buckets
+TEST_BUCKETS = 3  # of 10 batch buckets
+VALIDATION_BUCKETS = 2
+SPLITS = ("train", "validation", "test")
 # Notes that describe the whole batch, not this article. The label still counts; the reason does not.
 BATCH_LEVEL_NOTES = ("整批", "全部拒绝", "无单条理由", "除最后一条外", "标题阶段即不符合需求")
 
 
 def split_for(batch: str) -> str:
+    """同一批次永远落在同一份里：0-2 测试集，3-4 验证集，其余训练集。"""
     bucket = int(hashlib.sha1(batch.encode("utf-8")).hexdigest(), 16) % 10
-    return "holdout" if bucket < HOLDOUT_SHARE else "dev"
+    if bucket < TEST_BUCKETS:
+        return "test"
+    return "validation" if bucket < TEST_BUCKETS + VALIDATION_BUCKETS else "train"
 
 
 def label_strength(review: dict) -> str:
@@ -161,9 +167,23 @@ def load_benchmark(path: Path | None = None) -> tuple[Path, list[dict]]:
     return path, [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
 
+def rule_docs() -> list[Path]:
+    return [ROOT / "SKILL.md", *sorted((ROOT / "references").glob("*.md"))]
+
+
+def move_cited_batches_to_train(items: list[dict], docs: list[Path]) -> list[str]:
+    """验证集里有文章被规则文档引用过的批次，写规则时已经看过，整批归回训练集。测试集不动，引用了就是泄漏，要改文档。"""
+    cited = {item["batch"] for item in leak_check([item for item in items if item["split"] == "validation"], docs, splits={"validation"}, with_batch=True)}
+    for item in items:
+        if item["batch"] in cited:
+            item["split"] = "train"
+    return sorted(cited)
+
+
 def build(feedback: Path = FEEDBACK) -> Path:
     EVAL_DIR.mkdir(parents=True, exist_ok=True)
     items = collect(feedback)
+    moved = move_cited_batches_to_train(items, rule_docs())
     previous = latest_version()
     number = int(previous.stem.split("-v")[-1]) + 1 if previous else 1
     path = EVAL_DIR / f"benchmark-v{number:03d}.jsonl"
@@ -180,6 +200,7 @@ def build(feedback: Path = FEEDBACK) -> Path:
         "strong_labels": sum(item["label_strength"] == "strong" for item in items),
         "adopted_labels": sum(item["label_strength"] == "adopted" for item in items),
         "by_split_label": {f"{split}:{label}": count for (split, label), count in sorted(summary.items())},
+        "validation_batches_moved_to_train": moved,
     }
     path.with_suffix(".manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
@@ -207,7 +228,7 @@ def rank_auc(pairs: list[tuple[float, bool]]) -> float | None:
 def machine(items: list[dict], profile: dict) -> dict:
     """Deterministic layer: selected articles must survive and should rank above rejected ones."""
     report: dict = {}
-    for split in ("dev", "holdout", "all"):
+    for split in (*SPLITS, "all"):
         subset = [item for item in items if item["judgeable"] and (split == "all" or item["split"] == split)]
         blocked, pairs = [], []
         for item in subset:
@@ -232,13 +253,14 @@ def machine(items: list[dict], profile: dict) -> dict:
     return report
 
 
-def leak_check(items: list[dict], docs: list[Path]) -> list[dict]:
-    """Holdout titles quoted in rules make the holdout useless for catching overfit."""
+def leak_check(items: list[dict], docs: list[Path], splits: set[str] | None = None, with_batch: bool = False) -> list[dict]:
+    """Validation and test titles quoted in rules make them useless for catching overfit."""
+    splits = splits or {"validation", "test"}
     import re as _re
     texts = {str(path.relative_to(ROOT)): path.read_text(encoding="utf-8") for path in docs}
     leaks = []
     for item in items:
-        if item["split"] != "holdout":
+        if item["split"] not in splits:
             continue
         title = str(item["candidate"].get("source_title") or item["candidate"].get("title") or "")
         # Any 12-character run of the title counts as a quote.
@@ -250,7 +272,7 @@ def leak_check(items: list[dict], docs: list[Path]) -> list[dict]:
         for name, text in texts.items():
             flat = _re.sub(r"\s+", "", text)
             if any(fragment in flat for fragment in fragments):
-                leaks.append({"doc": name, "title": title, "label": item["label"]})
+                leaks.append({"doc": name, "title": title, "label": item["label"], **({"batch": item["batch"]} if with_batch else {})})
     return leaks
 
 
@@ -270,10 +292,28 @@ def published_articles(path: Path = PUBLISHED_TOPICS) -> list[tuple[str, str]]:
     return rows
 
 
+def same_article(adopted_name: str, day: str, title: str) -> bool:
+    """写成文章的对应表里的简称（“8.31 MHS”“W9 本体”）是不是清单里这一行。按日期或简称里的关键词对，不按标题全文对。"""
+    match = re.match(r"(\d{1,2})\.(\d{1,2})\s*(.*)", adopted_name.strip())
+    if match and day == f"2026-{int(match.group(1)):02d}-{int(match.group(2)):02d}":
+        return True
+    rest = match.group(3) if match else re.sub(r"^(W\d+|第.周)\s*", "", adopted_name.strip())
+    words = [w for w in re.split(r"[\s，,：:、「」《》]+", rest) if len(w) >= 2]
+    return bool(words) and any(w.lower() in title.lower() for w in words[:3])
+
+
 def written_before(review_date: str, exclude: set[str], articles: list[tuple[str, str]]) -> list[str]:
     """Articles Stephen had published by the day he reviewed this batch. 后来才写的不能让评审看到，
-    不然评审会把当时的正样本判成“已写过”。"""
-    return [title for day, title in articles if day <= review_date and not any(marker and marker in title for marker in exclude)]
+    这条候选自己写成的那篇也要去掉（exclude 是对应表里的文章简称），不然评审会把当时的正样本判成“已写过”。"""
+    return [title for day, title in articles if day <= review_date and not any(name and same_article(name, day, title) for name in exclude)]
+
+
+def review_day(item: dict) -> str:
+    """审核日；没有记录的（没打标、后来写成文章的批次）用批次 ID 里的日期，再没有就用候选发布日。"""
+    if item.get("reviewed_at"):
+        return item["reviewed_at"]
+    match = re.match(r"(\d{4}-\d{2}-\d{2})", str(item.get("batch", "")))
+    return match.group(1) if match else str((item.get("candidate") or {}).get("published", ""))[:10] or "9999"
 
 
 def stratified_sample(rows: list[dict], limit: int | None, seed: str) -> list[dict]:
@@ -298,7 +338,7 @@ def export_blind(items: list[dict], split: str, limit: int | None, seed: str = "
     articles = published_articles()
     exported = []
     for item in rows:
-        exclude = {str(adoptions.get(item["id"], {}).get("article", ""))[-12:]} if item["id"] in adoptions else set()
+        exclude = {str(adoptions.get(item["id"], {}).get("article", ""))} if item["id"] in adoptions else set()
         exported.append({
             "id": item["id"],
             "title": item["candidate"].get("source_title") or item["candidate"].get("title"),
@@ -308,7 +348,7 @@ def export_blind(items: list[dict], split: str, limit: int | None, seed: str = "
             "image_count": item["candidate"].get("image_count"),
             "video_count": item["candidate"].get("video_count"),
             "review_date": item.get("reviewed_at", ""),
-            "written_before_review": written_before(item.get("reviewed_at") or "9999", exclude, articles) if articles else None,
+            "written_before_review": written_before(review_day(item), exclude, articles) if articles else None,
             "content": item["candidate"].get("content"),
         })
     return exported
@@ -507,23 +547,23 @@ def main() -> None:
     machine_parser.add_argument("--no-record", action="store_true")
     sub.add_parser("leak-check")
     export_parser = sub.add_parser("export")
-    export_parser.add_argument("--split", choices=["dev", "holdout", "all"], default="dev")
+    export_parser.add_argument("--split", choices=[*SPLITS, "all"], default="validation")
     export_parser.add_argument("--limit", type=int)
     export_parser.add_argument("--output", type=Path, required=True)
     score_parser = sub.add_parser("score")
     score_parser.add_argument("verdicts", type=Path)
-    score_parser.add_argument("--split", choices=["dev", "holdout", "all"], default="dev")
-    score_parser.add_argument("--judge", required=True, help="这次评测的名字，同名的才互相比较，例如 dev-v11")
+    score_parser.add_argument("--split", choices=[*SPLITS, "all"], default="validation")
+    score_parser.add_argument("--judge", required=True, help="这次评测的名字，同名的才互相比较，例如 validation-v13")
     score_parser.add_argument("--model", required=True, help="评审用的模型版本，例如 claude-fable-5-1；模型换了数字就不能比")
     score_parser.add_argument("--no-gate", action="store_true", help="只看 Agent 本身，不叠加一票否决")
     sub.add_parser("history")
-    forward_parser = sub.add_parser("forward")
+    forward_parser = sub.add_parser("forward", help="时间外测试")
     forward_sub = forward_parser.add_subparsers(dest="forward_command", required=True)
     record_parser = forward_sub.add_parser("record", help="记下改规则前主干最新规则对这批的判决")
     record_parser.add_argument("--batch", required=True)
     record_parser.add_argument("--model", required=True)
     record_parser.add_argument("--verdicts", type=Path, nargs="+", required=True, help="一个或两个评审的 verdicts.json")
-    forward_sub.add_parser("report", help="累计前瞻命中率和双评审一致率")
+    forward_sub.add_parser("report", help="时间外测试的累计命中率和双评审一致率")
     args = parser.parse_args()
     profile = json.loads(PROFILE.read_text(encoding="utf-8"))
 
@@ -539,8 +579,8 @@ def main() -> None:
     path, items = load_benchmark()
     if args.command == "machine":
         report = machine(items, profile)
-        metrics = {k: report["dev"][k] for k in ("selected_kept_rate", "ranking_auc")}
-        entry = {"at": datetime.now(timezone.utc).isoformat(), "commit": git_head(), "kind": "machine", "benchmark": path.name, "split": "dev", "metrics": metrics}
+        metrics = {k: report["all"][k] for k in ("selected_kept_rate", "ranking_auc")}
+        entry = {"at": datetime.now(timezone.utc).isoformat(), "commit": git_head(), "kind": "machine", "benchmark": path.name, "split": "all", "metrics": metrics}
         print(json.dumps(report, ensure_ascii=False, indent=2))
         warnings = regression_warnings(entry, read_history())
         for warning in warnings:
@@ -549,8 +589,7 @@ def main() -> None:
             append_history(entry)
         sys.exit(1 if warnings else 0)
     if args.command == "leak-check":
-        docs = [ROOT / "SKILL.md", *sorted((ROOT / "references").glob("*.md"))]
-        leaks = leak_check(items, docs)
+        leaks = leak_check(items, rule_docs())
         print(json.dumps(leaks, ensure_ascii=False, indent=2))
         sys.exit(1 if leaks else 0)
     if args.command == "export":

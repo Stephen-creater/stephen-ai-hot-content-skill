@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from editorial_judgment import flags_for, validate_manual_review
+from review_answers import passing_answers
 from published import annotate
 
 
@@ -48,12 +49,9 @@ class PublishedTopicTest(unittest.TestCase):
     def test_a_flagged_candidate_cannot_be_delivered_without_saying_what_is_new(self):
         review = {
             "status": "passed",
-            "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 2,
-                       "re_authorability": 2, "durability": 1, "rewrite_effort": 1},
-            "reader_access": "国内能直接下载和使用",
-            **{field: "正文给出了具体证据，足够支撑这一项的判断" for field in
-               ("topic_appeal", "reader_change", "material_increment", "re_authorability", "durability",
-                "rewrite_effort", "counterargument", "decision_driver")},
+            "answers": passing_answers(),
+            "counterargument": "正文给出了具体证据，但数据只来自一次实测",
+            "decision_driver": "正文给出了具体证据，足够支撑推荐",
         }
         flags = flags_for({"written_topic_hint": "火爆全网的Jev到底是什么？", "image_count": 14})
         self.assertEqual(sorted(flags), ["many_images", "written_topic_hint"])

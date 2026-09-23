@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import argparse
 import fcntl
+import hashlib
 import json
 import os
 import socket
 import tempfile
 import urllib.error
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 
 from curator import canonical_url, deduplicate, minimum_article_chars
@@ -21,6 +23,17 @@ from scrape_aihot import is_historical_content_duplicate
 
 ROOT = Path(__file__).resolve().parents[1]
 LINK_CHECK_TIMEOUT = 15
+
+
+def log_check(root: Path, batch: str, row: dict, errors: list[str]) -> None:
+    """执行轨迹：每条候选每次过发布检查都记一笔。同一条先被拦、改了终审卡又放行，评测时要能看出来。"""
+    review = row.get("manual_editorial_review") or {}
+    digest = hashlib.sha256(json.dumps({k: review.get(k) for k in ("answers", "counterargument", "decision_driver")}, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
+    path = root / ".local" / "trace" / f"{batch}.jsonl"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a", encoding="utf-8") as out:
+        out.write(json.dumps({"at": datetime.now(timezone.utc).isoformat(), "event": "publish_check", "id": row.get("id"), "title": row.get("title"),
+                             "ok": not errors, "errors": errors, "card": digest}, ensure_ascii=False) + "\n")
 
 
 def unreachable_links(rows: list[dict], timeout: int = LINK_CHECK_TIMEOUT) -> list[tuple[str, str]]:
@@ -102,9 +115,10 @@ def publish_batch(folder: Path, owner: str, root: Path = ROOT, check_only: bool 
                 raise ValueError("旧版候选缺少机器资格记录且未通过筛选")
             validation = validate_manual_review(
                 row.get("manual_editorial_review", {}), flags=flags_for(row, maximum_images=int(profile.get("maximum_images", 10))))
+            source_validation = validate_source_anchors(row)
+            log_check(root, folder.name, row, [*validation.errors, *source_validation.errors])
             if not validation.ok:
                 raise ValueError(f"终审理由不完整：{row.get('title')}：{'；'.join(validation.errors)}")
-            source_validation = validate_source_anchors(row)
             if not source_validation.ok:
                 raise ValueError(f"原文引用不完整：{row.get('title')}：{'；'.join(source_validation.errors)}")
             row["editorial_decision"] = {

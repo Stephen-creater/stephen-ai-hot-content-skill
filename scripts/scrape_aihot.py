@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import base64
 import concurrent.futures
+from collections import Counter
 import functools
 import hashlib
 import json
@@ -1185,6 +1186,36 @@ def record_source_attempts(attempts: list[dict], items: list[dict], ranked: list
             errors.append(f"检索账本写入失败 {name}: {exc}")
 
 
+def source_funnel(items: list[dict], ranked: list[dict], eligible: list[dict]) -> list[dict]:
+    """每个信息源这一轮：列出多少条、拿到全文多少条、没拿到全文的原因、被脚本拦下多少条、最后合格几条。
+
+    用来看每个源有没有“吃干抹净”：列出来的却没拿到全文，就是漏掉的。
+    """
+    rows: dict[str, dict] = {}
+    for item in items:
+        name = str(item.get("source_name") or "<未知来源>")
+        row = rows.setdefault(name, {"source": name, "listed": 0, "fulltext": 0, "missing_text": Counter(), "gate_failed": Counter(), "eligible": 0})
+        row["listed"] += 1
+        status = item.get("content_status")
+        if status in {"fulltext", "shownotes", "partial"}:
+            row["fulltext"] += 1
+        else:
+            reason = "站点验证页" if status == "blocked" else ("打不开：" + str(item.get("fetch_error"))[:40] if item.get("fetch_error") else "只有摘要")
+            row["missing_text"][reason] += 1
+    for item in ranked:
+        failures = item.get("editorial_decision", {}).get("eligibility", {}).get("failures", [])
+        if failures:
+            rows.setdefault(str(item.get("source_name") or "<未知来源>"), {"source": item.get("source_name"), "listed": 0, "fulltext": 0, "missing_text": Counter(), "gate_failed": Counter(), "eligible": 0})["gate_failed"][failures[0].get("code", "other")] += 1
+    for item in eligible:
+        name = str(item.get("source_name") or "<未知来源>")
+        if name in rows:
+            rows[name]["eligible"] += 1
+    return sorted(
+        ({**row, "missing_text": dict(row["missing_text"]), "gate_failed": dict(row["gate_failed"])} for row in rows.values()),
+        key=lambda row: (-(row["listed"] - row["fulltext"]), row["source"]),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="为 Stephen 筛选 AI 热点选题")
     parser.add_argument("--fixture", type=Path, help="使用本地 JSON 数据，不联网")
@@ -1309,6 +1340,7 @@ def main() -> None:
                 "delivery_ready": False,
                 "include_rejected": args.include_rejected,
                 "errors": errors,
+                "source_funnel": source_funnel(items, ranked, eligible),
             },
             ensure_ascii=False,
             indent=2,

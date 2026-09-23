@@ -10,8 +10,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from review_answers import passing_answers  # noqa: E402
 from editorial_judgment import (
-    DIMENSIONS,
+    QUESTION_IDS,
     build_decision_contract,
     classify_penalties,
     final_decision_record,
@@ -23,16 +24,9 @@ from editorial_judgment import (
 def evidence_review(**overrides):
     review = {
         "status": "passed",
-        "topic_appeal": "普通知识工作者每天都会遇到资料核对困难。",
-        "reader_change": "读者会从直接采用回答改为返回原文核对事实。",
-        "material_increment": "正文记录一次失败、两次调整和最终可核验结果。",
-        "re_authorability": "移除作者身份与截图后，公共方法和因果链仍成立。",
-        "durability": "方法不依赖某个短期版本，半年后仍能复用。",
+        "answers": passing_answers(),
         "counterargument": "案例只有一位作者，结论可能存在样本偏差。",
         "decision_driver": "完整失败链和可回查原文的动作构成决定性证据。",
-        "rewrite_effort": "结构和论证可以沿用，只需去掉作者个人信息并换成 Stephen 的语气。",
-        "reader_access": "方法不依赖具体产品，国内读者直接能用。",
-        "scores": {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 1, "durability": 1, "rewrite_effort": 2},
     }
     review.update(overrides)
     return review
@@ -41,17 +35,17 @@ def evidence_review(**overrides):
 class EditorialJudgmentTest(unittest.TestCase):
     def test_fabricated_quotes_and_changed_body_fail(self):
         body = '团队原先只检查结果，后来发现过程错误会累积。'
-        review = {'source_sha256': hashlib.sha256(body.encode()).hexdigest(),
-                  'source_anchors': [{'dimension': d, 'quote': body}
-                                     for d in ('material_increment', 're_authorability')]}
+        answers = passing_answers(reader_takeaway={"quote": body}, has_substance={"quote": body})
+        review = {'source_sha256': hashlib.sha256(body.encode()).hexdigest(), 'answers': answers}
         self.assertTrue(validate_source_anchors({'content': body, 'manual_editorial_review': review}).ok)
         self.assertFalse(validate_source_anchors({'content': body + '变化', 'manual_editorial_review': review}).ok)
-        review['source_anchors'][0]['quote'] = '这段听起来很好的具体结果从未出现在正文里面。'
+        review['answers']['has_substance']['quote'] = '这段听起来很好的具体结果从未出现在正文里面。'
         self.assertFalse(validate_source_anchors({'content': body, 'manual_editorial_review': review}).ok)
+
     def test_profile_declares_generalizable_decision_contract(self):
         profile = json.loads((ROOT / "resources/editorial_profile.json").read_text(encoding="utf-8"))
         self.assertEqual(profile["schema_version"], 2)
-        self.assertEqual(tuple(profile["decision_model"]["dimensions_in_order"]), DIMENSIONS)
+        self.assertEqual(profile["decision_model"]["questions_file"], "resources/review_questions.json")
         self.assertTrue(profile["decision_model"]["manual_review_required"])
         self.assertFalse(profile["decision_model"]["keywords_affect_judgment"])
         self.assertFalse(profile["feedback_learning"]["blank_note_creates_rule"])
@@ -73,7 +67,7 @@ class EditorialJudgmentTest(unittest.TestCase):
         self.assertEqual(contract["eligibility"]["status"], "passed")
         self.assertEqual(contract["machine_disposition"], "shortlist")
         self.assertTrue(contract["human_review_required"])
-        self.assertTrue(all(row["verdict"] == "unassessed" for row in contract["editorial_dimensions"].values()))
+        self.assertTrue(all(row["answer"] == "unassessed" for row in contract["editorial_answers"].values()))
 
 
     def test_hard_failure_blocks_before_editorial_judgment(self):
@@ -96,42 +90,39 @@ class EditorialJudgmentTest(unittest.TestCase):
         self.assertEqual(hard, [])
         self.assertEqual(len(risks), 1)
 
-    def test_manual_review_requires_all_six_dimensions_and_objection(self):
-        incomplete = validate_manual_review({"status": "passed", "topic_appeal": "很有意思"})
+    def test_manual_review_requires_every_question_and_objection(self):
+        incomplete = validate_manual_review({"status": "passed", "answers": {"reader_meets_it": {"answer": "yes", "note": "读者每天都会遇到"}}})
         self.assertFalse(incomplete.ok)
-        self.assertTrue(any("读者改变" in error for error in incomplete.errors))
+        self.assertTrue(any("第 2 题没有回答" in error for error in incomplete.errors))
         self.assertTrue(any("最大疑点" in error for error in incomplete.errors))
         self.assertTrue(validate_manual_review(evidence_review()).ok)
-        # Most requirements met is enough; a weak dimension does not veto the rest.
-        mixed = {"topic_appeal": 2, "reader_change": 2, "material_increment": 2, "re_authorability": 0, "durability": 1, "rewrite_effort": 1}
-        self.assertTrue(validate_manual_review(evidence_review(scores=mixed)).ok)
-        low_total = {"topic_appeal": 1, "reader_change": 1, "material_increment": 1, "re_authorability": 1, "durability": 1, "rewrite_effort": 2}
-        self.assertFalse(validate_manual_review(evidence_review(scores=low_total)).ok)
-        # Rewrite effort is shown to Stephen but never decides the verdict.
-        hard_to_rewrite = {**mixed, "rewrite_effort": 0}
-        self.assertTrue(validate_manual_review(evidence_review(scores=hard_to_rewrite)).ok)
-        no_reader_change = {**mixed, "reader_change": 0, "re_authorability": 2}
-        self.assertFalse(validate_manual_review(evidence_review(scores=no_reader_change)).ok)
+        # 任何一题答到否决的那个答案就不推荐，没有总分可以拿来抵。
+        vetoed = validate_manual_review(evidence_review(answers=passing_answers(overseas_only="yes")))
+        self.assertFalse(vetoed.ok)
+        self.assertTrue(any("第 2 题答了 yes" in error for error in vetoed.errors))
+        self.assertFalse(validate_manual_review(evidence_review(answers=passing_answers(easy_rewrite="no"))).ok)
+        # 说不清也不推。
+        self.assertFalse(validate_manual_review(evidence_review(answers=passing_answers(text_stands_alone="unsure"))).ok)
 
     def test_final_record_is_auditable(self):
         item = {"manual_editorial_review": evidence_review()}
         record = final_decision_record(item)
         self.assertEqual(record["status"], "passed")
-        self.assertEqual(set(record["dimensions"]), set(DIMENSIONS))
+        self.assertEqual(set(record["answers"]), set(QUESTION_IDS))
         self.assertIn("决定性证据", record["decision_driver"])
 
-    def test_surface_feature_never_satisfies_dimension_evidence(self):
+    def test_surface_feature_never_answers_a_question(self):
         contract = build_decision_contract(
             {"title": "某创始人的真实第一人称访谈"},
             penalties=[],
         )
         self.assertEqual(contract["machine_disposition"], "shortlist")
-        self.assertEqual(contract["editorial_dimensions"]["re_authorability"]["verdict"], "unassessed")
+        self.assertEqual(contract["editorial_answers"]["author_bound"]["answer"], "unassessed")
         reviewed = build_decision_contract(
             {"manual_editorial_review": evidence_review()},
             penalties=[],
         )
-        self.assertEqual(reviewed["editorial_dimensions"]["re_authorability"]["verdict"], "supported")
+        self.assertEqual(reviewed["editorial_answers"]["author_bound"]["answer"], "yes")
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ from pathlib import Path
 
 # One click per reason. Stephen's recurring notes (382 reviews) collapse into these;
 # free text stays available for anything new.
-REJECT_REASONS = ("题目没意思", "对读者没用", "太浅太泛", "AI 味重", "太依赖作者个人经历", "太技术", "太垂直小众", "过时或已写过", "改写成本高", "广告或新闻通稿")
+REJECT_REASONS = ("题目没意思", "对读者没用", "太浅太泛", "AI 味重", "太依赖作者个人经历", "太技术", "代码多", "全是图片", "海外 App", "太垂直小众", "过时或已写过", "改写成本高", "广告或新闻通稿")
 SELECT_REASONS = ("读者痛点强", "干货足", "改一改就能发", "长期有用", "访谈或文字稿质量高")
 
 

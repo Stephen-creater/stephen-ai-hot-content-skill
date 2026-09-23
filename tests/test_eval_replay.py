@@ -80,18 +80,18 @@ class EvalReplayTest(unittest.TestCase):
         self.assertEqual(result["missed_selected"][0]["id"], "keep")
 
     def test_regression_warning_compares_same_benchmark_and_split(self) -> None:
-        history = [{"kind": "judge", "benchmark": "v1", "split": "dev", "metrics": {"selected_recall": 0.95}}]
+        history = [{"kind": "judge", "benchmark": "v1", "split": "train", "metrics": {"selected_recall": 0.95}}]
         # 判断层不再看百分比，看逐篇翻转：选中的有两篇从推荐翻成淘汰才算退步。
-        entry = {"kind": "judge", "benchmark": "v1", "split": "dev", "metrics": {"selected_recall": 0.8},
+        entry = {"kind": "judge", "benchmark": "v1", "split": "train", "metrics": {"selected_recall": 0.8},
                  "flips": {"selected_to_reject": 2, "rejected_to_recommend": 0, "ids": {"selected_to_reject": ["a", "b"]}}}
         self.assertTrue(eval_replay.regression_warnings(entry, history))
-        self.assertFalse(eval_replay.regression_warnings({**entry, "split": "holdout"}, history))
+        self.assertFalse(eval_replay.regression_warnings({**entry, "split": "test"}, history))
         # A baseline run with a different judge label is not a regression of this one.
         self.assertFalse(eval_replay.regression_warnings({**entry, "judge": "旧标准"}, history))
 
     def test_machine_regression_ignores_reading_order(self) -> None:
-        history = [{"kind": "machine", "benchmark": "v1", "split": "dev", "metrics": {"selected_kept_rate": 1.0, "ranking_auc": 0.66}}]
-        entry = {"kind": "machine", "benchmark": "v1", "split": "dev", "metrics": {"selected_kept_rate": 1.0, "ranking_auc": 0.58}}
+        history = [{"kind": "machine", "benchmark": "v1", "split": "train", "metrics": {"selected_kept_rate": 1.0, "ranking_auc": 0.66}}]
+        entry = {"kind": "machine", "benchmark": "v1", "split": "train", "metrics": {"selected_kept_rate": 1.0, "ranking_auc": 0.58}}
         self.assertFalse(eval_replay.regression_warnings(entry, history))
         self.assertTrue(eval_replay.regression_warnings({**entry, "metrics": {"selected_kept_rate": 0.9}}, history))
 
@@ -139,11 +139,11 @@ if __name__ == "__main__":
 
 
 class LeakCheckTest(unittest.TestCase):
-    def test_quoted_holdout_title_leaks_but_a_shared_product_name_does_not(self):
+    def test_quoted_test_set_title_leaks_but_a_shared_product_name_does_not(self):
         import tempfile
         items = [
-            {"split": "holdout", "label": "rejected", "candidate": {"title": "Claude Code团队讲究啊，这都往外说"}},
-            {"split": "holdout", "label": "selected", "candidate": {"title": "一个开源Skill，让AI学会挑选合适的中文字体"}},
+            {"split": "test", "label": "rejected", "candidate": {"title": "Claude Code团队讲究啊，这都往外说"}},
+            {"split": "test", "label": "selected", "candidate": {"title": "一个开源Skill，让AI学会挑选合适的中文字体"}},
         ]
         with tempfile.TemporaryDirectory(dir=ROOT) as directory:
             doc = Path(directory) / "rules.md"
@@ -158,7 +158,7 @@ class ForwardAndSamplingTest(unittest.TestCase):
     def items(self) -> list[dict]:
         body = "完整中文材料。" * 200
         def item(item_id, batch, label, strength, position):
-            return {"id": item_id, "batch": batch, "split": "dev", "label": label, "label_strength": strength, "reasons": [],
+            return {"id": item_id, "batch": batch, "split": "train", "label": label, "label_strength": strength, "reasons": [],
                     "note": "", "judgeable": True, "reviewed_at": "2026-09-21", "position": position,
                     "candidate": {"id": item_id, "title": item_id, "link": f"https://example.com/{item_id}", "content": body, "language": "zh", "content_status": "fulltext"}}
         return [item("s1", "b1", "selected", "strong", 1), item("s2", "b1", "selected", "strong", 4),
@@ -179,8 +179,8 @@ class ForwardAndSamplingTest(unittest.TestCase):
         current = {"s1": "reject", "s2": "reject", "r1": "reject", "r2": "recommend"}
         flips = eval_replay.verdict_flips(current, previous, items)
         self.assertEqual((flips["selected_to_reject"], flips["rejected_to_recommend"]), (2, 1))
-        entry = {"kind": "judge", "benchmark": "v1", "split": "dev", "judge": "j", "metrics": {}, "flips": flips}
-        history = [{"kind": "judge", "benchmark": "v1", "split": "dev", "judge": "j", "metrics": {"selected_recall": 1.0}}]
+        entry = {"kind": "judge", "benchmark": "v1", "split": "train", "judge": "j", "metrics": {}, "flips": flips}
+        history = [{"kind": "judge", "benchmark": "v1", "split": "train", "judge": "j", "metrics": {"selected_recall": 1.0}}]
         self.assertTrue(any("2 篇" in w for w in eval_replay.regression_warnings(entry, history)))
         one = {**entry, "flips": {**flips, "selected_to_reject": 1}}
         self.assertFalse(eval_replay.regression_warnings(one, history))

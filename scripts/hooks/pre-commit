@@ -1,0 +1,13 @@
+#!/bin/sh
+# 上线前检查：提交里改了规则文件（SKILL.md、判断标准、正反例、题目、口味档案、判断和一票否决脚本），
+# 就必须已经用现在的规则重跑过回归测试集和负向用例，并且全部通过。安装：sh scripts/hooks/install.sh
+ROOT=$(git rev-parse --show-toplevel)
+RULES='^(SKILL\.md|references/editorial-judgment\.md|references/editorial-calibration-cases\.md|resources/review_questions\.json|resources/editorial_profile\.json|scripts/editorial_judgment\.py|scripts/curator\.py)$'
+if git diff --cached --name-only | grep -Eq "$RULES"; then
+  PY="$ROOT/.venv/bin/python3"
+  [ -x "$PY" ] || PY="$(git rev-parse --path-format=absolute --git-common-dir)/../.venv/bin/python3"
+  "$PY" "$ROOT/scripts/eval_suite.py" gate || {
+    echo "上线前检查没过，提交被拦下。先按 references/evaluation.md 重跑回归测试集和负向用例。"
+    exit 1
+  }
+fi

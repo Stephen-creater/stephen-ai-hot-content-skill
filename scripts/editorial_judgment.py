@@ -2,52 +2,58 @@
 
 Code decides objective eligibility only. It must not pretend
 that keyword matches prove audience value, topic appeal, or reuse. Those need
-an Agent that read the whole article, scored six dimensions and quoted it.
+an Agent that read the whole article and answered the yes/no questions in
+resources/review_questions.json, quoting the article.
 """
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Iterable
 import hashlib
+import json
 import re
 
 
-DIMENSIONS = (
-    "topic_appeal",
-    "reader_change",
-    "material_increment",
-    "re_authorability",
-    "durability",
-    "rewrite_effort",
-)
+QUESTIONS_PATH = Path(__file__).resolve().parents[1] / "resources" / "review_questions.json"
 
-REVIEW_FIELD_LABELS = {
-    "topic_appeal": "选题吸引力",
-    "reader_change": "读者改变",
-    "material_increment": "干货含量",
-    "re_authorability": "可重写性",
-    "durability": "长期价值",
-    "rewrite_effort": "改写成本",
-    "counterargument": "最大疑点",
-    "decision_driver": "放行理由",
-}
 
-# Recommend when most requirements are met, not only when every one is.
-# Rewrite effort is scored and shown to Stephen but does not decide the verdict.
-CORE_DIMENSIONS = DIMENSIONS[:5]
-PASS_TOTAL = 6  # of 10, over the five core dimensions
-MUST_NOT_BE_ZERO = ("reader_change", "material_increment")
-# 2026-09-22 回看 92 条有终审分的审核：选题吸引力或读者改变不满 2 分的 34 条全被拒，六维里三项及以上 1 分的 30 条全被拒。
-# 以前写成“勉强过线要对上选过的类型才推荐”，评审每次都说“对上了”放行，所以改成机器拦。
-MUST_BE_FULL = ("topic_appeal", "reader_change")
-MAX_ONE_POINT_SCORES = 2
-# 评审自己在疑点里写出来的否决理由。2026-09-22 a 批五条全被拒，疑点里写着“三项只拿 1 分，属于勉强过线”
-# “效果有一部分靠画面”，后面接一句“放行是因为……”照样发布了。“国内用不上”不在这里：Stephen 写过国内用不了的 Ditto，
-# 海外 App 靠打分下限和读稿判断拦（Muse 那条选题吸引力只有 1 分）。
+def load_questions(path: Path = QUESTIONS_PATH) -> dict:
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+QUESTION_SET = load_questions()
+QUESTIONS = tuple(QUESTION_SET["questions"])
+QUESTION_IDS = tuple(q["id"] for q in QUESTIONS)
+ANSWERS = ("yes", "no", "unsure")
+# 这几道题的答案必须引一句能在正文里找到的原句，证明评审真的读了全文。
+QUOTED_QUESTIONS = ("reader_takeaway", "has_substance")
+REVIEW_FIELD_LABELS = {"counterargument": "最大疑点", "decision_driver": "放行理由"}
+
+
+def question_number(question_id: str) -> int:
+    return QUESTION_IDS.index(question_id) + 1
+
+
+def vetoes(answers: dict) -> list[str]:
+    """Question ids whose answer stops the recommendation. unsure counts too: 说不清就不推。
+
+    2026-09-22 起用是/否题代替六维 0/1/2 分：65 条有终审分的审核里 57 条选题吸引力是 2 分，Stephen 只选了 1 条，
+    分数分不出好坏；而且有了总分，评审就会写“虽然……但总分够，放行”。
+    """
+    hits = []
+    for question in QUESTIONS:
+        entry = answers.get(question["id"]) if isinstance(answers, dict) else None
+        answer = entry.get("answer") if isinstance(entry, dict) else None
+        if answer not in ANSWERS or answer == "unsure" or answer == question["veto_if"]:
+            hits.append(question["id"])
+    return hits
+
+
+# 评审自己在疑点里写出来的放行说辞。2026-09-22 a 批五条全被拒，疑点里写着“三项只拿 1 分，属于勉强过线”，后面接一句“放行是因为……”照样发布了。
+# 以前还拦“靠画面、靠截图”“大量代码”，改成是/否题后由第 8、9 题管；2026-09-23 全量重判时这两条单独拦下的只有两篇写成了文章的稿（Wan3.0、腾讯会议），就删了。
 SELF_VETO_PATTERNS = (
-    (r"勉强过线|勉强及格|放行是因为|虽然.{0,20}但.{0,6}放行", "疑点已经说了不够格，不能再找理由放行"),
-    (r"靠(?:画面|截图|视频|动图|效果图)", "效果靠图和视频展示"),
-    (r"大量代码|代码(?:较多|很多|偏多)", "正文代码多"),
+    (r"勉强过线|勉强及格|放行是因为|虽然.{0,20}但.{0,20}放行", "疑点已经说了不够格，不能再找理由放行"),
 )
 
 HARD_FAILURE_MARKERS = {
@@ -123,21 +129,16 @@ def build_decision_contract(
     """Build an auditable machine-stage record without inventing human evidence."""
     failures, risks = classify_penalties(penalties)
     manual = item.get("manual_editorial_review") if isinstance(item.get("manual_editorial_review"), dict) else {}
-    dimensions = {
-        key: {
-            "verdict": "supported" if str(manual.get(key, "")).strip() else "unassessed",
-            "evidence": str(manual.get(key, "")).strip(),
-        }
-        for key in DIMENSIONS
-    }
+    answered = manual.get("answers") if isinstance(manual.get("answers"), dict) else {}
+    dimensions = {key: answered.get(key, {"answer": "unassessed"}) for key in QUESTION_IDS}
     machine_disposition = "blocked" if failures else "shortlist"
     return {
-        "contract_version": 2,
+        "contract_version": 3,
         "eligibility": {
             "status": "failed" if failures else "passed",
             "failures": failures,
         },
-        "editorial_dimensions": dimensions,
+        "editorial_answers": dimensions,
         "risk_signals": risks,
         "machine_disposition": machine_disposition,
         "human_review_required": manual.get("status") != "passed",
@@ -188,30 +189,30 @@ def validate_manual_review(review: dict, *, require_v2: bool = True, flags: dict
     doubt = str(review.get("counterargument", ""))
     if re.search(r"写过|已写|写了.{0,6}篇|已经写", doubt) and len(str(review.get("new_progress", "")).strip()) < 12:
         errors.append("疑点里说 Stephen 写过同题，要在 new_progress 写明这次的新事实（新功能、新数据、新结果），不能只是换个人再说一遍")
-    evidence_text = " ".join(str(review.get(key, "")) for key in (*DIMENSIONS, "counterargument"))
+    answers = review.get("answers")
+    if not isinstance(answers, dict):
+        errors.append(f"要逐题回答 {len(QUESTIONS)} 道是/否题（answers）")
+        return ReviewValidation(False, tuple(errors))
+    notes = []
+    for question in QUESTIONS:
+        entry = answers.get(question["id"])
+        number = question_number(question["id"])
+        if not isinstance(entry, dict) or entry.get("answer") not in ANSWERS:
+            errors.append(f"第 {number} 题没有回答 yes、no 或 unsure：{question['text']}")
+            continue
+        note = str(entry.get("note", "")).strip()
+        notes.append(note)
+        if len(note) < 8:
+            errors.append(f"第 {number} 题要用一句话写明为什么这样答")
+        if entry["answer"] == "unsure":
+            errors.append(f"第 {number} 题答了说不清，说不清就不推荐：{question['text']}")
+        elif entry["answer"] == question["veto_if"]:
+            errors.append(f"第 {number} 题答了 {entry['answer']}，不能推荐：{question['text']}")
+    evidence_text = " ".join([*notes, doubt])
     for pattern, label in SELF_VETO_PATTERNS:
         text = doubt if label.startswith("疑点") else evidence_text
         if re.search(pattern, text):
             errors.append(f"终审自己写了否决理由（{label}），不能推荐")
-    access = str(review.get("reader_access", "")).strip()
-    if len(access) < 6:
-        errors.append("要在 reader_access 写明读者在国内能不能直接用上文章讲的产品或方法")
-    scores = review.get("scores")
-    if not isinstance(scores, dict) or any(scores.get(key) not in (0, 1, 2) for key in DIMENSIONS):
-        errors.append("六个维度都要打 0、1 或 2 分")
-    else:
-        total = sum(scores[key] for key in CORE_DIMENSIONS)
-        if total < PASS_TOTAL:
-            errors.append(f"五个核心维度总分 {total} 低于 {PASS_TOTAL}")
-        for key in MUST_NOT_BE_ZERO:
-            if scores[key] == 0:
-                errors.append(f"{REVIEW_FIELD_LABELS[key]}为 0 分")
-        for key in MUST_BE_FULL:
-            if scores[key] != 2:
-                errors.append(f"{REVIEW_FIELD_LABELS[key]}不满 2 分")
-        ones = sum(1 for key in DIMENSIONS if scores[key] == 1)
-        if ones > MAX_ONE_POINT_SCORES:
-            errors.append(f"六个维度里 {ones} 项只有 1 分")
     return ReviewValidation(not errors, tuple(errors))
 
 
@@ -219,30 +220,16 @@ def validate_source_anchors(item: dict) -> ReviewValidation:
     """Verify quotes against the exact source reviewed; no quality score implied."""
     content = item.get("content", "")
     review = item.get("manual_editorial_review", {})
-    anchors = review.get("source_anchors", [])
     errors = []
     digest = hashlib.sha256(content.encode("utf-8")).hexdigest()
     if review.get("source_sha256") != digest:
         errors.append("终审正文指纹缺失或正文已变化")
     normalize = lambda value: re.sub(r"\s+", "", value)
-    matched = set()
-    if not isinstance(anchors, list):
-        return ReviewValidation(False, ("source_anchors 必须为数组",))
-    for anchor in anchors:
-        if not isinstance(anchor, dict):
-            errors.append("无效原文依据")
-            continue
-        quote = anchor.get("quote", "")
+    for question_id in QUOTED_QUESTIONS:
+        entry = (review.get("answers") or {}).get(question_id) if isinstance(review.get("answers"), dict) else None
+        quote = entry.get("quote", "") if isinstance(entry, dict) else ""
         if not isinstance(quote, str) or len(normalize(quote)) < 12 or normalize(quote) not in normalize(content):
-            errors.append("引用无法在当前正文中定位")
-            continue
-        dimension = anchor.get("dimension")
-        if dimension not in DIMENSIONS:
-            errors.append("引用维度无效")
-        else:
-            matched.add(dimension)
-    if not {"material_increment", "re_authorability"}.issubset(matched):
-        errors.append("干货含量和可重写性必须各有原文引用")
+            errors.append(f"第 {question_number(question_id)} 题的原句引用无法在当前正文中定位")
     return ReviewValidation(not errors, tuple(errors))
 
 
@@ -251,15 +238,10 @@ def final_decision_record(item: dict) -> dict:
     review = item.get("manual_editorial_review", {})
     validation = validate_manual_review(review)
     return {
-        "contract_version": 2,
+        "contract_version": 3,
         "status": "passed" if validation.ok else "failed",
         "errors": list(validation.errors),
         "decision_driver": str(review.get("decision_driver", "")).strip(),
         "counterargument": str(review.get("counterargument", "")).strip(),
-        "scores": review.get("scores", {}),
-        "dimensions": {
-            key: {"verdict": "supported", "evidence": str(review.get(key, "")).strip()}
-            for key in DIMENSIONS
-            if str(review.get(key, "")).strip()
-        },
+        "answers": review.get("answers", {}),
     }

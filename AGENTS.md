@@ -5,7 +5,7 @@
 - 选题批次的数量、停止条件与缺口报告以 `SKILL.md`「交付规则」为唯一准则：不足时持续扩源，不降标凑数；达到停止条件仍不足时交付缺口报告，由用户决定下一步。
 
 - 本仓库只负责 Stephen 的 AI 热点选题，不负责文章正文。
-- 所有信息源一视同仁：都抓正文，都按同一套编辑标准判定，没有“只作线索”的源，语言也不再是否决理由。中文材料在阅读顺序上仍然优先；主流厂商的重大发布在发布后 5 天内排最前面。
+- 所有信息源一视同仁：都抓正文，都按同一套编辑标准判定。英文正文会被脚本否决（OpenAI、Anthropic、Google 官方发布稿除外），英文源抓来的只当线索去找中文稿。主流厂商的重大发布在发布后 5 天内排最前面。
 - 选题方向与筛选标准由用户决定，技术实现可自主完成。
 - 不修改仓库外的文件。
 
@@ -30,7 +30,7 @@ Skill 里的文档、注释、报错和审核页文字是写给 Stephen 看的�
 ## 验证
 
 - 修改评分、抓取或报告逻辑后，运行 `.venv/bin/python3 -m unittest discover -s tests -v`（worktree 内使用权威仓库的 `.venv`）。
-- 修改口味档案、一票否决、打分或终审标准后，运行 `.venv/bin/python3 scripts/eval_replay.py machine`，报告退步时不提交；改终审标准时再按 `references/evaluation.md` 跑判断层评测。
+- 修改口味档案、一票否决、是 / 否题或终审标准后，运行 `.venv/bin/python3 scripts/eval_replay.py machine` 和 `.venv/bin/python3 scripts/eval_suite.py gate`，报告退步或检查不通过时不提交；改终审标准时再按 `references/evaluation.md` 跑判断层评测。
 - 修改来源后，至少运行一次离线夹具 `.venv/bin/python3 scripts/scrape_aihot.py --fixture tests/fixtures/sample_items.json --output-root .local/work/fixture`；条件允许时再运行联网抓取。
 - 声称完成前，回读远程仓库最新提交。
 
