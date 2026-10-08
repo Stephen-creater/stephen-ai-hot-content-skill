@@ -23,6 +23,8 @@ from scrape_aihot import is_historical_content_duplicate
 
 ROOT = Path(__file__).resolve().parents[1]
 LINK_CHECK_TIMEOUT = 15
+# 用完整的浏览器标识回读链接：53AI 对只写 "Mozilla/5.0" 的请求直接断开连接，2026-10-03 和 10-08 两次把能打开的页面误报成“整站无响应”。
+LINK_CHECK_USER_AGENT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0 Safari/537.36"
 
 
 def log_check(root: Path, batch: str, row: dict, errors: list[str]) -> None:
@@ -47,7 +49,7 @@ def unreachable_links(rows: list[dict], timeout: int = LINK_CHECK_TIMEOUT) -> li
         link = str(row.get("link") or "")
         if not link.startswith("http"):
             continue
-        request = urllib.request.Request(link, method="HEAD", headers={"User-Agent": "Mozilla/5.0"})
+        request = urllib.request.Request(link, method="HEAD", headers={"User-Agent": LINK_CHECK_USER_AGENT})
         try:
             urllib.request.urlopen(request, timeout=timeout).close()
         except urllib.error.HTTPError:
